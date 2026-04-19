@@ -126,58 +126,126 @@ export function LoadReportPanel({ pack, rollup }: Props) {
                 : status === "fail"
                   ? "text-rose-600"
                   : "text-amber-600";
-            // Count rotated units of this item.
-            const rotatedCount = pack.placed.filter(
-              (b) => b.itemIdx === p.itemIdx && (b.rotated === "sideways" || b.rotated === "axis"),
-            ).length;
-            const tippedCount = pack.placed.filter(
-              (b) => b.itemIdx === p.itemIdx && b.rotated === "axis",
-            ).length;
+            // Boxes belonging to this item.
+            const itemBoxes = pack.placed.filter((b) => b.itemIdx === p.itemIdx);
+            const rotatedBoxes = itemBoxes.filter(
+              (b) => b.rotated === "sideways" || b.rotated === "axis",
+            );
+            const rotatedCount = rotatedBoxes.length;
+            const tippedCount = rotatedBoxes.filter((b) => b.rotated === "axis").length;
+            const turnedCount = rotatedCount - tippedCount;
+
+            // Cluster rotated boxes into loader-friendly zones along container length.
+            // Container length axis: 0 = back wall, max = door.
+            const containerLenMm = pack.container.inner.l * 1000;
+            const zoneOf = (xMm: number) => {
+              const ratio = xMm / Math.max(1, containerLenMm);
+              if (ratio < 0.25) return "back";
+              if (ratio < 0.5) return "mid-back";
+              if (ratio < 0.75) return "mid-door";
+              return "door";
+            };
+            const zoneLabel: Record<string, string> = {
+              back: "back wall",
+              "mid-back": "mid (back half)",
+              "mid-door": "mid (door half)",
+              door: "near door",
+            };
+            const zoneCounts: Record<string, number> = {};
+            rotatedBoxes.forEach((b) => {
+              const z = zoneOf(b.x);
+              zoneCounts[z] = (zoneCounts[z] ?? 0) + 1;
+            });
+            const tiltedWhere = Object.entries(zoneCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([z, n]) => `${n}× ${zoneLabel[z]}`)
+              .join(", ");
+
+            // Total boxes per zone (for context).
+            const allZoneCounts: Record<string, number> = {};
+            itemBoxes.forEach((b) => {
+              const z = zoneOf(b.x);
+              allZoneCounts[z] = (allZoneCounts[z] ?? 0) + 1;
+            });
+            const placementWhere = Object.entries(allZoneCounts)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 3)
+              .map(([z, n]) => `${n} ${zoneLabel[z]}`)
+              .join(" · ");
+
             return (
               <div
                 key={p.itemId}
-                className="flex items-start gap-2 rounded-md bg-muted/30 px-2 py-1.5 text-xs"
+                className="rounded-md bg-muted/30 px-2 py-1.5 text-xs"
               >
-                <span
-                  className="mt-0.5 size-3 shrink-0 rounded-sm border border-black/10"
-                  style={{ background: p.color }}
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-semibold text-brand-navy">Item {p.itemIdx + 1}</span>
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                      {p.packageType}
-                    </span>
-                    {!p.stackable && (
-                      <span className="rounded bg-rose-100 px-1 text-[9px] font-medium uppercase text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
-                        no-stack
+                <div className="flex items-start gap-2">
+                  <span
+                    className="mt-0.5 size-3 shrink-0 rounded-sm border border-black/10"
+                    style={{ background: p.color }}
+                    aria-hidden
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-semibold text-brand-navy">Item {p.itemIdx + 1}</span>
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        {p.packageType}
                       </span>
-                    )}
-                    {p.fragile && (
-                      <span className="rounded bg-amber-100 px-1 text-[9px] font-medium uppercase text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                        fragile
-                      </span>
+                      {!p.stackable && (
+                        <span className="rounded bg-rose-100 px-1 text-[9px] font-medium uppercase text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                          no-stack
+                        </span>
+                      )}
+                      {p.fragile && (
+                        <span className="rounded bg-amber-100 px-1 text-[9px] font-medium uppercase text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                          fragile
+                        </span>
+                      )}
+                      {rotatedCount > 0 && (
+                        <span
+                          className="rounded bg-yellow-100 px-1 text-[9px] font-medium uppercase text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
+                          title={
+                            tippedCount > 0
+                              ? `${tippedCount} tipped on side, ${turnedCount} rotated sideways`
+                              : `${turnedCount} rotated sideways for fit`
+                          }
+                        >
+                          ↻ tilted {rotatedCount}×
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {p.placed} / {p.planned} placed
+                      {p.reason ? ` — ${p.reason}` : ""}
+                    </div>
+                    {/* Loader guidance — where each box sits in the container. */}
+                    {placementWhere && (
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">
+                        <span className="font-semibold text-brand-navy/70">Place:</span>{" "}
+                        {placementWhere}
+                      </div>
                     )}
                     {rotatedCount > 0 && (
-                      <span
-                        className="rounded bg-yellow-100 px-1 text-[9px] font-medium uppercase text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
-                        title={
-                          tippedCount > 0
-                            ? `${tippedCount} tipped on side, ${rotatedCount - tippedCount} rotated sideways`
-                            : `${rotatedCount} rotated sideways for fit`
-                        }
-                      >
-                        ↻ tilted {rotatedCount}×
-                      </span>
+                      <div className="mt-0.5 rounded border border-yellow-300/60 bg-yellow-50 px-1.5 py-0.5 text-[10px] text-yellow-900 dark:border-yellow-700/40 dark:bg-yellow-950/30 dark:text-yellow-200">
+                        <span className="font-bold">↻ Tilt instructions:</span>{" "}
+                        {turnedCount > 0 && (
+                          <span>
+                            {turnedCount} rotated 90° (long-side along width)
+                            {tippedCount > 0 ? "; " : ""}
+                          </span>
+                        )}
+                        {tippedCount > 0 && (
+                          <span>{tippedCount} tipped onto its side (height ↔ length)</span>
+                        )}
+                        {tiltedWhere && (
+                          <span className="block">
+                            <span className="font-semibold">Location:</span> {tiltedWhere}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    {p.placed} / {p.planned} placed
-                    {p.reason ? ` — ${p.reason}` : ""}
-                  </div>
+                  <Icon className={cn("size-4 shrink-0", tone)} />
                 </div>
-                <Icon className={cn("size-4 shrink-0", tone)} />
               </div>
             );
           })}
