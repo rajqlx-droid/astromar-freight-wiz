@@ -93,8 +93,19 @@ export function LoadingRowsPanel({ pack }: Props) {
   };
 
   const rows = useMemo(() => buildRows(pack, heavyThreshold), [pack, heavyThreshold]);
+  const efficiency = useMemo(() => computeWallEfficiency(rows), [rows]);
   // First row open by default; others collapsed.
   const [openRows, setOpenRows] = useState<Set<number>>(() => new Set([0]));
+  // Per-row "Suggest re-shuffle" toggle state.
+  const [shuffleOpen, setShuffleOpen] = useState<Set<number>>(() => new Set());
+  const toggleShuffle = (idx: number) => {
+    setShuffleOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
 
   if (rows.length === 0) return null;
 
@@ -487,12 +498,49 @@ export function LoadingRowsPanel({ pack }: Props) {
                   </div>
 
                   {row.gapWarning && (
-                    <div className="flex items-start gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] leading-relaxed text-orange-800 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200">
-                      <span aria-hidden>⚠</span>
-                      <span>
-                        <strong className="font-semibold">Gap warning:</strong>{" "}
-                        Back wall only {Math.round(row.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side to close gaps before sealing the container.
-                      </span>
+                    <div className="space-y-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 py-1.5 dark:border-orange-900 dark:bg-orange-950/30">
+                      <div className="flex items-start gap-1.5 text-[11px] leading-relaxed text-orange-800 dark:text-orange-200">
+                        <span aria-hidden>⚠</span>
+                        <span className="flex-1">
+                          <strong className="font-semibold">Gap warning:</strong>{" "}
+                          Back wall only {Math.round(row.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side to close gaps before sealing the container.
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleShuffle(row.rowIdx);
+                          }}
+                          className="h-6 gap-1 px-1.5 text-[10px]"
+                          aria-expanded={shuffleOpen.has(row.rowIdx)}
+                        >
+                          <Lightbulb className="size-3" />
+                          {shuffleOpen.has(row.rowIdx) ? "Hide" : "Suggest re-shuffle"}
+                        </Button>
+                      </div>
+                      {shuffleOpen.has(row.rowIdx) && (() => {
+                        const sug = suggestReshuffle(row, pack);
+                        return (
+                          <div className="rounded border border-orange-200 bg-background/80 p-2 text-[11px] leading-relaxed text-brand-navy dark:border-orange-900/60">
+                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                              <Lightbulb className="size-3" />
+                              Suggested re-shuffle
+                            </div>
+                            <p>{sug.text}</p>
+                            {sug.direction !== "none" && (
+                              <p className="mt-1 text-[10.5px] text-muted-foreground">
+                                Projected back-wall utilisation after shuffle:{" "}
+                                <strong className="font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums">
+                                  {Math.round(sug.projectedUtilizationPct)}%
+                                </strong>
+                                {" "}(currently {Math.round(row.wallUtilizationPct)}%).
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
