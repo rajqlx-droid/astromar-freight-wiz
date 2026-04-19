@@ -121,8 +121,9 @@ export function ContainerLoadView({
           return null;
         }
       },
+      getActivePack: () => activePack,
     });
-  }, [onReady, is3D, activeTab]);
+  }, [onReady, is3D, activeTab, activePack]);
 
   return (
     <Card
