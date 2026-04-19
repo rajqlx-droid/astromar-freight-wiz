@@ -395,13 +395,23 @@ function SceneContents({
         {pack.placed.map((b, i) => {
           const t = transforms?.[i];
           if (recording && t && !t.visible) return null;
+          // Combine per-frame transform offset (recording) with the shuffle
+          // preview offset (applied to scene-z, the container width axis).
+          const shuffleZ = shufflePreview?.get(i) ?? 0;
+          const offset: [number, number, number] = [
+            t?.offset[0] ?? 0,
+            t?.offset[1] ?? 0,
+            (t?.offset[2] ?? 0) + shuffleZ,
+          ];
+          const isPreviewed = !recording && shuffleZ !== 0;
           return (
             <CargoBox
               key={i}
               box={b}
               stat={pack.perItem[b.itemIdx]}
-              offset={t?.offset}
+              offset={offset}
               scale={t?.scale}
+              previewHighlight={isPreviewed}
             />
           );
         })}
