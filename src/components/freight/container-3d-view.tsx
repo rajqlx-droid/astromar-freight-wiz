@@ -799,6 +799,9 @@ function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
         <meshStandardMaterial color="#111827" />
       </mesh>
 
+      {/* Driver figure — sits in the seat, faces forward (-x toward forks) */}
+      <ForkliftDriver />
+
       {/* Wheels */}
       {([
         [-0.35, 0.18, -0.5],
