@@ -107,6 +107,8 @@ export function instructionFor(row: RowGroup): string {
   }
   if (row.hasFragile) parts.push("cap with fragile units last");
   if (row.hasNonStack) parts.push("leave no-stack items uncovered");
+  if (row.needsSeparator)
+    parts.push("insert a separator board (plywood/cardboard) between heavy and fragile layers");
   if (row.rotatedCount > 0)
     parts.push(`rotate ${row.rotatedCount} unit${row.rotatedCount > 1 ? "s" : ""} as marked in 3D view`);
   return parts.join(", ") + ".";
