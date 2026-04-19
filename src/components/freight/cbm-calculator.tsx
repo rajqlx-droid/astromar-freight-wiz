@@ -5,9 +5,10 @@ import {
   Copy,
   ShieldAlert,
   CheckCircle2,
-  AlertTriangle,
   Settings2,
   Info,
+  Sparkles,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,6 +35,14 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
 import { ITEM_COLORS, totalCbm as sumCbm, totalWeight as sumWeight } from "@/lib/freight/packing";
 import { recommendContainers } from "@/lib/freight/container-recommender";
@@ -61,13 +70,15 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const captureRef = useRef<(() => Promise<{ iso: string; front: string; side: string } | null>) | null>(null);
+  const [optimizationRequested, setOptimizationRequested] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const result = useMemo(() => calcCbm(items), [items]);
   const recommendation = useMemo(
     () => recommendContainers(sumCbm(items), sumWeight(items)),
     [items],
   );
 
-  // Gate: every cargo row with real dimensions must have packingConfirmed === true.
+  // Items that have real dimensions but haven't had packing options confirmed yet.
   const unconfirmed = useMemo(
     () =>
       items.filter(
@@ -76,9 +87,8 @@ export function CbmCalculator({ items, setItems }: Props) {
     [items],
   );
   const allConfirmed = unconfirmed.length === 0 && items.some((it) => it.length > 0);
-  const gateReason = !allConfirmed
-    ? "Confirm packing options for every cargo item to enable container optimization, 3D loading and PDF export."
-    : null;
+  const hasAnyDims = items.some((it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0);
+  const showOptimization = optimizationRequested && allConfirmed;
 
   const update = (id: string, patch: Partial<CbmItem>) => {
     setItems(items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -116,18 +126,6 @@ export function CbmCalculator({ items, setItems }: Props) {
     );
   };
 
-  /** Scroll to and focus the first cargo row missing packing confirmation. */
-  const reviewFirstUnconfirmed = () => {
-    const first = unconfirmed[0];
-    if (!first) return;
-    const el = rowRefs.current[first.id];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("ring-2", "ring-amber-500");
-      window.setTimeout(() => el.classList.remove("ring-2", "ring-amber-500"), 1800);
-    }
-    setOpenPopoverId(first.id);
-  };
 
   const showLen = (cm: number) => {
     const v = cmTo(cm, lenUnit);
@@ -144,16 +142,16 @@ export function CbmCalculator({ items, setItems }: Props) {
   const setWt = (id: string) => (n: number) =>
     update(id, { weight: Number.isFinite(n) ? toKg(n, wtUnit) : 0 });
 
-  const inputsTable = items.flatMap((it, idx) => [
-    { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
-    { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
-    {
-      label: `Item ${idx + 1} Packing`,
-      value: it.packingConfirmed
-        ? buildSummary(it)
-        : "⚠ Packing options not confirmed",
-    },
-  ]);
+  const inputsTable = items.flatMap((it, idx) => {
+    const rows = [
+      { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
+      { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+    ];
+    if (it.packingConfirmed) {
+      rows.push({ label: `Item ${idx + 1} Packing`, value: buildSummary(it) });
+    }
+    return rows;
+  });
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
@@ -214,21 +212,20 @@ export function CbmCalculator({ items, setItems }: Props) {
                     <button
                       type="button"
                       className={cn(
-                        "inline-flex max-w-full items-center gap-1.5 rounded-full border-2 px-3 py-1 text-[11px] font-semibold transition-colors",
+                        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
                         confirmed
                           ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
-                          : "animate-pulse border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-200",
+                          : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
                       )}
                     >
                       {confirmed ? (
                         <CheckCircle2 className="size-3.5 shrink-0" />
                       ) : (
-                        <AlertTriangle className="size-3.5 shrink-0" />
+                        <Settings2 className="size-3.5 shrink-0" />
                       )}
                       <span className="truncate">
-                        {confirmed ? buildSummary(it) : "Packing options required"}
+                        {confirmed ? buildSummary(it) : "Packing options"}
                       </span>
-                      <Settings2 className="size-3 shrink-0 opacity-70" />
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-[min(420px,calc(100vw-2rem))] p-4">
@@ -350,68 +347,102 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Button>
         </div>
 
-        {/* Gate banner — replaces ContainerSuggestion when any row is unconfirmed */}
-        {sumCbm(items) > 0 && !allConfirmed && (
-          <div className="rounded-lg border-2 border-amber-400/60 bg-amber-50 p-3 sm:p-4 dark:bg-amber-950/20">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-200">
-              <AlertTriangle className="size-4" />
-              <span>Confirm packing options to unlock container optimization</span>
+        {/* Optimize-container CTA — CBM math is never gated, only this section is */}
+        {hasAnyDims && !showOptimization && (
+          <Card className="border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="rounded-full bg-brand-orange/10 p-2 text-brand-orange">
+                  <Sparkles className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-brand-navy">
+                    Get container optimization plan
+                  </h3>
+                  <p className="mt-0.5 max-w-md text-[11px] text-muted-foreground">
+                    Recommend the best container, render a 3D loading plan, generate a loading
+                    video and unlock PDF export. We'll ask a few packing questions first.
+                  </p>
+                </div>
+              </div>
               <Button
                 size="sm"
-                variant="default"
-                className="ml-auto h-7 bg-amber-600 px-2.5 text-[11px] text-white hover:bg-amber-700"
-                onClick={reviewFirstUnconfirmed}
+                className="text-white shadow-sm hover:opacity-90"
+                style={{ background: "var(--brand-orange)" }}
+                onClick={() => {
+                  if (allConfirmed) {
+                    setOptimizationRequested(true);
+                  } else {
+                    setConfirmModalOpen(true);
+                  }
+                }}
               >
-                Review packing options
+                <Sparkles className="size-3.5" /> Optimize loading
               </Button>
             </div>
-            <p className="mb-2 text-[11px] text-amber-900/90 dark:text-amber-200/90">
-              We need to know which cartons are stackable, fragile, and rotatable before we can
-              recommend the right container or render an accurate 3D loading plan.
-            </p>
-            <ul className="flex flex-wrap gap-1.5">
-              {unconfirmed.map((u) => {
-                const idx = items.findIndex((it) => it.id === u.id);
-                return (
-                  <li
-                    key={u.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-amber-400/60 bg-white/70 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-black/30 dark:text-amber-200"
-                  >
-                    <AlertTriangle className="size-2.5" />
-                    Item {idx + 1}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          </Card>
         )}
 
-        {sumCbm(items) > 0 && allConfirmed && (
-          <ContainerSuggestion
-            recommendation={recommendation}
-            currentChoice={forcedChoice ?? "auto"}
-            onApply={(id) => setForcedChoice(id)}
-          />
+        {showOptimization && (
+          <>
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmModalOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
+              >
+                <Pencil className="size-3" /> Edit packing options
+              </button>
+            </div>
+            <ContainerSuggestion
+              recommendation={recommendation}
+              currentChoice={forcedChoice ?? "auto"}
+              onApply={(id) => setForcedChoice(id)}
+            />
+            <ContainerLoadView
+              items={items}
+              recommendation={recommendation}
+              forcedChoice={forcedChoice}
+              onChoiceChange={setForcedChoice}
+              onReady={(h) => {
+                captureRef.current = h.capture;
+              }}
+            />
+          </>
         )}
-
-        <ContainerLoadView
-          items={items}
-          recommendation={recommendation}
-          forcedChoice={forcedChoice}
-          onChoiceChange={setForcedChoice}
-          optimizationDisabledReason={gateReason}
-          onReady={(h) => {
-            captureRef.current = h.capture;
-          }}
-        />
       </div>
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
-        pdfDisabledReason={gateReason}
+        pdfDisabledReason={
+          showOptimization
+            ? null
+            : "Click 'Optimize loading' and confirm packing options to enable PDF export with the 3D loading plan."
+        }
         resolveExtras={async () => {
           const snaps = captureRef.current ? await captureRef.current() : null;
           return snaps ? { snapshots: snaps } : undefined;
+        }}
+      />
+
+      {/* Confirm packing options modal */}
+      <ConfirmPackingModal
+        open={confirmModalOpen}
+        onOpenChange={setConfirmModalOpen}
+        items={items}
+        onUpdate={updatePacking}
+        onApplyToAll={applyToAll}
+        onConfirm={() => {
+          // Mark every dimensioned row as confirmed and unlock optimization.
+          setItems(
+            items.map((it) =>
+              it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0
+                ? { ...it, packingConfirmed: true }
+                : it,
+            ),
+          );
+          setConfirmModalOpen(false);
+          setOptimizationRequested(true);
         }}
       />
     </div>
@@ -456,4 +487,155 @@ function buildSummary(it: CbmItem): string {
   if (it.allowAxisRotation) bits.push("tip OK");
   if ((it.maxStackWeightKg ?? 0) > 0) bits.push(`max ${it.maxStackWeightKg}kg`);
   return bits.join(" · ");
+}
+
+/* ---------------- ConfirmPackingModal ---------------- */
+
+function ConfirmPackingModal({
+  open,
+  onOpenChange,
+  items,
+  onUpdate,
+  onApplyToAll,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  items: CbmItem[];
+  onUpdate: (id: string, patch: Partial<CbmItem>) => void;
+  onApplyToAll: (sourceId: string) => void;
+  onConfirm: () => void;
+}) {
+  const dimensioned = items.filter(
+    (it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0,
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-brand-navy">Confirm packing options</DialogTitle>
+          <DialogDescription>
+            Set packing rules for each item so we can recommend the right container and render an
+            accurate 3D loading plan.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {dimensioned.map((it, idx) => {
+            const color = ITEM_COLORS[items.findIndex((i) => i.id === it.id) % ITEM_COLORS.length];
+            return (
+              <div
+                key={it.id}
+                className="rounded-lg border-2 border-brand-navy/15 bg-card p-3"
+              >
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="size-3 rounded-sm border border-black/10"
+                      style={{ background: color }}
+                      aria-hidden
+                    />
+                    <h4 className="text-sm font-semibold text-brand-navy">
+                      Item {items.findIndex((i) => i.id === it.id) + 1}
+                    </h4>
+                    <span className="text-[11px] text-muted-foreground">
+                      {it.length}×{it.width}×{it.height} cm · {it.qty} pcs
+                    </span>
+                  </div>
+                  {dimensioned.length > 1 && idx === 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 border-brand-navy/40 text-[11px] text-brand-navy"
+                      onClick={() => onApplyToAll(it.id)}
+                    >
+                      Apply to all items
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-brand-navy">
+                        Package type
+                      </Label>
+                      <Select
+                        value={it.packageType ?? "carton"}
+                        onValueChange={(v) => onUpdate(it.id, { packageType: v as PackageType })}
+                      >
+                        <SelectTrigger className="h-8 border-brand-navy/30 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PACKAGE_TYPES.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>
+                              {p.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <NumberField
+                      compact
+                      id={`m-msw-${it.id}`}
+                      label="Max stack weight"
+                      suffix="kg"
+                      value={it.maxStackWeightKg ?? 0}
+                      onChange={(n) =>
+                        onUpdate(it.id, { maxStackWeightKg: Number.isFinite(n) ? Math.max(0, n) : 0 })
+                      }
+                      hint="Max weight allowed on top of one of these. 0 = unlimited."
+                    />
+                  </div>
+
+                  <ToggleRow
+                    title="Stackable"
+                    desc="Allow other cartons on top."
+                    checked={it.stackable !== false}
+                    onChange={(v) => onUpdate(it.id, { stackable: v })}
+                  />
+                  <ToggleRow
+                    title="Fragile"
+                    desc="Loaded last, on top. Nothing stacks on it."
+                    icon={<ShieldAlert className="size-3.5 text-amber-600" />}
+                    checked={it.fragile === true}
+                    onChange={(v) => onUpdate(it.id, { fragile: v })}
+                  />
+                  <ToggleRow
+                    title="Can lay sideways"
+                    desc="Packer may rotate 90° on the floor (swap L↔W)."
+                    checked={it.allowSidewaysRotation !== false}
+                    onChange={(v) => onUpdate(it.id, { allowSidewaysRotation: v })}
+                  />
+                  {!it.fragile && (
+                    <ToggleRow
+                      title="Can stand on side"
+                      desc="Packer may tip it onto its side. Non-fragile only."
+                      checked={it.allowAxisRotation === true}
+                      onChange={(v) => onUpdate(it.id, { allowAxisRotation: v })}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={onConfirm}
+            className="text-white"
+            style={{ background: "var(--brand-navy)" }}
+          >
+            <CheckCircle2 className="size-3.5" /> Confirm & optimize
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
