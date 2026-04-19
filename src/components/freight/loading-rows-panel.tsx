@@ -48,6 +48,15 @@ export function readHeavyThreshold(): number {
 
 interface Props {
   pack: AdvancedPackResult;
+  /**
+   * Emit per-box width-axis offsets (placedIdx → metres along scene-z) when the
+   * loader applies a "Suggested re-shuffle" preview. Pass `null` to clear it.
+   */
+  onApplyShuffle?: (overrides: Map<number, number> | null) => void;
+  /** True while a preview is active (drives the Apply/Clear button label). */
+  shufflePreviewActive?: boolean;
+  /** True when the parent is showing the 2D iso view — preview needs 3D enabled to be visible. */
+  previewRequires3D?: boolean;
 }
 
 /** Per-item count breakdown for a row (returns array of {itemIdx, count, color}). */
