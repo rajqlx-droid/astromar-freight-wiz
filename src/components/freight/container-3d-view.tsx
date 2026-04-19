@@ -37,6 +37,10 @@ export interface Container3DHandle {
   applyFrame: (info: VideoFrameInfo) => void;
   render: () => void;
   getCanvas: () => HTMLCanvasElement | null;
+  /** Temporarily resize the WebGL drawing buffer (for HD video capture). */
+  setRenderSize: (width: number, height: number) => void;
+  /** Restore the renderer's drawing buffer to match the on-screen canvas size. */
+  restoreRenderSize: () => void;
 }
 
 interface Props {
