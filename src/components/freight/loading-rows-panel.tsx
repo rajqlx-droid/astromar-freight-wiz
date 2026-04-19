@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
+  buildRowSideViewSvg,
   buildRows,
   instructionFor,
   itemCountsForRow,
