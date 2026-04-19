@@ -160,9 +160,13 @@ export function CbmCalculator({ items, setItems }: Props) {
   };
 
   const inputsTable = items.flatMap((it, idx) => {
+    const itemCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
+    const itemWt = it.qty * it.weight;
     const rows = [
       { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
-      { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+      { label: `Item ${idx + 1} Qty / Unit Wt`, value: `${it.qty} pcs / ${it.weight} kg` },
+      { label: `Item ${idx + 1} Subtotal CBM`, value: `${itemCbm.toFixed(4)} m³` },
+      { label: `Item ${idx + 1} Subtotal Weight`, value: `${itemWt.toFixed(2)} kg` },
     ];
     if (it.packingConfirmed) {
       rows.push({ label: `Item ${idx + 1} Packing`, value: buildSummary(it) });
@@ -189,8 +193,6 @@ export function CbmCalculator({ items, setItems }: Props) {
                 const rowLen = lenUnitFor(it);
                 const rowWt = wtUnitFor(it);
                 const rowCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
-                const rowVolWt = (rowCbm * 1000) / 5;
-                const rowTotalWt = it.qty * it.weight;
                 return (
                   <>
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -272,29 +274,14 @@ export function CbmCalculator({ items, setItems }: Props) {
                         <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
                       </div>
                       <div
-                        className="rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 p-2.5 md:min-h-full"
-                        aria-label={`Item ${idx + 1} totals`}
+                        className="flex items-center justify-between gap-2 rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-2 md:min-h-full md:flex-col md:items-stretch md:justify-center"
+                        aria-label={`Item ${idx + 1} CBM`}
                       >
-                        <div className="mb-1 flex items-baseline justify-between gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CBM</span>
-                          <span className="text-base font-bold leading-tight" style={{ color: "var(--brand-orange)" }}>
-                            {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
-                            <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vol. wt</span>
-                          <span className="text-sm font-semibold text-brand-navy">
-                            {Number.isFinite(rowVolWt) ? rowVolWt.toFixed(2) : "—"}
-                            <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">kg</span>
-                          </span>
-                        </div>
-                        <div className="mt-0.5 flex items-baseline justify-between gap-2 border-t border-brand-navy/10 pt-1">
-                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total wt</span>
-                          <span className="text-xs font-medium text-muted-foreground">
-                            {Number.isFinite(rowTotalWt) ? rowTotalWt.toFixed(2) : "—"} kg
-                          </span>
-                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CBM</span>
+                        <span className="text-lg font-bold leading-tight md:text-xl" style={{ color: "var(--brand-orange)" }}>
+                          {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
+                          <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
+                        </span>
                       </div>
                     </div>
                   </>
