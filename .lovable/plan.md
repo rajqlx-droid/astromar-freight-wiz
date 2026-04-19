@@ -1,53 +1,49 @@
 
 
-## What user wants
+## Goal
+Generate an MP4 video that teaches a loader, in true 3D, how to pack the container row-by-row using the **same rules** the app's 3D viewer follows: back-wall-first columns, heavy-on-bottom, fragile near the door, non-stackables on the floor, gap awareness, and tilted/turned rotation hints.
 
-Looking at the uploaded screenshot, the blue circle is the empty area to the **right of the Weight field** in each item row. The user wants two things:
+## Video structure (~25s @ 30fps, 1920×1080)
 
-1. **Per-row stats** displayed in that empty space: this row's **CBM** (qty × L×W×H) and its **Volumetric Weight** (CBM × 1000 ÷ 5).
-2. **Per-package editable units** — each item row should have its own length unit (cm/mm/m/in/ft) and weight unit (kg/g/lb), instead of a single shared unit at the top. Today only Item 1 shows the unit pills and they apply globally.
+1. **Intro (0–3s)** — Title "How to load your container", container dims, total cartons, ETA. Empty wireframe container does a slow 360° orbit so the loader sees length × width × height.
+2. **Rules recap (3–6s)** — Four icon cards: Heavy ↓ Bottom · Back wall first · Fragile near door · No-stack stays on floor.
+3. **Row-by-row load (6–22s)** — One mini-scene per row from `buildRows()`:
+   - Camera arcs iso → side → top-down → iso so you see all 3 dimensions of that row.
+   - Boxes drop in with stagger: bottom layer first, then stacked layers.
+   - Side caption: `Row N of M · X cartons · Y kg · against {back wall | row N-1}`.
+   - Tilted/turned boxes flash a hazard band + "ROTATE H↔L" overlay.
+   - Rows with a gap warning pulse a red heatmap on the void + caption "Add dunnage here".
+4. **Door close (22–24s)** — Camera pulls back, doors swing shut, seal applied.
+5. **Outro (24–25s)** — Summary: utilization %, total weight, COG offset, "Match this in the trailer."
 
 ## Approach
+Build a Remotion project under `remotion/` (per the Remotion skill: musl compositor fix, ffmpeg symlinks, programmatic render script with `chromeMode: "chrome-for-testing"` and `muted: true`).
 
-### 1. Per-row units (data model)
-- Extend `CbmItem` in `src/lib/freight/calculators.ts` with optional `lenUnit?: LengthUnit` and `wtUnit?: WeightUnit`. Default to the global preference when missing.
-- Update `emptyCbmItem()` to seed both from the persistent defaults — but since that helper is pure (no React), we'll just leave them undefined and resolve at render time inside `cbm-calculator.tsx`.
+3D scene uses `@react-three/fiber` + `three` inside Remotion, with the camera driven by `useCurrentFrame()` + `interpolate()` (no OrbitControls — every frame is deterministic).
 
-### 2. Per-row unit pills (UI)
-- In `cbm-calculator.tsx`, move the `UnitSelector` + `WeightUnitSelector` compact pills out of the "only when idx === 0" block and render them on **every** row, next to the "Item N" title (already where they sit today, just no longer gated on idx).
-- Each row's pills read/write `it.lenUnit` / `it.wtUnit` via `update(it.id, …)`. The first time a user changes Item 1's unit it also updates the persistent default (so new rows inherit it); subsequent rows are independent.
-- Replace `showLen`/`setLen`/`showWt`/`setWt` to take a row-resolved unit instead of the shared one.
+To guarantee the video matches the app's logic, the Remotion scene **imports the existing packing math directly**: `packAdvanced` and `buildRows` from `src/lib/freight/`. Same boxes, same positions, same row order as the in-app viewer.
 
-### 3. Per-row CBM + Vol-weight stat block (the blue area)
-- Add a compact summary block to the right of (or below, on mobile) the 5-input grid showing:
-  - **CBM**: `(L × W × H × qty) / 1,000,000` in m³ (4 decimals)
-  - **Vol. weight**: `CBM × 1000 / 5` in kg (2 decimals)
-  - **Total weight**: `qty × weight` in kg (small, muted)
-- Layout: change the row's grid so inputs span the left columns and the stat block sits in a right-side card-within-card. On mobile it stacks below the inputs.
-- Visual: light navy-soft background, two highlighted numbers, brand-orange accent on the headline (CBM). Updates live as user types.
+## Visual direction
+- Palette: cargo teal `#14b8a6`, dark slate bg `#0f172a`, amber `#f59e0b` for fragile/hazard, red `#ef4444` for gaps, off-white `#f5f5f4` text.
+- Typography: **Space Grotesk** (display) + **Inter** (body) via `@remotion/google-fonts`.
+- Motion system: spring entrance for boxes (`damping: 18, stiffness: 180`), smooth ease for camera, snappy fade for captions. One transition style between scenes (`fade`).
 
-### 4. Files to edit
-- `src/lib/freight/calculators.ts` — add optional unit fields to `CbmItem`.
-- `src/components/freight/cbm-calculator.tsx` — render per-row pills, per-row stat block, resolve per-row units in show/set helpers.
-- No changes needed to packing/3D/PDF — they read cm/kg from the model and stay correct.
+## Output
+- `/mnt/documents/loading-guide.mp4`
+- All Remotion source committed under `remotion/` so the video can be re-rendered/iterated later.
 
-### Notes / non-goals
-- Air calculator and other calculators stay on shared units (out of scope; user only asked about page 1 = CBM).
-- Existing global unit pills on Item 1 keep working (they update Item 1's row unit AND the persistent default for new rows).
-- Storage shape: `length/width/height` stay in cm and `weight` stays in kg internally — only the display unit is per-row, so saved calculations remain compatible.
+## Three quick choices before I build
 
-### ASCII of the new row layout (desktop)
+**1. Scenario source**
+- (A) **Use my current scenario** — I add a "Generate loading video" button to the Container Load Optimizer that snapshots the current pack + container into `remotion/public/scenario.json`, then renders. Video matches exactly what you just packed.
+- (B) **Generic demo** — Hard-coded 20ft GP + mixed cartons + 1 fragile pallet. No app changes, faster.
+- (C) **Both** — Render generic demo this turn, wire up the per-scenario button in a follow-up.
 
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│ ● Item 1   [LEN cm▾] [WT kg▾]              [Packing options] [⎘][🗑] │
-│ ┌──────────────────────────────────────┐  ┌────────────────────────┐ │
-│ │ L  | W  | H  | Qty | Wt              │  │ CBM      0.0720 m³     │ │
-│ │ 60 | 40 | 30 | 20  | 5               │  │ Vol. wt  14.40 kg      │ │
-│ └──────────────────────────────────────┘  │ Total wt 100.00 kg     │ │
-│                                            └────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────────┘
-```
+**2. Length / detail**
+- Quick (~15s, montage), **Standard (~25s, recommended)**, or Detailed (~40s with per-row 360° orbit, COG explainer, dunnage close-ups).
 
-On mobile the right card stacks under the inputs.
+**3. Voiceover**
+- Captions only (no audio, smaller file), or ElevenLabs narration (needs ElevenLabs API key in the project).
+
+Reply with your picks (e.g. "A, Standard, captions only") and I'll build and render.
 
