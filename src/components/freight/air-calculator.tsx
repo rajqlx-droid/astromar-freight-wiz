@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
 import { calcAir, emptyAirItem, type AirItem } from "@/lib/freight/calculators";
+import { nextId } from "@/lib/freight/ids";
 
 interface Props {
   items: AirItem[];
@@ -21,7 +22,7 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
   const remove = (id: string) => setItems(items.filter((it) => it.id !== id));
   const duplicate = (id: string) => {
     const src = items.find((i) => i.id === id);
-    if (src) setItems([...items, { ...src, id: crypto.randomUUID() }]);
+    if (src) setItems([...items, { ...src, id: nextId("air") }]);
   };
 
   const warn = result.items.find((i) => i.label === "Cost Impact" && i.value.startsWith("+"));

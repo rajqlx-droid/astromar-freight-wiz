@@ -4,6 +4,7 @@
  */
 
 import type { CalcResult } from "./types";
+import { nextId } from "./ids";
 
 export const fmt = (n: number, digits = 2) =>
   Number.isFinite(n)
@@ -35,7 +36,7 @@ export interface CbmItem {
 }
 
 export const emptyCbmItem = (): CbmItem => ({
-  id: crypto.randomUUID(),
+  id: nextId("cbm"),
   length: 0,
   width: 0,
   height: 0,
@@ -86,7 +87,7 @@ export interface AirItem {
 }
 
 export const emptyAirItem = (): AirItem => ({
-  id: crypto.randomUUID(),
+  id: nextId("air"),
   length: 0,
   width: 0,
   height: 0,
