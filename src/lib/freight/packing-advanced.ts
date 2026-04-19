@@ -27,6 +27,8 @@ export interface ItemPlacementStat {
   reason?: string;
   stackable: boolean;
   fragile: boolean;
+  /** Weight per individual package (kg) — used by row-grouping to flag mixed pallets. */
+  weightKgPerPkg: number;
 }
 
 export interface AdvancedPackResult {
@@ -406,6 +408,7 @@ export function packContainerAdvanced(
       reason: planned > 0 && placedN < planned ? perItemReason[idx] || "Container full" : undefined,
       stackable: it.stackable !== false,
       fragile: it.fragile === true,
+      weightKgPerPkg: it.weight ?? 0,
     };
   });
 

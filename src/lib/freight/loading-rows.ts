@@ -54,22 +54,26 @@ export function buildRows(pack: AdvancedPackResult): RowGroup[] {
     let rotatedCount = 0;
     let hasHeavyNonFragile = false;
     const zLevels = new Set<number>();
-    const avgKgPerPkg = pack.placedCartons > 0 ? pack.weightKg / pack.placedCartons : 0;
     for (const b of r.boxes) {
       const stat = pack.perItem[b.itemIdx];
       totalCbm += (b.l * b.w * b.h) / 1_000_000_000;
       const placedOfItem = stat?.placed ?? 1;
       if (stat && placedOfItem > 0) {
-        const itemSliceWeight =
-          (pack.weightKg * (placedOfItem / (pack.placedCartons || 1))) / placedOfItem;
-        totalWeightKg += itemSliceWeight;
+        const perPkg = stat.weightKgPerPkg ?? 0;
+        if (perPkg > 0) {
+          totalWeightKg += perPkg;
+        } else {
+          const itemSliceWeight =
+            (pack.weightKg * (placedOfItem / (pack.placedCartons || 1))) / placedOfItem;
+          totalWeightKg += itemSliceWeight;
+        }
       }
       if (stat?.fragile) hasFragile = true;
       if (stat && !stat.stackable) hasNonStack = true;
-      // Heuristic: a non-fragile box is "heavy" when row-average per-package
-      // weight crosses the threshold. We don't have per-pkg weight on PlacedBox,
-      // so use the pack-level average — good enough to flag mixed pallets.
-      if (stat && !stat.fragile && avgKgPerPkg >= HEAVY_KG_PER_PKG_THRESHOLD) {
+      // A non-fragile box is "heavy" when its own per-package weight crosses
+      // the threshold. (Previously used a row-wide average which masked a
+      // single heavy item mixed with many light ones.)
+      if (stat && !stat.fragile && (stat.weightKgPerPkg ?? 0) >= HEAVY_KG_PER_PKG_THRESHOLD) {
         hasHeavyNonFragile = true;
       }
       if (b.rotated === "sideways" || b.rotated === "axis") rotatedCount++;
