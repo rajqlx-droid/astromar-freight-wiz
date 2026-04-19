@@ -431,11 +431,18 @@ function SceneContents({
   );
 }
 
-function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
+function ContainerShell({
+  Cm,
+  doorOpen = 1,
+}: {
+  Cm: { l: number; w: number; h: number };
+  doorOpen?: number;
+}) {
   // Real container: corrugated steel walls, plywood floor, painted steel frame.
-  // Door is at +x (open), so rear wall is at -x. We render a 3-walls + roof
-  // silhouette so the camera can always see inside through the door.
+  // Door is at +x. Two hinged doors swing outward — left hinges at -z corner,
+  // right hinges at +z corner. doorOpen: 0 = closed, 1 = wide open (~135°).
   const wallColor = "#2c4a6b";
+  const doorColor = "#234058";
 
   const plywoodTex = useMemo(() => {
     const t = makePlywoodTexture();
@@ -453,6 +460,11 @@ function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
     t.repeat.set(Math.max(2, Cm.w / 0.3), Math.max(2, Cm.h / 1.5));
     return t;
   }, [Cm.w, Cm.h]);
+  const doorTex = useMemo(() => {
+    const t = makeCorrugatedTexture(doorColor);
+    t.repeat.set(Math.max(2, Cm.w / 0.6), Math.max(2, Cm.h / 1.5));
+    return t;
+  }, [Cm.w, Cm.h]);
 
   const FRAME = "#1a2433";
   const frameThk = 0.06;
@@ -464,6 +476,10 @@ function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
     [Cm.l / 2, Cm.w / 2],
   ];
 
+  const doorW = Cm.w / 2;
+  const doorH = Cm.h - 0.08;
+  const swing = doorOpen * (Math.PI * 0.75);
+
   return (
     <group>
       {/* Plywood floor */}
@@ -472,13 +488,13 @@ function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
         <meshStandardMaterial map={plywoodTex} roughness={0.85} />
       </mesh>
 
-      {/* Back wall (-x) — solid corrugated */}
+      {/* Back wall (-x) */}
       <mesh receiveShadow castShadow position={[-Cm.l / 2, Cm.h / 2, 0]}>
         <boxGeometry args={[0.05, Cm.h, Cm.w]} />
         <meshStandardMaterial map={wallTexZ} roughness={0.7} metalness={0.2} />
       </mesh>
 
-      {/* Left side wall (-z) — solid corrugated */}
+      {/* Left side wall (-z) */}
       <mesh receiveShadow position={[0, Cm.h / 2, -Cm.w / 2]}>
         <boxGeometry args={[Cm.l, Cm.h, 0.05]} />
         <meshStandardMaterial map={wallTexX} roughness={0.7} metalness={0.2} />
@@ -502,39 +518,175 @@ function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
         <meshStandardMaterial color={wallColor} transparent opacity={0.12} />
       </mesh>
 
-      {/* Steel corner posts (the iconic container silhouette) */}
+      {/* Steel corner posts */}
       {corners.map(([x, z], i) => (
         <mesh key={`post-${i}`} castShadow position={[x, Cm.h / 2, z]}>
           <boxGeometry args={[frameThk, Cm.h + 0.06, frameThk]} />
           <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
         </mesh>
       ))}
-      {/* Top length rails */}
       {[-Cm.w / 2, Cm.w / 2].map((z, i) => (
         <mesh key={`top-l-${i}`} position={[0, Cm.h, z]}>
           <boxGeometry args={[Cm.l + 0.06, frameThk, frameThk]} />
           <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
         </mesh>
       ))}
-      {/* Top width rails */}
       {[-Cm.l / 2, Cm.l / 2].map((x, i) => (
         <mesh key={`top-w-${i}`} position={[x, Cm.h, 0]}>
           <boxGeometry args={[frameThk, frameThk, Cm.w + 0.06]} />
           <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
         </mesh>
       ))}
-      {/* Bottom length rails */}
       {[-Cm.w / 2, Cm.w / 2].map((z, i) => (
         <mesh key={`bot-l-${i}`} position={[0, 0, z]}>
           <boxGeometry args={[Cm.l + 0.06, frameThk, frameThk]} />
           <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
         </mesh>
       ))}
-      {/* Door header above the open door (+x) */}
+      {/* Door header */}
       <mesh position={[Cm.l / 2, Cm.h - 0.08, 0]}>
         <boxGeometry args={[0.08, 0.16, Cm.w]} />
         <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
       </mesh>
+
+      {/* Hinged DOORS — left panel hinges at -z corner, right at +z corner */}
+      <group
+        position={[Cm.l / 2, doorH / 2 + 0.04, -Cm.w / 2]}
+        rotation={[0, -swing, 0]}
+      >
+        <mesh castShadow position={[0.025, 0, doorW / 2]}>
+          <boxGeometry args={[0.05, doorH, doorW]} />
+          <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
+        </mesh>
+        {[doorW * 0.25, doorW * 0.75].map((zz, i) => (
+          <mesh key={`bar-l-${i}`} position={[0.06, 0, zz]}>
+            <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
+            <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
+          </mesh>
+        ))}
+        {[-doorH / 3, doorH / 3].map((yy, i) => (
+          <mesh key={`hng-l-${i}`} position={[0.04, yy, 0.04]}>
+            <boxGeometry args={[0.05, 0.12, 0.06]} />
+            <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
+          </mesh>
+        ))}
+      </group>
+
+      <group
+        position={[Cm.l / 2, doorH / 2 + 0.04, Cm.w / 2]}
+        rotation={[0, swing, 0]}
+      >
+        <mesh castShadow position={[0.025, 0, -doorW / 2]}>
+          <boxGeometry args={[0.05, doorH, doorW]} />
+          <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
+        </mesh>
+        {[-doorW * 0.25, -doorW * 0.75].map((zz, i) => (
+          <mesh key={`bar-r-${i}`} position={[0.06, 0, zz]}>
+            <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
+            <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
+          </mesh>
+        ))}
+        {[-doorH / 3, doorH / 3].map((yy, i) => (
+          <mesh key={`hng-r-${i}`} position={[0.04, yy, -0.04]}>
+            <boxGeometry args={[0.05, 0.12, 0.06]} />
+            <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  );
+}
+
+/* --------------- Forklift --------------- */
+
+function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
+  // Recognizable forklift: yellow chassis, mast in front (-x), two forks.
+  // Origin = base center on ground. Forks point in -x (toward container door).
+  const BODY = "#fbbf24";
+  const DARK = "#1f2937";
+  return (
+    <group position={[x + 0.6, 0, z]}>
+      {/* Chassis */}
+      <mesh castShadow position={[0.1, 0.3, 0]}>
+        <boxGeometry args={[1.0, 0.5, 0.9]} />
+        <meshStandardMaterial color={BODY} roughness={0.5} metalness={0.2} />
+      </mesh>
+      <mesh castShadow position={[0.55, 0.25, 0]}>
+        <boxGeometry args={[0.25, 0.4, 0.85]} />
+        <meshStandardMaterial color={DARK} roughness={0.6} />
+      </mesh>
+      {/* Overhead guard */}
+      {([
+        [-0.2, 0.6, -0.4],
+        [-0.2, 0.6, 0.4],
+        [0.5, 0.6, -0.4],
+        [0.5, 0.6, 0.4],
+      ] as Array<[number, number, number]>).map(([px, py, pz], i) => (
+        <mesh key={`cage-${i}`} position={[px, py + 0.45, pz]}>
+          <boxGeometry args={[0.05, 0.9, 0.05]} />
+          <meshStandardMaterial color={DARK} />
+        </mesh>
+      ))}
+      <mesh position={[0.15, 1.55, 0]}>
+        <boxGeometry args={[0.85, 0.04, 0.9]} />
+        <meshStandardMaterial color={DARK} />
+      </mesh>
+      {/* Seat */}
+      <mesh position={[0.25, 0.6, 0]}>
+        <boxGeometry args={[0.35, 0.05, 0.4]} />
+        <meshStandardMaterial color="#111827" />
+      </mesh>
+      <mesh position={[0.45, 0.78, 0]}>
+        <boxGeometry args={[0.05, 0.35, 0.4]} />
+        <meshStandardMaterial color="#111827" />
+      </mesh>
+
+      {/* Wheels */}
+      {([
+        [-0.35, 0.18, -0.5],
+        [-0.35, 0.18, 0.5],
+        [0.35, 0.18, -0.5],
+        [0.35, 0.18, 0.5],
+      ] as Array<[number, number, number]>).map(([px, py, pz], i) => (
+        <mesh key={`wheel-${i}`} position={[px, py, pz]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[0.18, 0.18, 0.18, 16]} />
+          <meshStandardMaterial color="#111827" />
+        </mesh>
+      ))}
+
+      {/* Mast — vertical rails ahead of cabin */}
+      <mesh position={[-0.4, 0.9, -0.25]}>
+        <boxGeometry args={[0.06, 1.8, 0.06]} />
+        <meshStandardMaterial color={DARK} metalness={0.6} roughness={0.3} />
+      </mesh>
+      <mesh position={[-0.4, 0.9, 0.25]}>
+        <boxGeometry args={[0.06, 1.8, 0.06]} />
+        <meshStandardMaterial color={DARK} metalness={0.6} roughness={0.3} />
+      </mesh>
+      <mesh position={[-0.4, 1.8, 0]}>
+        <boxGeometry args={[0.08, 0.06, 0.6]} />
+        <meshStandardMaterial color={DARK} />
+      </mesh>
+
+      {/* Carriage + forks — lift to forkY */}
+      <group position={[-0.42, forkY, 0]}>
+        <mesh>
+          <boxGeometry args={[0.08, 0.25, 0.55]} />
+          <meshStandardMaterial color={DARK} metalness={0.7} roughness={0.3} />
+        </mesh>
+        {[-0.18, 0.18].map((zz, i) => (
+          <group key={`fork-${i}`}>
+            <mesh position={[-0.55, -0.05, zz]}>
+              <boxGeometry args={[1.0, 0.04, 0.08]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.85} roughness={0.25} />
+            </mesh>
+            <mesh position={[-0.06, 0.05, zz]}>
+              <boxGeometry args={[0.04, 0.18, 0.08]} />
+              <meshStandardMaterial color="#cbd5e1" metalness={0.85} roughness={0.25} />
+            </mesh>
+          </group>
+        ))}
+      </group>
     </group>
   );
 }
