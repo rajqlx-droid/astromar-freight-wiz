@@ -102,30 +102,45 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
         return;
       }
 
-      handle.beginRecording(30, 20);
+      // Resize the WebGL drawing buffer to the requested resolution for HD capture.
+      // 16:9 aspect to match common video players.
+      const targetH = resolution;
+      const targetW = Math.round((targetH * 16) / 9);
+      handle.setRenderSize(targetW, targetH);
 
-      const result = await generateLoadingVideo({
-        pack,
-        controls: {
-          applyFrame: (info) => {
-            handle.applyFrame(info);
-            setCurrentInfo(info);
+      // Bitrate scales with resolution for crisper output.
+      const bitrate = resolution === 1080 ? 12_000_000 : 8_000_000;
+
+      handle.beginRecording(30, 12);
+
+      try {
+        const result = await generateLoadingVideo({
+          pack,
+          controls: {
+            applyFrame: (info) => {
+              handle.applyFrame(info);
+              setCurrentInfo(info);
+            },
+            render: () => handle.render(),
+            getCanvas: () => handle.getCanvas(),
+            capture: () => handle.getCanvas()?.toDataURL("image/png") ?? "",
           },
-          render: () => handle.render(),
-          getCanvas: () => handle.getCanvas(),
-          capture: () => handle.getCanvas()?.toDataURL("image/png") ?? "",
-        },
-        width: canvas.width,
-        height: canvas.height,
-        fps: 30,
-        durationSec: 20,
-        onProgress: (frame, total) => setProgress({ frame, total }),
-      });
+          width: targetW,
+          height: targetH,
+          fps: 30,
+          durationSec: 12,
+          videoBitsPerSecond: bitrate,
+          onProgress: (frame, total) => setProgress({ frame, total }),
+        });
 
-      handle.endRecording();
-      const objectUrl = URL.createObjectURL(result.blob);
-      setUrl(objectUrl);
-      setVideo(result);
+        handle.endRecording();
+        const objectUrl = URL.createObjectURL(result.blob);
+        setUrl(objectUrl);
+        setVideo(result);
+      } finally {
+        // Always restore the on-screen canvas size, even if encoding fails.
+        handle.restoreRenderSize();
+      }
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Failed to generate video");
