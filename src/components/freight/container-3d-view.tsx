@@ -1230,8 +1230,134 @@ function CargoBox({
           )}
         </>
       )}
+      {/* Green checkmark stamp — shown briefly when this is the active pallet
+          (parent clears showCheckmark after ~400ms). */}
+      {showCheckmark && (
+        <Html position={[0, hm / 2 + 0.18, 0]} center zIndexRange={[100, 0]}>
+          <div className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-lg">
+            ✓
+          </div>
+        </Html>
+      )}
     </group>
   );
+}
+
+/* --------------- Next-pallet target outline (pulsing yellow) --------------- */
+
+function NextPalletTarget({ box }: { box: PlacedBox }) {
+  const lm = box.l / MM_PER_M;
+  const wm = box.w / MM_PER_M;
+  const hm = box.h / MM_PER_M;
+  const cx = box.x / MM_PER_M + lm / 2;
+  const cy = box.z / MM_PER_M + hm / 2;
+  const cz = box.y / MM_PER_M + wm / 2;
+  const matRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  useFrame(({ clock }) => {
+    if (matRef.current) {
+      matRef.current.opacity = 0.4 + 0.4 * Math.abs(Math.sin(clock.elapsedTime * 3));
+    }
+  });
+  return (
+    <group position={[cx, cy, cz]}>
+      <mesh>
+        <boxGeometry args={[lm * 1.02, hm * 1.02, wm * 1.02]} />
+        <meshBasicMaterial
+          ref={matRef}
+          color="#facc15"
+          transparent
+          opacity={0.6}
+          wireframe
+        />
+      </mesh>
+      {/* Glowing floor footprint */}
+      <mesh position={[0, -hm / 2 + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[lm * 1.05, wm * 1.05]} />
+        <meshBasicMaterial color="#facc15" transparent opacity={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+/* --------------- Lightweight forklift token (HUD walkthrough) --------------- */
+
+function LightForkliftToken({ box, containerL }: { box: PlacedBox; containerL: number }) {
+  // A simple low-poly stand-in: yellow chassis + two grey forks. Slides from
+  // the door (+x in world space, mapped to container x = containerL_mm) toward
+  // the active pallet's column. We position it just in front of the pallet
+  // (door side) so it doesn't occlude the box itself.
+  const lm = box.l / MM_PER_M;
+  const wm = box.w / MM_PER_M;
+  const cx = box.x / MM_PER_M + lm / 2;
+  const cz = box.y / MM_PER_M + wm / 2;
+  // Position just door-side of the pallet, on the floor.
+  const targetX = Math.min(containerL - 0.6, cx + lm / 2 + 0.6);
+  const ref = useRef<THREE.Group | null>(null);
+  const startRef = useRef<number | null>(null);
+  useFrame((_s, delta) => {
+    if (!ref.current) return;
+    if (startRef.current === null) {
+      startRef.current = 0;
+      ref.current.position.set(containerL + 1.2, 0, cz);
+    }
+    startRef.current += delta;
+    const t = Math.min(1, startRef.current / 0.6);
+    const e = 1 - Math.pow(1 - t, 3);
+    const x = (containerL + 1.2) + (targetX - (containerL + 1.2)) * e;
+    ref.current.position.set(x, 0, cz);
+  });
+  return (
+    <group ref={ref} position={[containerL + 1.2, 0, cz]}>
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <boxGeometry args={[0.6, 0.45, 0.55]} />
+        <meshStandardMaterial color="#fbbf24" roughness={0.6} />
+      </mesh>
+      <mesh position={[-0.45, 0.05, -0.15]}>
+        <boxGeometry args={[0.55, 0.04, 0.06]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.7} roughness={0.3} />
+      </mesh>
+      <mesh position={[-0.45, 0.05, 0.15]}>
+        <boxGeometry args={[0.55, 0.04, 0.06]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.7} roughness={0.3} />
+      </mesh>
+    </group>
+  );
+}
+
+/* --------------- Follow camera (shoulder of loader) --------------- */
+
+function FollowCam({ Cm, activeBox }: { Cm: { l: number; w: number; h: number }; activeBox: PlacedBox | null }) {
+  const { camera } = useThree();
+  const targetVec = useRef(new THREE.Vector3());
+  const camPos = useRef(new THREE.Vector3());
+
+  useFrame(() => {
+    // Active box position in scene coords (the cargo group is centred at origin
+    // with translation [-Cm.l/2, 0, -Cm.w/2], so we mirror the same maths.)
+    let tx = 0;
+    let ty = Cm.h / 2;
+    let tz = 0;
+    let layer = 0;
+    if (activeBox) {
+      const lm = activeBox.l / MM_PER_M;
+      const wm = activeBox.w / MM_PER_M;
+      const hm = activeBox.h / MM_PER_M;
+      tx = -Cm.l / 2 + activeBox.x / MM_PER_M + lm / 2;
+      ty = activeBox.z / MM_PER_M + hm / 2;
+      tz = -Cm.w / 2 + activeBox.y / MM_PER_M + wm / 2;
+      layer = Math.floor(activeBox.z / 100);
+    }
+    // Camera sits ~1.5m past the door (+x) at loader eye height (1.7m), lifts
+    // when stacking 2nd+ layer. Pans laterally to follow active pallet's z.
+    const eyeY = 1.7 + layer * 0.4;
+    const camX = Cm.l / 2 + 1.6;
+    const camZ = tz * 0.5; // partial track so the loader feels like they're stepping with the pallet
+    camPos.current.set(camX, eyeY, camZ);
+    camera.position.lerp(camPos.current, 0.12);
+    targetVec.current.set(tx, ty, tz);
+    camera.lookAt(targetVec.current);
+  });
+  return null;
 }
 
 /* --------------- Tilt info card (shown on hover) --------------- */
