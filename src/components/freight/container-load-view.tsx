@@ -384,30 +384,6 @@ function Legend({ items }: { items: CbmItem[] }) {
   );
 }
 
-function MultiPlan({ plan }: { plan: ReturnType<typeof splitMultiContainer> }) {
-  return (
-    <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 dark:bg-amber-950/20">
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-900 dark:text-amber-200">
-        <Boxes className="size-4" />
-        Multi-container plan ({plan.totalCbm.toFixed(2)} m³ total)
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {plan.units.map((u, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between rounded-md bg-white/70 px-2.5 py-1.5 text-xs dark:bg-amber-950/40"
-          >
-            <span className="font-semibold text-brand-navy">
-              #{i + 1} {u.container.name}
-            </span>
-            <span className="text-muted-foreground">
-              {u.fillCbm.toFixed(1)} m³ · {u.fillPct.toFixed(0)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 /* ---------------- Isometric SVG (2D fallback) ---------------- */
