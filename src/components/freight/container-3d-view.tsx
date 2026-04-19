@@ -5,6 +5,8 @@
  * - Translucent container walls so cargo is always visible.
  * - Soft shadows + ambient lighting.
  * - Exposes a snapshot API (via ref) returning PNG dataURLs for the PDF.
+ * - Exposes a frame-recording API (applyFrame / render / getCanvas) used by
+ *   the loading-video generator.
  *
  * Lazy-loaded by container-load-view.tsx (client-only).
  */
@@ -16,12 +18,25 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
+import {
+  buildTimeline,
+  cameraInfoForFrame,
+  transformsForFrame,
+  type Timeline,
+  type VideoFrameInfo,
+} from "@/lib/freight/loading-video";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
 export interface Container3DHandle {
   /** Capture a PNG dataURL from each preset angle. Used by PDF export. */
   captureAngles: () => Promise<{ iso: string; front: string; side: string }>;
+  /** Frame-level recording controls used by the loading-video generator. */
+  beginRecording: (fps: number, durationSec: number) => Timeline;
+  endRecording: () => void;
+  applyFrame: (info: VideoFrameInfo) => void;
+  render: () => void;
+  getCanvas: () => HTMLCanvasElement | null;
 }
 
 interface Props {
@@ -39,6 +54,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
+  const [recordingTimeline, setRecordingTimeline] = useState<Timeline | null>(null);
+  const [currentFrame, setCurrentFrame] = useState(0);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -56,7 +73,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
   // Snapshot helper — render an offscreen canvas at fixed angle and return PNG.
   useImperativeHandle(ref, () => ({
     async captureAngles() {
-      // Render the live canvas at three preset positions and grab PNGs.
       const angles: Record<"iso" | "front" | "side", string> = {
         iso: "",
         front: "",
@@ -87,6 +103,33 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
       gl.render(scene, cam);
       return angles;
     },
+    beginRecording(fps: number, durationSec: number) {
+      const t = buildTimeline(pack, fps, durationSec);
+      setRecordingTimeline(t);
+      setCurrentFrame(0);
+      return t;
+    },
+    endRecording() {
+      setRecordingTimeline(null);
+      setCurrentFrame(0);
+    },
+    applyFrame(info: VideoFrameInfo) {
+      setCurrentFrame(info.frame);
+      const cam = cameraRef.current;
+      if (!cam || !recordingTimeline) return;
+      const camInfo = cameraInfoForFrame(pack, recordingTimeline, info.frame);
+      cam.position.set(...camInfo.position);
+      cam.lookAt(...camInfo.target);
+    },
+    render() {
+      const gl = glRef.current;
+      const scene = sceneRef.current;
+      const cam = cameraRef.current;
+      if (gl && scene && cam) gl.render(scene, cam);
+    },
+    getCanvas() {
+      return glRef.current?.domElement ?? null;
+    },
   }));
 
   return (
@@ -106,7 +149,13 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
         }}
       >
         <Suspense fallback={<Html center>Loading 3D…</Html>}>
-          <SceneContents pack={pack} Cm={Cm} preset={preset} />
+          <SceneContents
+            pack={pack}
+            Cm={Cm}
+            preset={preset}
+            recording={recordingTimeline}
+            frame={currentFrame}
+          />
         </Suspense>
       </Canvas>
 
@@ -144,17 +193,22 @@ function SceneContents({
   pack,
   Cm,
   preset,
+  recording,
+  frame,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
+  recording: Timeline | null;
+  frame: number;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
   const target = useMemo(() => new THREE.Vector3(0, Cm.h / 2, 0), [Cm.h]);
 
-  // Apply preset.
+  // Apply preset only when not recording (recording drives the camera externally).
   useEffect(() => {
+    if (recording) return;
     if (!camera) return;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
@@ -167,7 +221,14 @@ function SceneContents({
     cam.position.copy(positions[preset]);
     cam.lookAt(preset === "inside" ? new THREE.Vector3(Cm.l / 2, Cm.h / 2, 0) : target);
     controlsRef.current?.update?.();
-  }, [preset, Cm.l, Cm.w, Cm.h, camera, target]);
+  }, [preset, Cm.l, Cm.w, Cm.h, camera, target, recording]);
+
+  // Per-frame transforms (only when recording).
+  const transforms = useMemo(
+    () =>
+      recording ? transformsForFrame(pack, recording, frame) : null,
+    [recording, pack, frame],
+  );
 
   return (
     <>
@@ -185,6 +246,7 @@ function SceneContents({
         ref={controlsRef}
         target={target}
         enablePan
+        enabled={!recording}
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
@@ -209,27 +271,42 @@ function SceneContents({
 
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
-        {pack.placed.map((b, i) => (
-          <CargoBox key={i} box={b} stat={pack.perItem[b.itemIdx]} />
-        ))}
+        {pack.placed.map((b, i) => {
+          const t = transforms?.[i];
+          // When recording: skip boxes that aren't visible yet, apply offsets.
+          if (recording && t && !t.visible) return null;
+          return (
+            <CargoBox
+              key={i}
+              box={b}
+              stat={pack.perItem[b.itemIdx]}
+              offset={t?.offset}
+              scale={t?.scale}
+            />
+          );
+        })}
       </group>
 
-      {/* Dimension labels */}
-      <Html position={[0, -0.2, Cm.w / 2 + 0.3]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-          {(Cm.l).toFixed(2)} m
-        </span>
-      </Html>
-      <Html position={[Cm.l / 2 + 0.3, -0.2, 0]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-          {(Cm.w).toFixed(2)} m
-        </span>
-      </Html>
-      <Html position={[-Cm.l / 2 - 0.3, Cm.h / 2, -Cm.w / 2]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-          {(Cm.h).toFixed(2)} m
-        </span>
-      </Html>
+      {/* Dimension labels — hidden during recording for clean video frames */}
+      {!recording && (
+        <>
+          <Html position={[0, -0.2, Cm.w / 2 + 0.3]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+              {(Cm.l).toFixed(2)} m
+            </span>
+          </Html>
+          <Html position={[Cm.l / 2 + 0.3, -0.2, 0]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+              {(Cm.w).toFixed(2)} m
+            </span>
+          </Html>
+          <Html position={[-Cm.l / 2 - 0.3, Cm.h / 2, -Cm.w / 2]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+              {(Cm.h).toFixed(2)} m
+            </span>
+          </Html>
+        </>
+      )}
     </>
   );
 }
@@ -279,21 +356,25 @@ function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
 function CargoBox({
   box,
   stat,
+  offset,
+  scale = 1,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
+  offset?: [number, number, number];
+  scale?: number;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
   const hm = box.h / MM_PER_M;
-  const cx = box.x / MM_PER_M + lm / 2;
-  const cy = box.z / MM_PER_M + hm / 2;
-  const cz = box.y / MM_PER_M + wm / 2;
+  const cx = box.x / MM_PER_M + lm / 2 + (offset?.[0] ?? 0);
+  const cy = box.z / MM_PER_M + hm / 2 + (offset?.[1] ?? 0);
+  const cz = box.y / MM_PER_M + wm / 2 + (offset?.[2] ?? 0);
   const nonStack = stat && !stat.stackable;
   const fragile = stat?.fragile;
 
   return (
-    <group position={[cx, cy, cz]}>
+    <group position={[cx, cy, cz]} scale={scale}>
       <mesh castShadow receiveShadow>
         <boxGeometry args={[lm, hm, wm]} />
         <meshStandardMaterial
