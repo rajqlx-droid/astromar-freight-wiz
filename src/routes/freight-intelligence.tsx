@@ -12,6 +12,8 @@ import {
   MapPin,
   ArrowRight,
 } from "lucide-react";
+import { toast } from "sonner";
+import { nextId } from "@/lib/freight/ids";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
