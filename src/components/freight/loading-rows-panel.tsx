@@ -82,6 +82,7 @@ export function LoadingRowsPanel({ pack }: Props) {
           row.totalWeightKg > 0
             ? `· ~${row.totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
             : "";
+        const sideSvg = buildRowSideViewSvg(row, pack, { width: 240, height: 96 });
         return `
           <li class="row">
             <div class="row-head">
@@ -94,8 +95,16 @@ export function LoadingRowsPanel({ pack }: Props) {
               <span class="check"></span>
             </div>
             <div class="row-body">
-              <div class="chips">${itemsHtml}</div>
-              <div class="instruction"><strong>Loader:</strong> ${instructionFor(row)}</div>
+              <div class="row-body-grid">
+                <div class="side-view">
+                  <div class="side-view-label">Side view (looking down container)</div>
+                  ${sideSvg}
+                </div>
+                <div class="row-body-text">
+                  <div class="chips">${itemsHtml}</div>
+                  <div class="instruction"><strong>Loader:</strong> ${instructionFor(row)}</div>
+                </div>
+              </div>
             </div>
           </li>`;
       })
