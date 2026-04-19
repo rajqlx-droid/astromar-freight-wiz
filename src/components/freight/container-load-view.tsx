@@ -445,51 +445,51 @@ function SinglePlanBody({
                   </div>
                 }
               >
-                <Container3DView
-                  ref={isActive ? view3DRef : undefined}
-                  pack={pack}
-                  shufflePreview={shufflePreview}
-                  visiblePlacedSet={visiblePlacedSet}
-                  hideDoors={stepMode}
-                  gapHeatmapRow={gapHeatmapRow}
-                  flyInPlacedSet={flyInPlacedSet}
-                  flyInKey={flyInKey}
-                />
+                <div className="relative">
+                  <Container3DView
+                    ref={isActive ? view3DRef : undefined}
+                    pack={pack}
+                    shufflePreview={shufflePreview}
+                    visiblePlacedSet={visiblePlacedSet}
+                    hideDoors={stepMode}
+                    gapHeatmapRow={gapHeatmapRow}
+                    flyInPlacedSet={flyInPlacedSet}
+                    flyInKey={flyInKey}
+                    activePalletIdx={activePalletIdx}
+                    nextPalletIdx={nextPalletIdx}
+                    followCam={isPlaying}
+                    showForkliftToken={showForkliftToken && currentStep != null}
+                  />
+                  {stepMode && (
+                    <LoaderHUD
+                      step={currentStep}
+                      totalSteps={palletSequence.length}
+                      currentIdx={palletIdx}
+                      isPlaying={isPlaying}
+                      speed={speed}
+                      onPlayPause={togglePlay}
+                      onPrev={goPrev}
+                      onNext={goNext}
+                      onReset={goReset}
+                      onSpeedChange={setSpeed}
+                      showForklift={showForkliftToken}
+                      onToggleForklift={() => setShowForkliftToken((v) => !v)}
+                    />
+                  )}
+                </div>
               </Suspense>
             ) : (
               <IsoContainer pack={pack} />
             )}
-            {is3D && rows.length > 0 && (
-              <RowStepperBar
-                stepMode={stepMode}
-                onToggleStepMode={() => {
-                  stopPlay();
-                  setStepMode((v) => !v);
-                  setStepIdx(-1);
-                }}
-                stepIdx={stepIdx}
+            {is3D && palletSequence.length > 0 && (
+              <PalletStatusBar
+                currentIdx={palletIdx}
+                total={palletSequence.length}
+                rowIdx={currentStep?.rowIdx ?? null}
                 totalRows={rows.length}
-                onPrev={() => {
-                  stopPlay();
-                  setStepIdx((i) => Math.max(-1, i - 1));
-                }}
-                onNext={() => {
-                  stopPlay();
-                  setStepIdx((i) => Math.min(rows.length - 1, i + 1));
-                }}
-                onReset={() => {
-                  stopPlay();
-                  setStepIdx(-1);
-                }}
-                canStep={canStep}
-                atEmpty={atEmpty}
-                atFirst={atFirst}
-                atLast={atLast}
                 showGapHeatmap={showGapHeatmap}
                 onToggleGapHeatmap={() => setShowGapHeatmap((v) => !v)}
                 activeRowHasGap={!!activeRow?.gapWarning}
-                isPlaying={isPlaying}
-                onTogglePlay={() => (isPlaying ? stopPlay() : startPlay())}
               />
             )}
           </div>
