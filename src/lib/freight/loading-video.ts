@@ -351,7 +351,7 @@ export async function generateLoadingVideo(
   opts: GenerateOptions,
 ): Promise<GeneratedVideo> {
   const fps = opts.fps ?? 30;
-  const durationSec = opts.durationSec ?? 20;
+  const durationSec = opts.durationSec ?? 12;
   const timeline = buildTimeline(opts.pack, fps, durationSec);
 
   const timelineMeta: VideoFrameInfo[] = [];
@@ -377,6 +377,7 @@ export async function generateLoadingVideo(
     timeline.totalFrames,
     driveFrame,
     opts.onProgress,
+    opts.videoBitsPerSecond ?? 8_000_000,
   );
 
   return { blob, mime, ext, timeline: timelineMeta };
