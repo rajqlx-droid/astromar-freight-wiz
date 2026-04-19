@@ -2,12 +2,12 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Package, Boxes, Box as BoxIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   CONTAINERS,
   ITEM_COLORS,
   pickOptimalContainer,
-  splitMultiContainer,
   totalCbm,
   totalQty,
   totalWeight,
@@ -15,6 +15,10 @@ import {
   type PlacedBox,
 } from "@/lib/freight/packing";
 import { packContainerAdvanced, type AdvancedPackResult } from "@/lib/freight/packing-advanced";
+import {
+  splitItemsAcrossContainers,
+  type ContainerRecommendation,
+} from "@/lib/freight/container-recommender";
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
@@ -27,6 +31,12 @@ const Container3DView = lazy(() =>
 
 interface Props {
   items: CbmItem[];
+  /** Smart recommendation from the calculator. Drives multi-container tabbed view. */
+  recommendation?: ContainerRecommendation;
+  /** Manually-applied choice that overrides "auto". */
+  forcedChoice?: "20gp" | "40gp" | "40hc" | null;
+  /** Notify parent when user picks a container pill. */
+  onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | null) => void;
   /** Expose snapshot capture so parent (PDF flow) can grab 3 angles. */
   onReady?: (handle: { capture: () => Promise<{ iso: string; front: string; side: string } | null> }) => void;
 }
@@ -36,10 +46,23 @@ type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = Math.sin(Math.PI / 6);
 
-export function ContainerLoadView({ items, onReady }: Props) {
-  const [choice, setChoice] = useState<ContainerChoice>("auto");
+export function ContainerLoadView({
+  items,
+  recommendation,
+  forcedChoice,
+  onChoiceChange,
+  onReady,
+}: Props) {
+  const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
+  const choice: ContainerChoice = forcedChoice ?? internalChoice;
+  const setChoice = (c: ContainerChoice) => {
+    setInternalChoice(c);
+    onChoiceChange?.(c === "auto" ? null : c);
+  };
+
   const [is3D, setIs3D] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState("0");
   const view3DRef = useRef<Container3DHandle | null>(null);
 
   useEffect(() => {
@@ -51,6 +74,7 @@ export function ContainerLoadView({ items, onReady }: Props) {
   const cargoQty = useMemo(() => totalQty(items), [items]);
 
   const hasCargo = cargoCbm > 0 && cargoQty > 0;
+  const isMulti = recommendation?.isMulti === true;
 
   const autoContainer = useMemo(() => pickOptimalContainer(cargoCbm), [cargoCbm]);
   const activeContainer: ContainerPreset =
@@ -58,18 +82,26 @@ export function ContainerLoadView({ items, onReady }: Props) {
       ? autoContainer
       : CONTAINERS.find((c) => c.id === choice) ?? autoContainer;
 
-  const pack = useMemo(
+  // Single-container pack (used when not multi).
+  const singlePack = useMemo(
     () => packContainerAdvanced(items, activeContainer),
     [items, activeContainer],
   );
 
-  const needsMulti = cargoCbm > 70;
-  const multiPlan = useMemo(
-    () => (needsMulti ? splitMultiContainer(cargoCbm) : null),
-    [needsMulti, cargoCbm],
-  );
+  // Multi-container packs (one per recommended unit).
+  const multiPacks = useMemo<AdvancedPackResult[]>(() => {
+    if (!isMulti || !recommendation) return [];
+    const buckets = splitItemsAcrossContainers(items, recommendation);
+    return recommendation.units.map((u, i) =>
+      packContainerAdvanced(buckets[i] ?? [], u.container),
+    );
+  }, [items, isMulti, recommendation]);
 
-  // Expose snapshot capability to parent.
+  const activePack: AdvancedPackResult = isMulti
+    ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
+    : singlePack;
+
+  // Expose snapshot capability to parent (current visible pack).
   useEffect(() => {
     if (!onReady) return;
     onReady({
@@ -82,7 +114,7 @@ export function ContainerLoadView({ items, onReady }: Props) {
         }
       },
     });
-  }, [onReady, is3D]);
+  }, [onReady, is3D, activeTab]);
 
   return (
     <Card
