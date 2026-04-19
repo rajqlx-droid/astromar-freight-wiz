@@ -240,6 +240,7 @@ export function ContainerLoadView({
                 mounted={mounted}
                 view3DRef={view3DRef}
                 isActive={activeTab === String(i)}
+                viewerCollapsed={viewerCollapsed}
                 rollup={{
                   totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
                   totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
@@ -261,6 +262,7 @@ export function ContainerLoadView({
           mounted={mounted}
           view3DRef={view3DRef}
           isActive
+          viewerCollapsed={viewerCollapsed}
         />
       )}
     </Card>
