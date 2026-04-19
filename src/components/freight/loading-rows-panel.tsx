@@ -27,6 +27,98 @@ function itemCounts(row: RowGroup, pack: AdvancedPackResult) {
   return itemCountsForRow(row, pack);
 }
 
+/**
+ * Mini side-view of a single row — a loader's-eye projection looking down the
+ * container length toward the door. Width axis is horizontal, height axis is
+ * vertical, the floor sits at the bottom. Only this row's boxes are drawn.
+ */
+function RowSideView({ row, pack }: { row: RowGroup; pack: AdvancedPackResult }) {
+  const containerW = pack.container.inner.w; // mm
+  const containerH = pack.container.inner.h; // mm
+  const VIEW_W = 220;
+  const VIEW_H = 90;
+  const PAD = 4;
+  const innerW = VIEW_W - PAD * 2;
+  const innerH = VIEW_H - PAD * 2;
+  const sx = innerW / containerW;
+  const sy = innerH / containerH;
+
+  return (
+    <svg
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      className="h-[90px] w-full max-w-[260px] rounded border bg-background text-brand-navy"
+      role="img"
+      aria-label={`Side view of row ${row.rowIdx + 1}`}
+    >
+      <rect
+        x={PAD}
+        y={PAD}
+        width={innerW}
+        height={innerH}
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity={0.25}
+        strokeDasharray="3 3"
+      />
+      <line
+        x1={PAD}
+        y1={VIEW_H - PAD}
+        x2={VIEW_W - PAD}
+        y2={VIEW_H - PAD}
+        stroke="currentColor"
+        strokeOpacity={0.45}
+        strokeWidth={1}
+      />
+      {row.boxes.map((b, i) => {
+        const color = pack.perItem[b.itemIdx]?.color ?? "#888";
+        const x = PAD + b.y * sx;
+        const w = b.w * sx;
+        const h = b.h * sy;
+        const y = VIEW_H - PAD - (b.z + b.h) * sy;
+        const tilted = b.rotated === "sideways" || b.rotated === "axis";
+        return (
+          <g key={i}>
+            <rect
+              x={x}
+              y={y}
+              width={Math.max(w, 1)}
+              height={Math.max(h, 1)}
+              fill={color}
+              fillOpacity={0.85}
+              stroke="rgba(0,0,0,0.35)"
+              strokeWidth={0.5}
+            />
+            {tilted && w > 10 && h > 10 && (
+              <text
+                x={x + w / 2}
+                y={y + h / 2 + 3}
+                fontSize={8}
+                fontWeight={700}
+                textAnchor="middle"
+                fill="#854d0e"
+              >
+                ↻
+              </text>
+            )}
+          </g>
+        );
+      })}
+      <text x={PAD + 2} y={PAD + 8} fontSize={7} fill="currentColor" fillOpacity={0.5}>
+        ← width →
+      </text>
+      <text
+        x={PAD + 2}
+        y={VIEW_H - PAD - 2}
+        fontSize={7}
+        fill="currentColor"
+        fillOpacity={0.5}
+      >
+        floor
+      </text>
+    </svg>
+  );
+}
+
 
 export function LoadingRowsPanel({ pack }: Props) {
   const rows = useMemo(() => buildRows(pack), [pack]);
@@ -220,6 +312,14 @@ export function LoadingRowsPanel({ pack }: Props) {
 
               {isOpen && (
                 <div className="space-y-2 bg-muted/20 px-3 pb-3 pt-1">
+                  {/* Mini side-view of just this row */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Side view (looking down container length)
+                    </span>
+                    <RowSideView row={row} pack={pack} />
+                  </div>
+
                   {/* Item color chips */}
                   <div className="flex flex-wrap gap-1.5">
                     {counts.map((c) => (
