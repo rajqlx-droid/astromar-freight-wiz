@@ -5,10 +5,12 @@
 
 import React from "react";
 import { boxFaces, project, type Camera } from "./projection";
-import { CONTAINER, type Box } from "./scenario";
+import type { Box, ContainerSpec } from "./scenario-demo";
 
 export interface SceneProps {
   cam: Camera;
+  /** Container dimensions to render. */
+  container: ContainerSpec;
   visibleBoxes: Box[];
   /** Box index → 0..1 entrance progress. Missing = fully present. */
   boxProgress?: Map<number, number>;
