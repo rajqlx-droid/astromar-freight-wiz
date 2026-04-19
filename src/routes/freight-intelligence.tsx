@@ -302,6 +302,40 @@ function FreightIntelligencePage() {
     }
   };
 
+  /**
+   * Renders the calculator UI for a given key. Reused by the single-tool view
+   * and the split-compare view (each pane calls this with its own key).
+   */
+  const renderCalculator = (key: CalcKey) => {
+    switch (key) {
+      case "cbm":
+        return <CbmCalculator items={cbmItems} setItems={setCbmItems} />;
+      case "air":
+        return (
+          <AirCalculator
+            items={airItems}
+            setItems={setAirItems}
+            divisor={airDivisor}
+            setDivisor={setAirDivisor}
+          />
+        );
+      case "landed":
+        return (
+          <LandedCalculator
+            state={landed}
+            setState={setLanded}
+            onDuplicateToExport={duplicateLandedToExport}
+          />
+        );
+      case "export":
+        return <ExportCalculator state={exp} setState={setExp} />;
+      case "compare":
+        return <CompareCalculator state={compare} setState={setCompare} />;
+      case "risk":
+        return <RiskCalculator state={risk} setState={setRisk} />;
+    }
+  };
+
   return (
     <TooltipProvider delayDuration={200}>
       <div className="min-h-screen bg-background">
