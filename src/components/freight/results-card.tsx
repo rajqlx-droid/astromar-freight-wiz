@@ -1,12 +1,7 @@
 /**
- * Results card with action toolbar (PDF, Copy, Save, Print, Share, Email).
+ * Results card with action toolbar (PDF, Print, Email, WhatsApp).
  */
-import {
-  Download,
-  Printer,
-  Mail,
-  MessageCircle,
-} from "lucide-react";
+import { Download, Printer, Mail, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,9 +19,6 @@ interface Props {
 }
 
 export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledReason }: Props) {
-  const [saveOpen, setSaveOpen] = useState(false);
-  const [saveName, setSaveName] = useState("");
-
   if (!result) {
     return (
       <Card
@@ -38,15 +30,6 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
     );
   }
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(result.text);
-      toast.success("Results copied to clipboard");
-    } catch {
-      toast.error("Could not copy");
-    }
-  };
-
   const handlePdf = async () => {
     const extras = resolveExtras ? await resolveExtras() : undefined;
     downloadResultPdf(result, inputsTable, extras);
@@ -55,136 +38,75 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
 
   const handlePrint = () => window.print();
 
-  const handleSave = () => {
-    const id = crypto.randomUUID();
-    const name = saveName.trim() || `${result.title} ${new Date().toLocaleString("en-IN")}`;
-    const entry = {
-      id,
-      type: result.type,
-      name,
-      savedAt: Date.now(),
-      inputs: inputsTable ?? null,
-      result,
-    };
-    savedStore.add(entry);
-    historyStore.add(entry);
-    toast.success("Saved", { description: name });
-    setSaveOpen(false);
-    setSaveName("");
-    window.dispatchEvent(new Event("freight:storage"));
-  };
-
-  const handleShare = async () => {
-    const url = window.location.href;
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("Share link copied");
-    } catch {
-      toast.error("Could not copy link");
-    }
-  };
-
   const waUrl = `https://wa.me/?text=${encodeURIComponent(result.text + "\n\n— via Smart Tool")}`;
   const mailUrl = `mailto:?subject=${encodeURIComponent(
     `[${result.title}] Calculation`,
   )}&body=${encodeURIComponent(result.text + "\n\n— via Smart Tool")}`;
 
   return (
-    <>
-      <Card
-        className="print-area overflow-hidden border-2 shadow-sm"
-        style={{
-          borderColor: "var(--brand-navy)",
-          background:
-            "linear-gradient(180deg, var(--brand-navy-soft) 0%, var(--background) 70%)",
-        }}
-        aria-live="polite"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
+    <Card
+      className="print-area overflow-hidden border-2 shadow-sm"
+      style={{
+        borderColor: "var(--brand-navy)",
+        background:
+          "linear-gradient(180deg, var(--brand-navy-soft) 0%, var(--background) 70%)",
+      }}
+      aria-live="polite"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
+        <div className="flex items-center gap-2">
           <h3 className="text-base font-bold text-brand-navy">Results</h3>
-          {/* Desktop toolbar — mobile uses the sticky MobileResultBar instead */}
-          <div className="no-print hidden flex-wrap gap-1.5 lg:flex">
-            <Button
-              size="sm"
-              onClick={handlePdf}
-              disabled={!!pdfDisabledReason}
-              title={pdfDisabledReason ?? undefined}
-              className="text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ background: "var(--brand-orange)" }}
-            >
-              <Download className="size-3.5" /> PDF
-            </Button>
-            <Button size="sm" variant="outline" className="border-brand-navy text-brand-navy" onClick={handlePrint}>
-              <Printer className="size-3.5" /> Print
-            </Button>
-            <Button asChild size="sm" variant="outline" className="border-brand-navy text-brand-navy">
-              <a href={mailUrl}>
-                <Mail className="size-3.5" /> Email
-              </a>
-            </Button>
-            <Button asChild size="sm" variant="outline" className="border-brand-navy text-brand-navy">
-              <a href={waUrl} target="_blank" rel="noreferrer noopener">
-                <MessageCircle className="size-3.5" /> WhatsApp
-              </a>
-            </Button>
-          </div>
+          {/* Primary PDF action — kept next to the title for fast access */}
+          <Button
+            size="sm"
+            onClick={handlePdf}
+            disabled={!!pdfDisabledReason}
+            title={pdfDisabledReason ?? "Download PDF report"}
+            className="h-7 text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: "var(--brand-orange)" }}
+          >
+            <Download className="size-3.5" /> PDF
+          </Button>
         </div>
-
-        <div className="divide-y">
-          {result.items.map((it) => (
-            <div
-              key={it.label}
-              className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
-            >
-              <span className="text-muted-foreground">{it.label}</span>
-              <span
-                key={it.value}
-                className={
-                  "animate-fade-in rounded-md px-3 py-1 font-semibold " +
-                  (it.highlight
-                    ? "bg-brand-orange-soft text-brand-orange"
-                    : "text-foreground")
-                }
-              >
-                {it.value}
-              </span>
-            </div>
-          ))}
+        {/* Desktop secondary actions — mobile uses the sticky MobileResultBar */}
+        <div className="no-print hidden flex-wrap gap-1.5 lg:flex">
+          <Button size="sm" variant="outline" className="border-brand-navy text-brand-navy" onClick={handlePrint}>
+            <Printer className="size-3.5" /> Print
+          </Button>
+          <Button asChild size="sm" variant="outline" className="border-brand-navy text-brand-navy">
+            <a href={mailUrl}>
+              <Mail className="size-3.5" /> Email
+            </a>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="border-brand-navy text-brand-navy">
+            <a href={waUrl} target="_blank" rel="noreferrer noopener">
+              <MessageCircle className="size-3.5" /> WhatsApp
+            </a>
+          </Button>
         </div>
-      </Card>
+      </div>
 
-      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save calculation</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="save-name">Name (optional)</Label>
-            <Input
-              id="save-name"
-              value={saveName}
-              onChange={(e) => setSaveName(e.target.value)}
-              placeholder={`${result.title} — ${new Date().toLocaleDateString("en-IN")}`}
-              maxLength={80}
-            />
-            <p className="text-xs text-muted-foreground">
-              Stored in your browser. Maximum 10 saved calculations.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              className="text-white"
-              style={{ background: "var(--brand-navy)" }}
+      <div className="divide-y">
+        {result.items.map((it) => (
+          <div
+            key={it.label}
+            className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
+          >
+            <span className="text-muted-foreground">{it.label}</span>
+            <span
+              key={it.value}
+              className={
+                "animate-fade-in rounded-md px-3 py-1 font-semibold " +
+                (it.highlight
+                  ? "bg-brand-orange-soft text-brand-orange"
+                  : "text-foreground")
+              }
             >
-              <LinkIcon className="size-3.5" /> Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+              {it.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
