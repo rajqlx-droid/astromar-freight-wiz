@@ -277,15 +277,20 @@ export function cameraForFrame(
   const Cl = pack.container.inner.l / MM_PER_M;
   const Cw = pack.container.inner.w / MM_PER_M;
   const Ch = pack.container.inner.h / MM_PER_M;
-  const target: [number, number, number] = [0, Ch / 2, 0];
-
-  // Slow orbit around the container during loading; closer during intro.
+  // Door is at world +x (cargo group sits at -Cl/2, so high box.x → world +x).
+  // Start looking THROUGH THE OPEN DOOR toward the back wall, then slowly
+  // arc out to a 3/4 hero view as the loading progresses.
   const t = frame / Math.max(1, timeline.totalFrames - 1);
-  const angle = -Math.PI / 4 + t * Math.PI * 1.4; // ~250° arc
-  const dist = Math.max(Cl, Cw) * (1.6 + 0.3 * Math.sin(t * Math.PI));
-  const height = Ch * (1.2 + 0.4 * Math.sin(t * Math.PI * 2));
+  const startAngle = 0;          // straight in from door
+  const endAngle = -Math.PI / 4; // 3/4 view
+  const angle = startAngle + (endAngle - startAngle) * t;
+  const dist = Math.max(Cl, Cw) * (1.5 + 0.25 * t);
+  const height = Ch * (0.9 + 0.4 * t);
+  // Aim slightly toward the back wall during loading so the user sees boxes
+  // stack from the back forward.
+  const target: [number, number, number] = [-Cl * 0.15 * (1 - t), Ch / 2, 0];
   return {
-    position: [Math.sin(angle) * dist, height, Math.cos(angle) * dist],
+    position: [Math.cos(angle) * dist, height, Math.sin(angle) * dist],
     target,
   };
 }
