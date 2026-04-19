@@ -155,7 +155,7 @@ function buildTimeline(
       endFrame: end,
       step: i + 1,
       caption: `Step ${i + 1} of ${n}: Item ${box.itemIdx + 1}${stat?.packageType ? ` — ${stat.packageType}` : ""}`,
-      subCaption: `${(box.weight ?? 0).toFixed(0)} kg · ${stat?.fragile ? "Fragile · " : ""}${stat?.stackable ? "Stackable" : "Non-stackable"}`,
+      subCaption: `${box.l}×${box.w}×${box.h} mm · ${stat?.fragile ? "Fragile · " : ""}${stat?.stackable ? "Stackable" : "Non-stackable"}`,
     });
   }
 
