@@ -377,10 +377,11 @@ export function CbmCalculator({ items, setItems }: Props) {
           const extras: import("@/lib/freight/pdf").PdfExtras = {};
           if (snaps) extras.snapshots = snaps;
           if (pack && pack.placed.length > 0) {
-            const { buildRows, instructionFor, itemCountsForRow, buildRowSideViewSvg, buildRowFrontViewSvg, buildRowTopViewSvg } =
+            const { buildRows, computeWallEfficiency, instructionFor, itemCountsForRow, buildRowSideViewSvg, buildRowFrontViewSvg, buildRowTopViewSvg } =
               await import("@/lib/freight/loading-rows");
             const { readHeavyThreshold } = await import("@/components/freight/loading-rows-panel");
             const rows = buildRows(pack, readHeavyThreshold());
+            extras.wallEfficiency = computeWallEfficiency(rows);
             // Rasterise each side-view SVG to a PNG dataURL for jsPDF.
             const svgToPng = (svg: string): Promise<string | undefined> =>
               new Promise((resolve) => {
