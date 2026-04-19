@@ -80,8 +80,8 @@ function FreightIntelligencePage() {
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // ----- per-calculator state, lifted so values persist across tab switches -----
-  const [cbmItems, setCbmItems] = useState<CbmItem[]>([emptyCbmItem()]);
-  const [airItems, setAirItems] = useState<AirItem[]>([emptyAirItem()]);
+  const [cbmItems, setCbmItems] = useState<CbmItem[]>(() => [emptyCbmItem(0)]);
+  const [airItems, setAirItems] = useState<AirItem[]>(() => [emptyAirItem(0)]);
   const [airDivisor, setAirDivisor] = useState(6000);
   const [landed, setLanded] = useState<LandedInput>({
     product: 0,

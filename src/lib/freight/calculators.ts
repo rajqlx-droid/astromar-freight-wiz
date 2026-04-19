@@ -4,7 +4,7 @@
  */
 
 import type { CalcResult } from "./types";
-import { nextId } from "./ids";
+import { nextId, seedId } from "./ids";
 
 export const fmt = (n: number, digits = 2) =>
   Number.isFinite(n)
@@ -35,8 +35,8 @@ export interface CbmItem {
   weight: number;
 }
 
-export const emptyCbmItem = (): CbmItem => ({
-  id: nextId("cbm"),
+export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
+  id: typeof seedIndex === "number" ? seedId("cbm", seedIndex) : nextId("cbm"),
   length: 0,
   width: 0,
   height: 0,
@@ -86,8 +86,8 @@ export interface AirItem {
   weight: number;
 }
 
-export const emptyAirItem = (): AirItem => ({
-  id: nextId("air"),
+export const emptyAirItem = (seedIndex?: number): AirItem => ({
+  id: typeof seedIndex === "number" ? seedId("air", seedIndex) : nextId("air"),
   length: 0,
   width: 0,
   height: 0,
