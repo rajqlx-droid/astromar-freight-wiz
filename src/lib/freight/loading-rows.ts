@@ -313,6 +313,138 @@ export function instructionFor(row: RowGroup): string {
   return parts.join(", ") + ".";
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Per-pallet loading sequence
+ *
+ * Returns an ordered list of every placed box, sorted in actual
+ * loader-hand-order (back→front by row, then bottom-up by layer, then
+ * left→right within a layer). Each step carries a derived action verb,
+ * a position cue and a list of warnings the loader needs to act on.
+ * Used by the dock-loader POV walkthrough in the 3D viewer.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export type PalletAction =
+  | "PLACE"
+  | "STACK ON"
+  | "ROTATE 90° THEN PLACE"
+  | "TIP ON SIDE THEN PLACE"
+  | "CAP WITH FRAGILE";
+
+export interface PalletStep {
+  /** Index into pack.placed — the canonical placedIdx used by the 3D viewer. */
+  placedIdx: number;
+  /** Reference back to the box itself. */
+  box: PlacedBox;
+  /** 0-indexed row this pallet belongs to. */
+  rowIdx: number;
+  /** 0-indexed layer (0 = floor). */
+  layer: number;
+  /** Step number within the row, 1-indexed. */
+  stepInRow: number;
+  /** Loader-friendly item label. */
+  itemLabel: string;
+  /** Pretty dimensions string (mm + kg). */
+  dimsLabel: string;
+  /** What the loader actually does. */
+  action: PalletAction;
+  /** Plain-English position cue. */
+  positionText: string;
+  /** Warnings (FRAGILE / NO-STACK / ROTATE / SEPARATOR). */
+  warnings: string[];
+  /** True when this is the last step of its row. */
+  rowEnd: boolean;
+}
+
+function rowDescriptor(rowIdx: number, totalRows: number): string {
+  if (rowIdx === 0) return "back wall";
+  if (rowIdx === totalRows - 1) return "door end";
+  return `row ${rowIdx + 1}`;
+}
+
+function lateralDescriptor(yMid: number, containerW: number): string {
+  const frac = yMid / containerW;
+  if (frac < 0.34) return "left";
+  if (frac > 0.66) return "right";
+  return "centre";
+}
+
+export function buildPalletSequence(
+  pack: AdvancedPackResult,
+  rows?: RowGroup[],
+): PalletStep[] {
+  const allRows = rows ?? buildRows(pack);
+  const containerW = pack.container.inner.w;
+  const steps: PalletStep[] = [];
+
+  for (const row of allRows) {
+    // Sort boxes inside this row: layer (z) bottom-up → x back-to-front
+    // → y left-to-right.
+    const ordered = [...row.boxes].sort((a, b) => {
+      if (Math.abs(a.z - b.z) > 5) return a.z - b.z;
+      if (Math.abs(a.x - b.x) > 5) return a.x - b.x;
+      return a.y - b.y;
+    });
+
+    // Build a layer-index lookup — every distinct z (rounded) is its own layer.
+    const layerZs = Array.from(new Set(ordered.map((b) => Math.round(b.z / 10) * 10))).sort(
+      (a, b) => a - b,
+    );
+
+    let stepInRow = 0;
+    for (const b of ordered) {
+      stepInRow += 1;
+      const placedIdx = pack.placed.indexOf(b);
+      if (placedIdx < 0) continue;
+      const stat = pack.perItem[b.itemIdx];
+      const layer = layerZs.indexOf(Math.round(b.z / 10) * 10);
+      const onFloor = layer === 0;
+
+      // Action verb.
+      let action: PalletAction = onFloor ? "PLACE" : "STACK ON";
+      if (b.rotated === "sideways") action = "ROTATE 90° THEN PLACE";
+      else if (b.rotated === "axis") action = "TIP ON SIDE THEN PLACE";
+      else if (stat?.fragile) action = "CAP WITH FRAGILE";
+
+      // Position cue.
+      const lateral = lateralDescriptor(b.y + b.w / 2, containerW);
+      const rowName = rowDescriptor(row.rowIdx, allRows.length);
+      const layerName = onFloor ? "floor" : `layer ${layer + 1}`;
+      const positionText = `${rowName}, ${lateral} side, ${layerName}`;
+
+      // Warnings.
+      const warnings: string[] = [];
+      if (stat?.fragile) warnings.push("⚠ FRAGILE — load last in this row, no stacking on top");
+      if (stat && !stat.stackable) warnings.push("⚠ NO-STACK — leave the top clear");
+      if (b.rotated === "sideways") warnings.push("↻ ROTATE 90° around vertical axis before placing");
+      if (b.rotated === "axis") warnings.push("⤾ TIP onto side — height & width swap");
+      if (row.needsSeparator && layer > 0)
+        warnings.push("INSERT separator board (plywood/cardboard) below this layer");
+      if (row.gapWarning && onFloor)
+        warnings.push(`Re-shuffle row toward wall — only ${Math.round(row.wallUtilizationPct)}% wall coverage`);
+
+      const itemLabel = `Item ${b.itemIdx + 1}`;
+      const weightTxt = stat?.weightKgPerPkg ? ` · ${Math.round(stat.weightKgPerPkg)} kg` : "";
+      const dimsLabel = `${b.l}×${b.w}×${b.h} mm${weightTxt}`;
+
+      steps.push({
+        placedIdx,
+        box: b,
+        rowIdx: row.rowIdx,
+        layer,
+        stepInRow,
+        itemLabel,
+        dimsLabel,
+        action,
+        positionText,
+        warnings,
+        rowEnd: stepInRow === ordered.length,
+      });
+    }
+  }
+
+  return steps;
+}
+
 /** Per-item count breakdown for a row. */
 export function itemCountsForRow(row: RowGroup, pack: AdvancedPackResult) {
   const map = new Map<number, number>();
