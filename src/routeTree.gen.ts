@@ -9,30 +9,12 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ServicesRouteImport } from './routes/services'
-import { Route as FtwzRouteImport } from './routes/ftwz'
-import { Route as ContactRouteImport } from './routes/contact'
-import { Route as AboutRouteImport } from './routes/about'
+import { Route as FreightIntelligenceRouteImport } from './routes/freight-intelligence'
 import { Route as IndexRouteImport } from './routes/index'
 
-const ServicesRoute = ServicesRouteImport.update({
-  id: '/services',
-  path: '/services',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FtwzRoute = FtwzRouteImport.update({
-  id: '/ftwz',
-  path: '/ftwz',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AboutRoute = AboutRouteImport.update({
-  id: '/about',
-  path: '/about',
+const FreightIntelligenceRoute = FreightIntelligenceRouteImport.update({
+  id: '/freight-intelligence',
+  path: '/freight-intelligence',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,70 +25,37 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/contact': typeof ContactRoute
-  '/ftwz': typeof FtwzRoute
-  '/services': typeof ServicesRoute
+  '/freight-intelligence': typeof FreightIntelligenceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/contact': typeof ContactRoute
-  '/ftwz': typeof FtwzRoute
-  '/services': typeof ServicesRoute
+  '/freight-intelligence': typeof FreightIntelligenceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
-  '/contact': typeof ContactRoute
-  '/ftwz': typeof FtwzRoute
-  '/services': typeof ServicesRoute
+  '/freight-intelligence': typeof FreightIntelligenceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/contact' | '/ftwz' | '/services'
+  fullPaths: '/' | '/freight-intelligence'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/contact' | '/ftwz' | '/services'
-  id: '__root__' | '/' | '/about' | '/contact' | '/ftwz' | '/services'
+  to: '/' | '/freight-intelligence'
+  id: '__root__' | '/' | '/freight-intelligence'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AboutRoute: typeof AboutRoute
-  ContactRoute: typeof ContactRoute
-  FtwzRoute: typeof FtwzRoute
-  ServicesRoute: typeof ServicesRoute
+  FreightIntelligenceRoute: typeof FreightIntelligenceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/services': {
-      id: '/services'
-      path: '/services'
-      fullPath: '/services'
-      preLoaderRoute: typeof ServicesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ftwz': {
-      id: '/ftwz'
-      path: '/ftwz'
-      fullPath: '/ftwz'
-      preLoaderRoute: typeof FtwzRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof ContactRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/about': {
-      id: '/about'
-      path: '/about'
-      fullPath: '/about'
-      preLoaderRoute: typeof AboutRouteImport
+    '/freight-intelligence': {
+      id: '/freight-intelligence'
+      path: '/freight-intelligence'
+      fullPath: '/freight-intelligence'
+      preLoaderRoute: typeof FreightIntelligenceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -121,11 +70,17 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AboutRoute: AboutRoute,
-  ContactRoute: ContactRoute,
-  FtwzRoute: FtwzRoute,
-  ServicesRoute: ServicesRoute,
+  FreightIntelligenceRoute: FreightIntelligenceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
