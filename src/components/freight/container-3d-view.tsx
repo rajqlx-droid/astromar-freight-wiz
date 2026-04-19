@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
+import type { RowGroup } from "@/lib/freight/loading-rows";
 import {
   buildTimeline,
   cameraInfoForFrame,
@@ -66,6 +67,12 @@ interface Props {
    * an open door at 135° still occludes the camera from many iso angles.
    */
   hideDoors?: boolean;
+  /**
+   * When set, paint translucent red void rectangles on the floor and back
+   * wall of this row's slice so loaders can see exactly where dunnage or a
+   * re-shuffle is needed. Cleared when null.
+   */
+  gapHeatmapRow?: RowGroup | null;
 }
 
 /**
@@ -74,7 +81,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -211,6 +218,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             shufflePreview={shufflePreview}
             visiblePlacedSet={visiblePlacedSet}
             hideDoors={hideDoors}
+            gapHeatmapRow={gapHeatmapRow}
           />
         </Suspense>
       </Canvas>
@@ -333,6 +341,7 @@ function SceneContents({
   shufflePreview,
   visiblePlacedSet,
   hideDoors,
+  gapHeatmapRow,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -342,6 +351,7 @@ function SceneContents({
   shufflePreview: Map<number, number> | null;
   visiblePlacedSet: Set<number> | null;
   hideDoors: boolean;
+  gapHeatmapRow: RowGroup | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -455,6 +465,12 @@ function SceneContents({
             />
           );
         })}
+        {/* Gap heatmap overlay — translucent red rectangles on the floor and
+            back wall of the active row's slice. Hidden during recording so
+            video frames stay clean. */}
+        {!recording && gapHeatmapRow && (
+          <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
+        )}
       </group>
 
       {/* Forklift — only visible while recording and a box is being carried */}
@@ -1011,6 +1027,11 @@ function CargoBox({
   const PALLET_H = 0.12;
   const palletLift = onFloor ? PALLET_H : 0;
 
+  // Hover state — drives the rich tilt popover. Pointer events fire from the
+  // mesh itself; we stop propagation so only the topmost box hovers (otherwise
+  // the cursor would light up every box behind the camera ray).
+  const [hovered, setHovered] = useState(false);
+
   return (
     <group position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && <WoodenPallet lm={lm} wm={wm} />}
@@ -1020,7 +1041,22 @@ function CargoBox({
           <meshBasicMaterial color="#10b981" transparent opacity={0.85} />
         </mesh>
       )}
-      <mesh castShadow receiveShadow>
+      <mesh
+        castShadow
+        receiveShadow
+        onPointerOver={(e) => {
+          if (!tilted) return;
+          e.stopPropagation();
+          setHovered(true);
+          if (typeof document !== "undefined") document.body.style.cursor = "help";
+        }}
+        onPointerOut={(e) => {
+          if (!tilted) return;
+          e.stopPropagation();
+          setHovered(false);
+          if (typeof document !== "undefined") document.body.style.cursor = "";
+        }}
+      >
         <boxGeometry args={[lm, hm, wm]} />
         <meshStandardMaterial
           color={box.color}
@@ -1028,8 +1064,10 @@ function CargoBox({
           metalness={0.05}
           transparent={fragile}
           opacity={fragile ? 0.85 : 1}
+          emissive={hovered ? tiltColor : "#000000"}
+          emissiveIntensity={hovered ? 0.25 : 0}
         />
-        <Edges color="rgba(0,0,0,0.35)" />
+        <Edges color={hovered ? tiltColor : "rgba(0,0,0,0.35)"} />
       </mesh>
       {/* Non-stackable warning stripe on top */}
       {nonStack && (
@@ -1038,7 +1076,8 @@ function CargoBox({
           <meshStandardMaterial color="#dc2626" />
         </mesh>
       )}
-      {/* Tilt indicator: hazard band wrapping all 4 vertical faces + always-on billboard */}
+      {/* Tilt indicator: discreet hazard band on the four vertical faces — no
+          always-on text. Hover the box to see the full instructions popover. */}
       {tilted && (
         <>
           <mesh position={[0, hm / 2 - hm * 0.12, wm / 2 + 0.002]}>
@@ -1064,19 +1103,166 @@ function CargoBox({
             <boxGeometry args={[Math.min(lm, wm) * 0.95, 0.012, 0.06]} />
             <meshStandardMaterial color={tiltColor} />
           </mesh>
-          {/* Compact corner glyph — fixed pixel size, doesn't grow with zoom.
-              Hover the box in the 3D view to see full TIPPED/TURNED label. */}
-          <Html position={[0, hm / 2 + 0.04, 0]} center zIndexRange={[5, 0]}>
-            <span
-              className="pointer-events-none flex size-3.5 items-center justify-center rounded-full border border-white text-[8px] font-black leading-none shadow"
-              style={{ background: tiltColor, color: "#1a1a1a" }}
-              title={box.rotated === "axis" ? "Tipped on side" : "Rotated sideways"}
-            >
-              {box.rotated === "axis" ? "⤾" : "↻"}
-            </span>
-          </Html>
+          {/* Hover-only rich popover with full instructions + axis diagram. */}
+          {hovered && (
+            <Html position={[0, hm / 2 + 0.06, 0]} center zIndexRange={[100, 0]}>
+              <TiltInfoCard mode={box.rotated === "axis" ? "tipped" : "turned"} color={tiltColor} />
+            </Html>
+          )}
         </>
       )}
+    </group>
+  );
+}
+
+/* --------------- Tilt info card (shown on hover) --------------- */
+
+function TiltInfoCard({ mode, color }: { mode: "tipped" | "turned"; color: string }) {
+  const isTipped = mode === "tipped";
+  return (
+    <div
+      className="pointer-events-none w-56 rounded-lg border-2 bg-background/95 p-2.5 shadow-xl backdrop-blur"
+      style={{ borderColor: color }}
+    >
+      <div className="mb-2 flex items-center gap-1.5">
+        <span
+          className="flex size-5 items-center justify-center rounded-full text-[11px] font-black leading-none"
+          style={{ background: color, color: "#1a1a1a" }}
+        >
+          {isTipped ? "⤾" : "↻"}
+        </span>
+        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-navy">
+          {isTipped ? "Tipped on side" : "Rotated sideways"}
+        </span>
+      </div>
+      {/* Mini ASCII-style axis diagram. SVG so it renders identically across browsers. */}
+      <svg viewBox="0 0 220 70" className="mb-1.5 w-full">
+        {/* Original outline (dashed) */}
+        <rect x="14" y="14" width="60" height="42" fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 2" />
+        <text x="44" y="68" textAnchor="middle" fontSize="7" fill="#64748b">original</text>
+        {/* Arrow */}
+        <path d="M 90 35 L 122 35 M 116 30 L 122 35 L 116 40" stroke={color} strokeWidth="2" fill="none" />
+        {isTipped ? (
+          <>
+            <rect x="138" y="22" width="42" height="34" fill="none" stroke={color} strokeWidth="2" />
+            <text x="159" y="68" textAnchor="middle" fontSize="7" fill="#1a1a1a" fontWeight="700">tipped (H ↔ L)</text>
+          </>
+        ) : (
+          <>
+            <rect x="138" y="6" width="42" height="50" fill="none" stroke={color} strokeWidth="2" />
+            <text x="159" y="68" textAnchor="middle" fontSize="7" fill="#1a1a1a" fontWeight="700">turned 90° (L ↔ W)</text>
+          </>
+        )}
+      </svg>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        {isTipped
+          ? "Lay this carton on its side so the height becomes the length. Mark the new top before banding."
+          : "Rotate this carton 90° around the vertical axis so the long edge runs along the container width."}
+      </p>
+    </div>
+  );
+}
+
+/* --------------- Gap heatmap (floor + back wall void overlay) --------------- */
+
+/**
+ * Paints translucent red rectangles where the active row has voids:
+ *   - Floor voids: along the container width (y-axis) within the row's x-slice.
+ *   - Back wall void above the bottom-layer footprint, capped at row height.
+ *
+ * All scene coords are in metres; row coords are in mm. The parent group
+ * translates so the back-bottom-left corner sits at the local origin.
+ */
+function GapHeatmap({
+  row,
+  containerW,
+  containerH,
+}: {
+  row: RowGroup;
+  containerW: number; // mm
+  containerH: number; // mm
+}) {
+  const RED = "#ef4444";
+  const HEATMAP_Y = 0.005; // lift just above the floor to avoid z-fighting
+
+  // Bottom-layer y-intervals → merged → voids along container width.
+  const bottoms = row.boxes.filter((b) => b.z < 10);
+
+  // 1. Compute floor voids along y (container width) within the row x-slice.
+  const intervals = bottoms
+    .map((b) => [b.y, b.y + b.w] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const iv of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && iv[0] <= last[1]) {
+      last[1] = Math.max(last[1], iv[1]);
+    } else {
+      merged.push([...iv] as [number, number]);
+    }
+  }
+  const floorVoids: { y0: number; y1: number }[] = [];
+  let cursor = 0;
+  for (const [s, e] of merged) {
+    if (s > cursor) floorVoids.push({ y0: cursor, y1: s });
+    cursor = Math.max(cursor, e);
+  }
+  if (cursor < containerW) floorVoids.push({ y0: cursor, y1: containerW });
+
+  // 2. Compute the bottom-layer max height — anything above that against the
+  //    back wall is a "wall void" worth flagging.
+  const rowDepthM = (row.xEnd - row.xStart) / 1000;
+  const xStartM = row.xStart / 1000;
+  const containerHm = containerH / 1000;
+  // Top of the highest box in this row's footprint (only count back-wall column,
+  // i.e. boxes whose x-start is at the row start).
+  const backWallBoxes = row.boxes.filter((b) => Math.abs(b.x - row.xStart) < 50);
+  const backWallTopMm =
+    backWallBoxes.length === 0
+      ? 0
+      : Math.max(...backWallBoxes.map((b) => b.z + b.h));
+  const backWallTopM = backWallTopMm / 1000;
+  const wallVoidH = Math.max(0, containerHm - backWallTopM);
+
+  return (
+    <group>
+      {/* Floor voids — laid flat in the x/y plane, lifted slightly to avoid z-fighting */}
+      {floorVoids.map((v, i) => {
+        const widthM = (v.y1 - v.y0) / 1000;
+        const cxM = xStartM + rowDepthM / 2;
+        const czM = (v.y0 + v.y1) / 2 / 1000;
+        return (
+          <mesh
+            key={`fv-${i}`}
+            position={[cxM, HEATMAP_Y, czM]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <planeGeometry args={[rowDepthM, widthM]} />
+            <meshBasicMaterial color={RED} transparent opacity={0.35} depthWrite={false} />
+          </mesh>
+        );
+      })}
+      {/* Back-wall void — vertical plane sitting at the row's xStart, between
+          backWallTop and ceiling. Only drawn when there's meaningful headroom. */}
+      {wallVoidH > 0.1 && (
+        <mesh
+          position={[xStartM + 0.005, backWallTopM + wallVoidH / 2, containerW / 1000 / 2]}
+          rotation={[0, Math.PI / 2, 0]}
+        >
+          <planeGeometry args={[containerW / 1000, wallVoidH]} />
+          <meshBasicMaterial color={RED} transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {/* Hover-free label — tells the user what they're looking at. */}
+      <Html
+        position={[xStartM + rowDepthM / 2, containerHm + 0.15, containerW / 1000 / 2]}
+        center
+        zIndexRange={[50, 0]}
+      >
+        <div className="pointer-events-none rounded-md border border-red-400 bg-red-50/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700 shadow">
+          ⚠ Gaps in row {row.rowIdx + 1} — {Math.round(100 - row.wallUtilizationPct)}% void
+        </div>
+      </Html>
     </group>
   );
 }

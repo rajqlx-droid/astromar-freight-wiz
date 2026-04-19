@@ -6,7 +6,7 @@
  * the container) should build that row from the floor up before advancing
  * to the next row toward the door.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Layers, Lightbulb, Printer, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +57,8 @@ interface Props {
   shufflePreviewActive?: boolean;
   /** True when the parent is showing the 2D iso view — preview needs 3D enabled to be visible. */
   previewRequires3D?: boolean;
+  /** Index of the row currently being inspected by the 3D step-load mode (null when stepper off). */
+  activeRowIdx?: number | null;
 }
 
 /** Per-item count breakdown for a row (returns array of {itemIdx, count, color}). */
@@ -89,6 +91,7 @@ export function LoadingRowsPanel({
   onApplyShuffle,
   shufflePreviewActive = false,
   previewRequires3D = false,
+  activeRowIdx = null,
 }: Props) {
   // Configurable kg/pkg threshold for the "heavy" mixed-pallet warning.
   // Hydrate from localStorage AFTER mount to avoid SSR/CSR mismatch.
@@ -115,6 +118,10 @@ export function LoadingRowsPanel({
   // Which row's preview is currently applied to the 3D view (null = none).
   const [previewedRow, setPreviewedRow] = useState<number | null>(null);
 
+  // Refs to each row <li> so we can scroll the active row into view when the
+  // 3D step-load mode advances. Map is rebuilt every render — cheap and safe.
+  const rowRefs = useRef(new Map<number, HTMLLIElement>());
+
   // Clear preview if the pack changes (re-pack invalidates placedIdx mapping).
   useEffect(() => {
     setPreviewedRow(null);
@@ -122,6 +129,22 @@ export function LoadingRowsPanel({
     // Intentionally only on pack identity change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pack]);
+
+  // Keep this panel in sync with the 3D row stepper: auto-open the active row
+  // and scroll it into view so the user sees the matching loader instructions.
+  useEffect(() => {
+    if (activeRowIdx == null) return;
+    setOpenRows((prev) => {
+      if (prev.has(activeRowIdx)) return prev;
+      const next = new Set(prev);
+      next.add(activeRowIdx);
+      return next;
+    });
+    const el = rowRefs.current.get(activeRowIdx);
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [activeRowIdx]);
 
   const toggleShuffle = (idx: number) => {
     setShuffleOpen((prev) => {
@@ -505,11 +528,22 @@ export function LoadingRowsPanel({
       <ol className="divide-y">
         {rows.map((row) => {
           const isOpen = openRows.has(row.rowIdx);
+          const isActive = activeRowIdx === row.rowIdx;
           const counts = itemCounts(row, pack);
           const xStartM = row.xStart / 1000;
           const xEndM = row.xEnd / 1000;
           return (
-            <li key={row.rowIdx}>
+            <li
+              key={row.rowIdx}
+              ref={(el) => {
+                if (el) rowRefs.current.set(row.rowIdx, el);
+                else rowRefs.current.delete(row.rowIdx);
+              }}
+              className={cn(
+                "transition-colors",
+                isActive && "bg-amber-50 ring-2 ring-inset ring-amber-400 dark:bg-amber-950/30",
+              )}
+            >
               <button
                 type="button"
                 onClick={() => toggle(row.rowIdx)}

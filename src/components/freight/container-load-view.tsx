@@ -342,6 +342,16 @@ function SinglePlanBody({
   const atFirst = stepIdx <= 0;
   const atLast = stepIdx >= rows.length - 1;
 
+  // Active row = the row most recently loaded by the stepper. Used to drive
+  // both the gap heatmap and the row-card highlight/scroll.
+  const activeRowIdx = stepMode && stepIdx >= 0 ? stepIdx : null;
+  const activeRow = activeRowIdx != null ? rows[activeRowIdx] ?? null : null;
+
+  // User toggle for the gap heatmap. Default ON whenever step mode is on.
+  const [showGapHeatmap, setShowGapHeatmap] = useState(true);
+  const gapHeatmapRow =
+    stepMode && showGapHeatmap && activeRow && activeRow.gapWarning ? activeRow : null;
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
@@ -362,6 +372,7 @@ function SinglePlanBody({
                   shufflePreview={shufflePreview}
                   visiblePlacedSet={visiblePlacedSet}
                   hideDoors={stepMode}
+                  gapHeatmapRow={gapHeatmapRow}
                 />
               </Suspense>
             ) : (
@@ -383,6 +394,9 @@ function SinglePlanBody({
                 atEmpty={atEmpty}
                 atFirst={atFirst}
                 atLast={atLast}
+                showGapHeatmap={showGapHeatmap}
+                onToggleGapHeatmap={() => setShowGapHeatmap((v) => !v)}
+                activeRowHasGap={!!activeRow?.gapWarning}
               />
             )}
           </div>
@@ -394,6 +408,7 @@ function SinglePlanBody({
           onApplyShuffle={(map) => setShufflePreview(map)}
           shufflePreviewActive={shufflePreview !== null}
           previewRequires3D={!is3D}
+          activeRowIdx={activeRowIdx}
         />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
@@ -418,6 +433,9 @@ function RowStepperBar({
   atEmpty,
   atFirst: _atFirst,
   atLast,
+  showGapHeatmap,
+  onToggleGapHeatmap,
+  activeRowHasGap,
 }: {
   stepMode: boolean;
   onToggleStepMode: () => void;
@@ -430,6 +448,9 @@ function RowStepperBar({
   atEmpty: boolean;
   atFirst: boolean;
   atLast: boolean;
+  showGapHeatmap: boolean;
+  onToggleGapHeatmap: () => void;
+  activeRowHasGap: boolean;
 }) {
   const nextRowNum = Math.min(totalRows, stepIdx + 2); // 1-indexed for label
   const statusLabel = atEmpty
@@ -462,6 +483,28 @@ function RowStepperBar({
             </span>
 
             <div className="ml-auto flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={showGapHeatmap ? "default" : "outline"}
+                onClick={onToggleGapHeatmap}
+                disabled={!canStep || atEmpty}
+                className={cn(
+                  "h-7 px-2 text-[11px]",
+                  showGapHeatmap && activeRowHasGap
+                    ? "bg-rose-600 text-white hover:bg-rose-700"
+                    : "",
+                )}
+                aria-pressed={showGapHeatmap}
+                aria-label="Toggle gap heatmap"
+                title={
+                  activeRowHasGap
+                    ? "Toggle red overlay highlighting floor & wall voids in this row"
+                    : "Active row has no gap — heatmap will appear on rows flagged with gap warnings"
+                }
+              >
+                ⚠ Gaps
+              </Button>
               <Button
                 type="button"
                 size="sm"
