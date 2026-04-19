@@ -1,7 +1,7 @@
 /**
- * Results card with action toolbar (PDF, Print, Email, WhatsApp).
+ * Results card with a single primary action: PDF download.
  */
-import { Download, Printer, Mail, MessageCircle } from "lucide-react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -36,13 +36,6 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
     toast.success("PDF downloaded");
   };
 
-  const handlePrint = () => window.print();
-
-  const waUrl = `https://wa.me/?text=${encodeURIComponent(result.text + "\n\n— via Smart Tool")}`;
-  const mailUrl = `mailto:?subject=${encodeURIComponent(
-    `[${result.title}] Calculation`,
-  )}&body=${encodeURIComponent(result.text + "\n\n— via Smart Tool")}`;
-
   return (
     <Card
       className="print-area overflow-hidden border-2 shadow-sm"
@@ -53,37 +46,18 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
       }}
       aria-live="polite"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-base font-bold text-brand-navy">Results</h3>
-          {/* Primary PDF action — kept next to the title for fast access */}
-          <Button
-            size="sm"
-            onClick={handlePdf}
-            disabled={!!pdfDisabledReason}
-            title={pdfDisabledReason ?? "Download PDF report"}
-            className="h-7 text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ background: "var(--brand-orange)" }}
-          >
-            <Download className="size-3.5" /> PDF
-          </Button>
-        </div>
-        {/* Desktop secondary actions — mobile uses the sticky MobileResultBar */}
-        <div className="no-print hidden flex-wrap gap-1.5 lg:flex">
-          <Button size="sm" variant="outline" className="border-brand-navy text-brand-navy" onClick={handlePrint}>
-            <Printer className="size-3.5" /> Print
-          </Button>
-          <Button asChild size="sm" variant="outline" className="border-brand-navy text-brand-navy">
-            <a href={mailUrl}>
-              <Mail className="size-3.5" /> Email
-            </a>
-          </Button>
-          <Button asChild size="sm" variant="outline" className="border-brand-navy text-brand-navy">
-            <a href={waUrl} target="_blank" rel="noreferrer noopener">
-              <MessageCircle className="size-3.5" /> WhatsApp
-            </a>
-          </Button>
-        </div>
+      <div className="flex items-center justify-between gap-3 border-b px-5 py-2.5">
+        <h3 className="text-base font-bold text-brand-navy">Results</h3>
+        <Button
+          size="sm"
+          onClick={handlePdf}
+          disabled={!!pdfDisabledReason}
+          title={pdfDisabledReason ?? "Download PDF report"}
+          className="no-print h-8 text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: "var(--brand-orange)" }}
+        >
+          <Download className="size-3.5" /> Download PDF
+        </Button>
       </div>
 
       <div className="divide-y">
