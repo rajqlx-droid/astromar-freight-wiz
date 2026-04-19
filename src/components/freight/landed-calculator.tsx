@@ -14,6 +14,8 @@ import {
 } from "@/lib/freight/calculators";
 import type { CargoLine } from "@/lib/freight/types";
 import { nextId } from "@/lib/freight/ids";
+import { CsvImportDialog } from "@/components/freight/csv-import-dialog";
+import { CurrencyQuickPick } from "@/components/freight/currency-quick-pick";
 
 interface Props {
   state: LandedInput;
@@ -53,7 +55,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
         {/* Currency + FX */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            <div className="space-y-1">
+            <div className="col-span-2 space-y-1 md:col-span-2">
               <Label className="text-xs font-semibold text-brand-navy">Currency Code</Label>
               <Input
                 value={state.currency}
@@ -61,6 +63,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
                 placeholder="USD, EUR, INR…"
                 className="h-9 border-2 border-brand-navy/30 text-sm uppercase"
               />
+              <CurrencyQuickPick value={state.currency} onChange={(c) => set({ currency: c })} />
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-brand-navy">Base Currency</Label>
@@ -87,6 +90,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-brand-navy">Cargo Line Items</h4>
             <div className="flex flex-wrap gap-2">
+              <CsvImportDialog mode="landed" onImport={(lines) => set({ lines })} />
               {onDuplicateToExport && (
                 <Button
                   size="sm"
