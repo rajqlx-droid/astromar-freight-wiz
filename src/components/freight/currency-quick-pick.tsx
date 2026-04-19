@@ -1,6 +1,12 @@
-import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-const COMMON = ["USD", "EUR", "GBP", "AED", "CNY", "JPY", "SGD", "AUD"] as const;
+const COMMON = ["USD", "EUR", "GBP", "AED", "CNY", "JPY", "SGD", "AUD", "INR", "HKD", "CAD", "CHF"] as const;
 
 interface Props {
   value: string;
@@ -8,35 +14,33 @@ interface Props {
 }
 
 /**
- * Compact row of one-click currency switches. Highlights the active code.
- * Users can still type any currency in the Currency Code field above.
+ * Compact currency dropdown. Users can still type any currency in
+ * the Currency Code field above; this offers fast switching to common ones.
  */
 export function CurrencyQuickPick({ value, onChange }: Props) {
+  const upper = value.toUpperCase();
+  // Ensure the current value is present in the list so Select can display it.
+  const options = COMMON.includes(upper as (typeof COMMON)[number])
+    ? [...COMMON]
+    : [upper, ...COMMON];
+
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex items-center gap-2">
       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Quick:
       </span>
-      {COMMON.map((code) => {
-        const active = value.toUpperCase() === code;
-        return (
-          <Button
-            key={code}
-            type="button"
-            size="sm"
-            variant={active ? "default" : "outline"}
-            onClick={() => onChange(code)}
-            className={
-              active
-                ? "h-6 px-2 text-[10px] font-bold text-white"
-                : "h-6 px-2 text-[10px] font-semibold text-brand-navy"
-            }
-            style={active ? { background: "var(--brand-orange)" } : undefined}
-          >
-            {code}
-          </Button>
-        );
-      })}
+      <Select value={upper} onValueChange={(v) => onChange(v)}>
+        <SelectTrigger className="h-7 w-[110px] border-2 border-brand-navy/30 text-xs font-bold text-brand-navy">
+          <SelectValue placeholder="Currency" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((code) => (
+            <SelectItem key={code} value={code} className="text-xs font-semibold">
+              {code}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
