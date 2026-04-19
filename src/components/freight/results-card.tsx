@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { downloadResultPdf } from "@/lib/freight/pdf";
+import { downloadResultPdf, type PdfExtras } from "@/lib/freight/pdf";
 import { historyStore, savedStore } from "@/lib/freight/storage";
 import type { CalcResult } from "@/lib/freight/types";
 
@@ -32,9 +32,11 @@ interface Props {
   result: CalcResult | null;
   inputsTable?: { label: string; value: string }[];
   onLoadSaved?: () => void;
+  /** Optional async resolver for extras (e.g. 3D snapshots). Called at PDF time. */
+  resolveExtras?: () => Promise<PdfExtras | undefined> | PdfExtras | undefined;
 }
 
-export function ResultsCard({ result, inputsTable }: Props) {
+export function ResultsCard({ result, inputsTable, resolveExtras }: Props) {
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
 
@@ -58,8 +60,9 @@ export function ResultsCard({ result, inputsTable }: Props) {
     }
   };
 
-  const handlePdf = () => {
-    downloadResultPdf(result, inputsTable);
+  const handlePdf = async () => {
+    const extras = resolveExtras ? await resolveExtras() : undefined;
+    downloadResultPdf(result, inputsTable, extras);
     toast.success("PDF downloaded");
   };
 
