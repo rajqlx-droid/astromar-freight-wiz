@@ -519,7 +519,55 @@ function SinglePlanBody({
   );
 }
 
-/* ---------------- Row stepper bar (under the 3D viewer) ---------------- */
+/* ---------------- Slim status bar (under the 3D viewer) ---------------- */
+
+function PalletStatusBar({
+  currentIdx,
+  total,
+  rowIdx,
+  totalRows,
+  showGapHeatmap,
+  onToggleGapHeatmap,
+  activeRowHasGap,
+}: {
+  currentIdx: number;
+  total: number;
+  rowIdx: number | null;
+  totalRows: number;
+  showGapHeatmap: boolean;
+  onToggleGapHeatmap: () => void;
+  activeRowHasGap: boolean;
+}) {
+  const empty = currentIdx < 0;
+  const status = empty
+    ? "Empty container — press ▶ in the HUD to start the loader walkthrough"
+    : `Pallet ${currentIdx + 1} of ${total}${rowIdx != null ? ` · row ${rowIdx + 1} / ${totalRows}` : ""}`;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-1.5">
+      <span className="text-[11px] font-medium text-muted-foreground">{status}</span>
+      <Button
+        type="button"
+        size="sm"
+        variant={showGapHeatmap ? "default" : "outline"}
+        onClick={onToggleGapHeatmap}
+        className={cn(
+          "ml-auto h-7 px-2 text-[11px]",
+          showGapHeatmap && activeRowHasGap
+            ? "bg-rose-600 text-white hover:bg-rose-700"
+            : "",
+        )}
+        aria-pressed={showGapHeatmap}
+        title={
+          activeRowHasGap
+            ? "Toggle red overlay highlighting floor & wall voids"
+            : "Heatmap appears on rows flagged with gap warnings"
+        }
+      >
+        ⚠ Gaps
+      </Button>
+    </div>
+  );
+}
 
 function RowStepperBar({
   stepMode,
