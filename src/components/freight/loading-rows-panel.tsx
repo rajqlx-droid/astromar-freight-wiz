@@ -116,6 +116,8 @@ export function LoadingRowsPanel({ pack }: Props) {
         if (row.hasNonStack) badges.push('<span class="badge nostack">NO-STACK</span>');
         if (row.needsSeparator)
           badges.push('<span class="badge mixed">⚠ MIXED PALLET</span>');
+        if (row.gapWarning)
+          badges.push('<span class="badge gap">⚠ GAP — RE-SHUFFLE</span>');
         if (row.rotatedCount > 0)
           badges.push(`<span class="badge tilt">↻ ${row.rotatedCount} TILTED</span>`);
         const itemsHtml = counts
@@ -128,6 +130,8 @@ export function LoadingRowsPanel({ pack }: Props) {
           row.totalWeightKg > 0
             ? `· ~${row.totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
             : "";
+        const wallPct = Math.round(row.wallUtilizationPct);
+        const wallClass = row.gapWarning ? "wall warn" : "wall ok";
         const doorSvg = buildRowSideViewSvg(row, pack, { width: 200, height: 90 });
         const sideSvg = buildRowFrontViewSvg(row, pack, { width: 200, height: 90 });
         const topSvg = buildRowTopViewSvg(row, pack, { width: 200, height: 90 });
@@ -137,7 +141,7 @@ export function LoadingRowsPanel({ pack }: Props) {
               <span class="rnum">R${row.rowIdx + 1}</span>
               <div class="row-meta">
                 <div class="row-title">Row ${row.rowIdx + 1} <span class="dim">— ${xStartM}–${xEndM} m from rear wall</span></div>
-                <div class="row-sub">${row.boxes.length} pkg · ${row.layers} layer${row.layers > 1 ? "s" : ""} · ${row.totalCbm.toFixed(2)} m³ ${wt}</div>
+                <div class="row-sub">${row.boxes.length} pkg · ${row.layers} layer${row.layers > 1 ? "s" : ""} · ${row.totalCbm.toFixed(2)} m³ ${wt} · <span class="${wallClass}">${wallPct}% wall used</span></div>
               </div>
               <div class="badges">${badges.join(" ")}</div>
               <span class="check"></span>
@@ -160,6 +164,7 @@ export function LoadingRowsPanel({ pack }: Props) {
                 </div>
                 <div class="row-body-text">
                   <div class="chips">${itemsHtml}</div>
+                  ${row.gapWarning ? `<div class="warn warn-gap">⚠ Gap warning — back wall only ${Math.round(row.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side to close gaps before sealing the container.</div>` : ""}
                   ${row.needsSeparator ? '<div class="warn">⚠ Mixed pallet — insert a plywood/cardboard separator board between heavy non-fragile units and fragile units before stacking.</div>' : ""}
                   <div class="instruction"><strong>Loader:</strong> ${instructionFor(row)}</div>
                 </div>
@@ -192,7 +197,11 @@ export function LoadingRowsPanel({ pack }: Props) {
         .badge.nostack { background: #ffe4e6; color: #9f1239; }
         .badge.tilt { background: #fef9c3; color: #854d0e; }
         .badge.mixed { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+        .badge.gap { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
         .warn { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; padding: 5px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+        .warn.warn-gap { background: #fff7ed; border-color: #fdba74; color: #9a3412; }
+        .wall.ok { color: #047857; font-weight: 700; }
+        .wall.warn { color: #c2410c; font-weight: 700; }
         .check { width: 18px; height: 18px; border: 1.5px solid #1B3A6B; border-radius: 4px; flex-shrink: 0; }
         .row-body { margin-top: 8px; padding-left: 38px; }
         .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
@@ -360,6 +369,11 @@ export function LoadingRowsPanel({ pack }: Props) {
                         ⚠ mixed pallet
                       </span>
                     )}
+                    {row.gapWarning && (
+                      <span className="rounded border border-orange-300 bg-orange-100 px-1 text-[9px] font-medium uppercase text-orange-700 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-300">
+                        ⚠ gap — re-shuffle
+                      </span>
+                    )}
                     {row.rotatedCount > 0 && (
                       <span className="rounded bg-yellow-100 px-1 text-[9px] font-medium uppercase text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200">
                         ↻ {row.rotatedCount} tilted
@@ -380,6 +394,16 @@ export function LoadingRowsPanel({ pack }: Props) {
                         </span>
                       </>
                     )}
+                    <span>·</span>
+                    <span
+                      className={cn(
+                        "font-semibold tabular-nums",
+                        row.gapWarning ? "text-orange-700 dark:text-orange-300" : "text-emerald-700 dark:text-emerald-300",
+                      )}
+                      title="Back-wall floor area covered by bottom layer"
+                    >
+                      {Math.round(row.wallUtilizationPct)}% wall used
+                    </span>
                   </div>
                 </div>
                 <ChevronDown
@@ -435,6 +459,40 @@ export function LoadingRowsPanel({ pack }: Props) {
                       </div>
                     ))}
                   </div>
+
+                  {/* Wall utilization bar */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wide">
+                      <span className="text-muted-foreground">Back-wall utilization</span>
+                      <span
+                        className={cn(
+                          "tabular-nums",
+                          row.gapWarning ? "text-orange-700 dark:text-orange-300" : "text-emerald-700 dark:text-emerald-300",
+                        )}
+                      >
+                        {Math.round(row.wallUtilizationPct)}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          row.gapWarning ? "bg-orange-500" : "bg-emerald-500",
+                        )}
+                        style={{ width: `${Math.max(2, Math.round(row.wallUtilizationPct))}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {row.gapWarning && (
+                    <div className="flex items-start gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] leading-relaxed text-orange-800 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200">
+                      <span aria-hidden>⚠</span>
+                      <span>
+                        <strong className="font-semibold">Gap warning:</strong>{" "}
+                        Back wall only {Math.round(row.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side to close gaps before sealing the container.
+                      </span>
+                    </div>
+                  )}
 
                   {row.needsSeparator && (
                     <div className="flex items-start gap-1.5 rounded-md border border-red-300 bg-red-50 px-2 py-1.5 text-[11px] leading-relaxed text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">

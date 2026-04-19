@@ -22,6 +22,10 @@ export interface PdfLoadingRow {
   hasNonStack: boolean;
   rotatedCount: number;
   needsSeparator: boolean;
+  /** Back-wall floor utilization (0-100). */
+  wallUtilizationPct: number;
+  /** True when wallUtilizationPct < 90% — flagged for re-shuffle. */
+  gapWarning: boolean;
   items: { itemIdx: number; count: number; color: string; packageType: string }[];
   instruction: string;
   /** Optional pre-rasterised door-view PNG dataURL (W × H) for this row. */
@@ -208,6 +212,7 @@ export function downloadResultPdf(
       if (r.hasFragile) flags.push("FRAGILE");
       if (r.hasNonStack) flags.push("NO-STACK");
       if (r.needsSeparator) flags.push("MIXED PALLET");
+      if (r.gapWarning) flags.push(`GAP ${Math.round(r.wallUtilizationPct)}%`);
       if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
       const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
       const wt =
@@ -228,8 +233,14 @@ export function downloadResultPdf(
             cardW - svgW - cardPad * 3,
           ) as string[])
         : [];
+      const gapLines = r.gapWarning
+        ? (doc.splitTextToSize(
+            `Gap warning — back wall only ${Math.round(r.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side before sealing.`,
+            cardW - svgW - cardPad * 3,
+          ) as string[])
+        : [];
       const textBlockH =
-        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
+        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + gapLines.length * 10 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
       const cardH = Math.max(imageColH + cardPad * 2, textBlockH + cardPad * 2);
 
       // Page-break check
@@ -298,8 +309,9 @@ export function downloadResultPdf(
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(110, 110, 110);
+      const wallTxt = `${Math.round(r.wallUtilizationPct)}% wall`;
       doc.text(
-        `${r.pkgCount} pkg · ${r.layers} layer${r.layers > 1 ? "s" : ""} · ${r.cbm.toFixed(2)} m³ · ${wt}`,
+        `${r.pkgCount} pkg · ${r.layers} layer${r.layers > 1 ? "s" : ""} · ${r.cbm.toFixed(2)} m³ · ${wt} · ${wallTxt}`,
         tx,
         ty,
       );
