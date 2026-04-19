@@ -452,6 +452,8 @@ function SinglePlanBody({
                   visiblePlacedSet={visiblePlacedSet}
                   hideDoors={stepMode}
                   gapHeatmapRow={gapHeatmapRow}
+                  flyInPlacedSet={flyInPlacedSet}
+                  flyInKey={flyInKey}
                 />
               </Suspense>
             ) : (
@@ -461,14 +463,24 @@ function SinglePlanBody({
               <RowStepperBar
                 stepMode={stepMode}
                 onToggleStepMode={() => {
+                  stopPlay();
                   setStepMode((v) => !v);
-                  setStepIdx(-1); // start EMPTY so user can inspect floor first
+                  setStepIdx(-1);
                 }}
                 stepIdx={stepIdx}
                 totalRows={rows.length}
-                onPrev={() => setStepIdx((i) => Math.max(-1, i - 1))}
-                onNext={() => setStepIdx((i) => Math.min(rows.length - 1, i + 1))}
-                onReset={() => setStepIdx(-1)}
+                onPrev={() => {
+                  stopPlay();
+                  setStepIdx((i) => Math.max(-1, i - 1));
+                }}
+                onNext={() => {
+                  stopPlay();
+                  setStepIdx((i) => Math.min(rows.length - 1, i + 1));
+                }}
+                onReset={() => {
+                  stopPlay();
+                  setStepIdx(-1);
+                }}
                 canStep={canStep}
                 atEmpty={atEmpty}
                 atFirst={atFirst}
@@ -476,6 +488,8 @@ function SinglePlanBody({
                 showGapHeatmap={showGapHeatmap}
                 onToggleGapHeatmap={() => setShowGapHeatmap((v) => !v)}
                 activeRowHasGap={!!activeRow?.gapWarning}
+                isPlaying={isPlaying}
+                onTogglePlay={() => (isPlaying ? stopPlay() : startPlay())}
               />
             )}
           </div>
