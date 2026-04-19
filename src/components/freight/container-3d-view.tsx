@@ -668,11 +668,16 @@ function WarehouseAmbience({ Cm }: { Cm: { l: number; w: number; h: number } }) 
   const palletL = 1.2;
   const palletW = 1.0;
 
-  // Stacks of empty pallets behind the container (x = -Cl/2 - 1.5 m), to the side.
+  // Stacks of empty pallets: ambient stacks behind, plus loading-side feeder
+  // stacks near the door (the forklift drives out to these to grab a fresh
+  // pallet+box during each loading step).
   const stacks: Array<{ pos: [number, number, number]; count: number }> = [
     { pos: [-Cm.l / 2 - 1.6, 0, -Cm.w / 2 - 1.4], count: 5 },
     { pos: [-Cm.l / 2 - 1.6, 0, Cm.w / 2 + 1.4], count: 4 },
     { pos: [-Cm.l / 2 - 3.0, 0, -Cm.w / 2 - 1.6], count: 6 },
+    // Loading-side feeder stacks (near door, +x). Forklift picks from here.
+    { pos: [Cm.l / 2 + 4.5, 0, -Cm.w / 2 - 1.4], count: 4 },
+    { pos: [Cm.l / 2 + 4.5, 0, Cm.w / 2 + 1.4], count: 4 },
   ];
 
   // Traffic cones flanking the door (door is at +Cl/2). Two pairs forming a lane.
