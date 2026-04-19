@@ -46,6 +46,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
   const [wtUnit, setWtUnit] = usePersistentWeightUnit();
   const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
+  const captureRef = useRef<(() => Promise<{ iso: string; front: string; side: string } | null>) | null>(null);
   const result = useMemo(() => calcCbm(items), [items]);
 
   const update = (id: string, patch: Partial<CbmItem>) => {
@@ -213,9 +214,21 @@ export function CbmCalculator({ items, setItems }: Props) {
             Clear all
           </Button>
         </div>
-        <ContainerLoadView items={items} />
+        <ContainerLoadView
+          items={items}
+          onReady={(h) => {
+            captureRef.current = h.capture;
+          }}
+        />
       </div>
-      <ResultsCard result={result} inputsTable={inputsTable} />
+      <ResultsCard
+        result={result}
+        inputsTable={inputsTable}
+        resolveExtras={async () => {
+          const snaps = captureRef.current ? await captureRef.current() : null;
+          return snaps ? { snapshots: snaps } : undefined;
+        }}
+      />
     </div>
   );
 }
