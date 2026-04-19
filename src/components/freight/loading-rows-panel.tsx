@@ -312,6 +312,14 @@ export function LoadingRowsPanel({ pack }: Props) {
 
               {isOpen && (
                 <div className="space-y-2 bg-muted/20 px-3 pb-3 pt-1">
+                  {/* Mini side-view of just this row */}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Side view (looking down container length)
+                    </span>
+                    <RowSideView row={row} pack={pack} />
+                  </div>
+
                   {/* Item color chips */}
                   <div className="flex flex-wrap gap-1.5">
                     {counts.map((c) => (
