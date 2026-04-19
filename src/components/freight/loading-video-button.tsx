@@ -222,7 +222,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
               <p className="text-[11px] text-muted-foreground">
                 Encoding as fast as possible — usually 3-5× faster than playback. Saves directly inside the browser when ready (no popout).
               </p>
-              <p className="max-w-md rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-center text-[11px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300">
+              <p className="max-w-md rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-center text-[11px] font-medium text-destructive">
                 ⚠ Keep this tab in the foreground until encoding finishes — browsers throttle background tabs, which can pause encoding. Once finished you can switch tabs freely.
               </p>
             </div>
