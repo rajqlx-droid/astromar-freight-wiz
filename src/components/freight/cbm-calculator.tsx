@@ -155,7 +155,7 @@ export function CbmCalculator({ items, setItems }: Props) {
 
               {/* Advanced packing constraints */}
               {open && (
-                <div className="mt-3 grid gap-3 rounded-md border border-dashed border-brand-navy/20 bg-muted/30 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-3 grid gap-3 rounded-md border border-dashed border-brand-navy/20 bg-muted/30 p-3 sm:grid-cols-2 lg:grid-cols-3">
                   <div className="space-y-1">
                     <Label className="text-xs font-semibold text-brand-navy">Package type</Label>
                     <Select
@@ -174,29 +174,6 @@ export function CbmCalculator({ items, setItems }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2">
-                    <div>
-                      <Label className="text-xs font-semibold text-brand-navy">Stackable</Label>
-                      <p className="text-[10px] text-muted-foreground">Allow cargo on top</p>
-                    </div>
-                    <Switch
-                      checked={it.stackable !== false}
-                      onCheckedChange={(v) => update(it.id, { stackable: v })}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <ShieldAlert className="size-3.5 text-amber-600" />
-                      <div>
-                        <Label className="text-xs font-semibold text-brand-navy">Fragile</Label>
-                        <p className="text-[10px] text-muted-foreground">Load on top last</p>
-                      </div>
-                    </div>
-                    <Switch
-                      checked={it.fragile === true}
-                      onCheckedChange={(v) => update(it.id, { fragile: v })}
-                    />
-                  </div>
                   <NumberField
                     compact
                     id={`msw-${it.id}`}
@@ -208,6 +185,57 @@ export function CbmCalculator({ items, setItems }: Props) {
                     }
                     hint="Max weight of cargo allowed on top of one of these. 0 = unlimited."
                   />
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2">
+                      <div>
+                        <Label className="text-xs font-semibold text-brand-navy">Stackable</Label>
+                        <p className="text-[10px] text-muted-foreground">Allow cargo on top</p>
+                      </div>
+                      <Switch
+                        checked={it.stackable !== false}
+                        onCheckedChange={(v) => update(it.id, { stackable: v })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldAlert className="size-3.5 text-amber-600" />
+                        <div>
+                          <Label className="text-xs font-semibold text-brand-navy">Fragile</Label>
+                          <p className="text-[10px] text-muted-foreground">Load on top last</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={it.fragile === true}
+                        onCheckedChange={(v) => update(it.id, { fragile: v })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2 sm:col-span-2 lg:col-span-1">
+                    <div>
+                      <Label className="text-xs font-semibold text-brand-navy">Can lay sideways</Label>
+                      <p className="text-[10px] text-muted-foreground" title="Allow rotating box 90° on the floor (swap length & width)">
+                        Rotate 90° on floor
+                      </p>
+                    </div>
+                    <Switch
+                      checked={it.allowSidewaysRotation !== false}
+                      onCheckedChange={(v) => update(it.id, { allowSidewaysRotation: v })}
+                    />
+                  </div>
+                  {!it.fragile && (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2 sm:col-span-2 lg:col-span-2">
+                      <div>
+                        <Label className="text-xs font-semibold text-brand-navy">Can stand on side</Label>
+                        <p className="text-[10px] text-muted-foreground" title="Allow tipping box onto its side (swap height with length or width). Only safe for non-fragile cargo.">
+                          Tip onto side for tighter fit
+                        </p>
+                      </div>
+                      <Switch
+                        checked={it.allowAxisRotation === true}
+                        onCheckedChange={(v) => update(it.id, { allowAxisRotation: v })}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </Card>

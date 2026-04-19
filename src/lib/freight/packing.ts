@@ -75,23 +75,26 @@ export interface PackResult {
 }
 
 const RENDER_CAP = 200;
+const CELL_MM = 100;
+const SUPPORT_MIN_RATIO = 0.9;
+const PLACE_STEP_MM = 100;
 
 /**
- * Shelf-fit / FFD by volume.
- * Sort cartons largest-first, fill rows along length, wrap by width, stack layers by height.
- * Uses single orientation (input as-given). Indicative only.
+ * Support-aware skyline packer.
+ * Quantises floor into ~100mm cells and rests each carton on the actual
+ * top-Z of cells under its footprint — eliminates floating boxes.
+ * Single orientation (input as-given). Indicative only.
  */
 export function packContainer(
   items: CbmItem[],
   container: ContainerPreset,
 ): PackResult {
-  // Expand items into individual cartons with item index for color.
   const cartons: Array<{ l: number; w: number; h: number; itemIdx: number }> = [];
   let cargoCbm = 0;
   let weightKg = 0;
   items.forEach((it, idx) => {
     if (it.length <= 0 || it.width <= 0 || it.height <= 0 || it.qty <= 0) return;
-    const lmm = it.length * 10; // cm → mm
+    const lmm = it.length * 10;
     const wmm = it.width * 10;
     const hmm = it.height * 10;
     const single = (it.length * it.width * it.height) / 1_000_000;
@@ -102,47 +105,73 @@ export function packContainer(
     }
   });
 
-  // Largest first by volume.
+  // Largest first by volume → better packing.
   cartons.sort((a, b) => b.l * b.w * b.h - a.l * a.w * a.h);
 
   const placed: PlacedBox[] = [];
   const C = container.inner;
-
-  let cursorX = 0; // along length
-  let cursorY = 0; // along width
-  let cursorZ = 0; // along height
-  let rowDepth = 0; // current row's max width (along Y)
-  let layerHeight = 0; // current layer's max height (along Z)
+  const cellsX = Math.ceil(C.l / CELL_MM);
+  const cellsY = Math.ceil(C.w / CELL_MM);
+  const heightMap = new Float32Array(cellsX * cellsY);
+  const cellIdx = (cx: number, cy: number) => cy * cellsX + cx;
 
   let placedCount = 0;
   let truncated = false;
 
   for (const c of cartons) {
-    // If carton can't fit container at all → skip.
     if (c.l > C.l || c.w > C.w || c.h > C.h) continue;
 
-    // Wrap to next row (advance Y) if no length space left.
-    if (cursorX + c.l > C.l) {
-      cursorX = 0;
-      cursorY += rowDepth;
-      rowDepth = 0;
+    let bestScore = Infinity;
+    let bestX = -1;
+    let bestY = -1;
+    let bestZ = 0;
+
+    const stepX = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(c.l / 4)));
+    const stepY = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(c.w / 4)));
+
+    for (let y = 0; y + c.w <= C.w; y += stepY) {
+      for (let x = 0; x + c.l <= C.l; x += stepX) {
+        const cx0 = Math.floor(x / CELL_MM);
+        const cy0 = Math.floor(y / CELL_MM);
+        const cx1 = Math.ceil((x + c.l) / CELL_MM);
+        const cy1 = Math.ceil((y + c.w) / CELL_MM);
+
+        let topZ = 0;
+        for (let cy = cy0; cy < cy1; cy++) {
+          for (let cx = cx0; cx < cx1; cx++) {
+            const h = heightMap[cellIdx(cx, cy)];
+            if (h > topZ) topZ = h;
+          }
+        }
+        if (topZ + c.h > C.h) continue;
+
+        let supported = 0;
+        let total = 0;
+        for (let cy = cy0; cy < cy1; cy++) {
+          for (let cx = cx0; cx < cx1; cx++) {
+            total++;
+            if (Math.abs(heightMap[cellIdx(cx, cy)] - topZ) < 1) supported++;
+          }
+        }
+        if (topZ > 0 && total > 0 && supported / total < SUPPORT_MIN_RATIO) continue;
+
+        const score = topZ * 1000 + (x + y);
+        if (score < bestScore) {
+          bestScore = score;
+          bestX = x;
+          bestY = y;
+          bestZ = topZ;
+        }
+      }
     }
-    // Wrap to next layer (advance Z) if no width space left.
-    if (cursorY + c.w > C.w) {
-      cursorY = 0;
-      cursorX = 0;
-      cursorZ += layerHeight;
-      rowDepth = 0;
-      layerHeight = 0;
-    }
-    // No height left → can't place this or remaining.
-    if (cursorZ + c.h > C.h) break;
+
+    if (bestX < 0) continue;
 
     if (placed.length < RENDER_CAP) {
       placed.push({
-        x: cursorX,
-        y: cursorY,
-        z: cursorZ,
+        x: bestX,
+        y: bestY,
+        z: bestZ,
         l: c.l,
         w: c.w,
         h: c.h,
@@ -153,10 +182,18 @@ export function packContainer(
       truncated = true;
     }
 
+    const cx0 = Math.floor(bestX / CELL_MM);
+    const cy0 = Math.floor(bestY / CELL_MM);
+    const cx1 = Math.ceil((bestX + c.l) / CELL_MM);
+    const cy1 = Math.ceil((bestY + c.w) / CELL_MM);
+    const newTop = bestZ + c.h;
+    for (let cy = cy0; cy < cy1; cy++) {
+      for (let cx = cx0; cx < cx1; cx++) {
+        heightMap[cellIdx(cx, cy)] = newTop;
+      }
+    }
+
     placedCount++;
-    cursorX += c.l;
-    if (c.w > rowDepth) rowDepth = c.w;
-    if (c.h > layerHeight) layerHeight = c.h;
   }
 
   return {
