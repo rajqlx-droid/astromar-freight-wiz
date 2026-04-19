@@ -126,6 +126,13 @@ export function LoadReportPanel({ pack, rollup }: Props) {
                 : status === "fail"
                   ? "text-rose-600"
                   : "text-amber-600";
+            // Count rotated units of this item.
+            const rotatedCount = pack.placed.filter(
+              (b) => b.itemIdx === p.itemIdx && (b.rotated === "sideways" || b.rotated === "axis"),
+            ).length;
+            const tippedCount = pack.placed.filter(
+              (b) => b.itemIdx === p.itemIdx && b.rotated === "axis",
+            ).length;
             return (
               <div
                 key={p.itemId}
@@ -137,7 +144,7 @@ export function LoadReportPanel({ pack, rollup }: Props) {
                   aria-hidden
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-semibold text-brand-navy">Item {p.itemIdx + 1}</span>
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       {p.packageType}
@@ -150,6 +157,18 @@ export function LoadReportPanel({ pack, rollup }: Props) {
                     {p.fragile && (
                       <span className="rounded bg-amber-100 px-1 text-[9px] font-medium uppercase text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                         fragile
+                      </span>
+                    )}
+                    {rotatedCount > 0 && (
+                      <span
+                        className="rounded bg-yellow-100 px-1 text-[9px] font-medium uppercase text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200"
+                        title={
+                          tippedCount > 0
+                            ? `${tippedCount} tipped on side, ${rotatedCount - tippedCount} rotated sideways`
+                            : `${rotatedCount} rotated sideways for fit`
+                        }
+                      >
+                        ↻ tilted {rotatedCount}×
                       </span>
                     )}
                   </div>

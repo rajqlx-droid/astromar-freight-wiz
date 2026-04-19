@@ -49,11 +49,13 @@ export interface GenerateOptions {
   pack: AdvancedPackResult;
   controls: VideoControls;
   fps?: number;
-  /** Total target duration in seconds (default 20). */
+  /** Total target duration in seconds (default 12). */
   durationSec?: number;
   /** Width × height of output. Should match canvas pixel size. */
   width: number;
   height: number;
+  /** Encoder bitrate in bits/sec. Defaults to 8 Mbps. */
+  videoBitsPerSecond?: number;
   onProgress?: (frame: number, total: number) => void;
 }
 
@@ -133,14 +135,15 @@ function buildTimeline(
   const order = loadingOrder(pack);
   const totalFrames = Math.max(60, Math.round(durationSec * fps));
 
-  // Allocate time: 12% intro, 76% loading, 12% outro.
-  const introFrames = Math.round(totalFrames * 0.12);
-  const outroFrames = Math.round(totalFrames * 0.12);
+  // Allocate time: 8% intro, 84% loading, 8% outro (snappier than the
+  // previous 12/76/12 split — gets to the action faster).
+  const introFrames = Math.round(totalFrames * 0.08);
+  const outroFrames = Math.round(totalFrames * 0.08);
   const loadFrames = totalFrames - introFrames - outroFrames;
 
   const n = order.length || 1;
   // Each box gets a slice; boxes overlap slightly for smoother motion.
-  const sliceLen = Math.max(4, Math.floor(loadFrames / n));
+  const sliceLen = Math.max(3, Math.floor(loadFrames / n));
   const anims: BoxAnim[] = [];
 
   for (let i = 0; i < n; i++) {
@@ -149,13 +152,18 @@ function buildTimeline(
     const stat = pack.perItem[box.itemIdx];
     const start = introFrames + Math.floor((i / n) * loadFrames);
     const end = Math.min(introFrames + loadFrames, start + sliceLen);
+    const rotNote = box.rotated === "axis"
+      ? " · TIPPED ON SIDE"
+      : box.rotated === "sideways"
+        ? " · ROTATED SIDEWAYS"
+        : "";
     anims.push({
       placedIdx,
       startFrame: start,
       endFrame: end,
       step: i + 1,
       caption: `Step ${i + 1} of ${n}: Item ${box.itemIdx + 1}${stat?.packageType ? ` — ${stat.packageType}` : ""}`,
-      subCaption: `${box.l}×${box.w}×${box.h} mm · ${stat?.fragile ? "Fragile · " : ""}${stat?.stackable ? "Stackable" : "Non-stackable"}`,
+      subCaption: `${box.l}×${box.w}×${box.h} mm · ${stat?.fragile ? "Fragile · " : ""}${stat?.stackable ? "Stackable" : "Non-stackable"}${rotNote}`,
     });
   }
 
@@ -285,11 +293,13 @@ async function encodeWithMediaRecorder(
   totalFrames: number,
   driveFrame: (n: number) => Promise<void>,
   onProgress?: (n: number, total: number) => void,
+  bitrate = 8_000_000,
 ): Promise<{ blob: Blob; mime: string; ext: "mp4" | "webm" }> {
   const stream = canvas.captureStream(fps);
-  // Prefer mp4 (Safari 17+, Chrome 126+); fall back to webm.
+  // Prefer H.264 High profile MP4 for crisper output, then fall back.
   const candidates = [
-    "video/mp4;codecs=avc1.42E01E",
+    "video/mp4;codecs=avc1.640028", // H.264 High @ L4 — best quality
+    "video/mp4;codecs=avc1.42E01E", // H.264 Baseline — broad support
     "video/mp4",
     "video/webm;codecs=vp9",
     "video/webm;codecs=vp8",
@@ -303,7 +313,7 @@ async function encodeWithMediaRecorder(
 
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
-    videoBitsPerSecond: 6_000_000,
+    videoBitsPerSecond: bitrate,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
@@ -341,7 +351,7 @@ export async function generateLoadingVideo(
   opts: GenerateOptions,
 ): Promise<GeneratedVideo> {
   const fps = opts.fps ?? 30;
-  const durationSec = opts.durationSec ?? 20;
+  const durationSec = opts.durationSec ?? 12;
   const timeline = buildTimeline(opts.pack, fps, durationSec);
 
   const timelineMeta: VideoFrameInfo[] = [];
@@ -367,6 +377,7 @@ export async function generateLoadingVideo(
     timeline.totalFrames,
     driveFrame,
     opts.onProgress,
+    opts.videoBitsPerSecond ?? 8_000_000,
   );
 
   return { blob, mime, ext, timeline: timelineMeta };

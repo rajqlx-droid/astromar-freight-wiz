@@ -46,7 +46,7 @@ interface Props {
   containerLabel?: string;
 }
 
-type Speed = 0.5 | 1 | 2;
+type Speed = 0.5 | 1 | 1.5 | 2;
 type Resolution = 720 | 1080;
 
 export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLabel }: Props) {
@@ -55,7 +55,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
   const [progress, setProgress] = useState({ frame: 0, total: 0 });
   const [video, setVideo] = useState<GeneratedVideo | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-  const [speed, setSpeed] = useState<Speed>(1);
+  const [speed, setSpeed] = useState<Speed>(1.5);
   const [resolution, setResolution] = useState<Resolution>(720);
   const [currentInfo, setCurrentInfo] = useState<VideoFrameInfo | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -102,30 +102,45 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
         return;
       }
 
-      handle.beginRecording(30, 20);
+      // Resize the WebGL drawing buffer to the requested resolution for HD capture.
+      // 16:9 aspect to match common video players.
+      const targetH = resolution;
+      const targetW = Math.round((targetH * 16) / 9);
+      handle.setRenderSize(targetW, targetH);
 
-      const result = await generateLoadingVideo({
-        pack,
-        controls: {
-          applyFrame: (info) => {
-            handle.applyFrame(info);
-            setCurrentInfo(info);
+      // Bitrate scales with resolution for crisper output.
+      const bitrate = resolution === 1080 ? 12_000_000 : 8_000_000;
+
+      handle.beginRecording(30, 12);
+
+      try {
+        const result = await generateLoadingVideo({
+          pack,
+          controls: {
+            applyFrame: (info) => {
+              handle.applyFrame(info);
+              setCurrentInfo(info);
+            },
+            render: () => handle.render(),
+            getCanvas: () => handle.getCanvas(),
+            capture: () => handle.getCanvas()?.toDataURL("image/png") ?? "",
           },
-          render: () => handle.render(),
-          getCanvas: () => handle.getCanvas(),
-          capture: () => handle.getCanvas()?.toDataURL("image/png") ?? "",
-        },
-        width: canvas.width,
-        height: canvas.height,
-        fps: 30,
-        durationSec: 20,
-        onProgress: (frame, total) => setProgress({ frame, total }),
-      });
+          width: targetW,
+          height: targetH,
+          fps: 30,
+          durationSec: 12,
+          videoBitsPerSecond: bitrate,
+          onProgress: (frame, total) => setProgress({ frame, total }),
+        });
 
-      handle.endRecording();
-      const objectUrl = URL.createObjectURL(result.blob);
-      setUrl(objectUrl);
-      setVideo(result);
+        handle.endRecording();
+        const objectUrl = URL.createObjectURL(result.blob);
+        setUrl(objectUrl);
+        setVideo(result);
+      } finally {
+        // Always restore the on-screen canvas size, even if encoding fails.
+        handle.restoreRenderSize();
+      }
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Failed to generate video");
@@ -186,7 +201,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
             <DialogTitle>Loading Sequence Video</DialogTitle>
             <DialogDescription>
               {containerLabel ? `${containerLabel} · ` : ""}
-              ~20 second 3D animation of cargo loading back-to-front, bottom-to-top.
+              ~12 second 3D animation of cargo loading back-to-front, bottom-to-top.
             </DialogDescription>
           </DialogHeader>
 
@@ -230,7 +245,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-1 rounded-md border border-brand-navy/30 bg-background p-0.5">
                   <span className="px-2 text-[11px] font-medium text-muted-foreground">Speed</span>
-                  {([0.5, 1, 2] as Speed[]).map((s) => (
+                  {([0.5, 1, 1.5, 2] as Speed[]).map((s) => (
                     <button
                       key={s}
                       type="button"
@@ -242,7 +257,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
                           : "text-brand-navy hover:bg-brand-navy/10",
                       )}
                     >
-                      {s}×{s === 0.5 ? " (slow-mo)" : ""}
+                      {s}×{s === 0.5 ? " (slow)" : ""}
                     </button>
                   ))}
                 </div>

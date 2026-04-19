@@ -61,6 +61,13 @@ export interface PlacedBox {
   h: number;
   color: string;
   itemIdx: number;
+  /**
+   * Orientation flag — set when the packer chose a non-original orientation:
+   *  - "sideways": L↔W swapped (rotated 90° around vertical axis)
+   *  - "axis":     box tipped onto its side (height swapped with L or W)
+   *  - null:       original orientation
+   */
+  rotated?: "sideways" | "axis" | null;
 }
 
 export interface PackResult {

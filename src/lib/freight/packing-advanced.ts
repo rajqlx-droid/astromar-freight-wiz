@@ -290,9 +290,16 @@ export function packContainerAdvanced(
           }
           if (!weightOk) continue;
 
-          // Score: lowest Z, then tightest to back-left (low x+y), then tightest fit.
+          // Score (back-to-front row-wise loading):
+          //   1. x position has the highest weight — fully fill the row at the
+          //      back wall before advancing forward (loaders can't climb on cargo).
+          //   2. z (height) — bottom of the current row first.
+          //   3. y position — left-to-right within the row.
+          //   4. support quality tie-break.
+          // Coefficients chosen so a 100mm advance in x always outweighs the
+          // tallest possible stack progression at the same x.
           const score =
-            ev.z * 1000 + (x + y) + (1 - ev.supportRatio) * 200;
+            x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
           if (score < bestScore) {
             bestScore = score;
             bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters };
@@ -308,6 +315,15 @@ export function packContainerAdvanced(
 
     const { x, y, z, orient, supporters } = bestPick;
     const internalIdx = placedInternal.length;
+
+    // Detect rotation vs original dimensions.
+    let rotated: "sideways" | "axis" | null = null;
+    if (orient.h !== c.origH) {
+      rotated = "axis"; // tipped — height swapped with L or W
+    } else if (orient.l !== c.origL || orient.w !== c.origW) {
+      rotated = "sideways"; // L↔W swap
+    }
+
     const box: PlacedInternal = {
       x,
       y,
@@ -317,6 +333,7 @@ export function packContainerAdvanced(
       h: orient.h,
       color: ITEM_COLORS[c.itemIdx % ITEM_COLORS.length],
       itemIdx: c.itemIdx,
+      rotated,
       weight: c.weight,
       fragile: c.fragile,
       maxStackWeightKg: c.maxStackWeightKg,
@@ -351,16 +368,16 @@ export function packContainerAdvanced(
   }
 
   // Render-cap truncation (rare with skyline since we score; just in case).
+  const toPlaced = (p: PlacedInternal): PlacedBox => ({
+    x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h,
+    color: p.color, itemIdx: p.itemIdx, rotated: p.rotated ?? null,
+  });
   let placed: PlacedBox[];
   if (placedInternal.length > RENDER_CAP) {
     truncated = true;
-    placed = placedInternal.slice(0, RENDER_CAP).map((p) => ({
-      x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h, color: p.color, itemIdx: p.itemIdx,
-    }));
+    placed = placedInternal.slice(0, RENDER_CAP).map(toPlaced);
   } else {
-    placed = placedInternal.map((p) => ({
-      x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h, color: p.color, itemIdx: p.itemIdx,
-    }));
+    placed = placedInternal.map(toPlaced);
   }
 
   // COG along container length (X axis).
