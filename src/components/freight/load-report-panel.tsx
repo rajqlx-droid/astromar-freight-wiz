@@ -8,9 +8,17 @@ import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
 interface Props {
   pack: AdvancedPackResult;
+  /** Optional roll-up across all containers in a multi-container plan. */
+  rollup?: {
+    totalCbm: number;
+    totalWeightKg: number;
+    totalContainers: number;
+    totalPlaced: number;
+    totalPlanned: number;
+  };
 }
 
-export function LoadReportPanel({ pack }: Props) {
+export function LoadReportPanel({ pack, rollup }: Props) {
   const volPct = Math.min(100, pack.utilizationPct);
   const wtPct = Math.min(100, pack.weightUtilizationPct);
   const volColor = volPct < 80 ? "bg-emerald-500" : volPct < 95 ? "bg-amber-500" : "bg-rose-500";
