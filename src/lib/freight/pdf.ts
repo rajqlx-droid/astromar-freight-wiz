@@ -28,6 +28,8 @@ export interface PdfLoadingRow {
   sideViewPng?: string;
   /** Optional pre-rasterised side-view PNG dataURL (depth × H) for this row. */
   frontViewPng?: string;
+  /** Optional pre-rasterised top-down PNG dataURL (W × depth) for this row. */
+  topViewPng?: string;
 }
 
 export interface PdfExtras {
@@ -195,9 +197,9 @@ export function downloadResultPdf(
     const cardX = 40;
     const cardW = pageWidth - 80;
     const svgW = 130;
-    const svgH = 48;
-    const svgGap = 6;
-    const imageColH = svgH * 2 + svgGap + 14; // two stacked views + labels
+    const svgH = 44;
+    const svgGap = 4;
+    const imageColH = svgH * 3 + svgGap * 2 + 21; // three stacked views + labels
     const cardPad = 8;
 
     for (const r of extras.loadingRows) {
@@ -265,6 +267,15 @@ export function downloadResultPdf(
       if (r.frontViewPng) {
         try {
           doc.addImage(r.frontViewPng, "PNG", imgX, imgY1 + 7, svgW, svgH, undefined, "FAST");
+        } catch {
+          /* ignore broken dataURL */
+        }
+      }
+      const imgY2 = imgY1 + 7 + svgH + svgGap;
+      doc.text("TOP VIEW (W × DEPTH)", imgX, imgY2 + 5);
+      if (r.topViewPng) {
+        try {
+          doc.addImage(r.topViewPng, "PNG", imgX, imgY2 + 7, svgW, svgH, undefined, "FAST");
         } catch {
           /* ignore broken dataURL */
         }
