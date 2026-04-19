@@ -1011,6 +1011,11 @@ function CargoBox({
   const PALLET_H = 0.12;
   const palletLift = onFloor ? PALLET_H : 0;
 
+  // Hover state — drives the rich tilt popover. Pointer events fire from the
+  // mesh itself; we stop propagation so only the topmost box hovers (otherwise
+  // the cursor would light up every box behind the camera ray).
+  const [hovered, setHovered] = useState(false);
+
   return (
     <group position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && <WoodenPallet lm={lm} wm={wm} />}
@@ -1020,7 +1025,22 @@ function CargoBox({
           <meshBasicMaterial color="#10b981" transparent opacity={0.85} />
         </mesh>
       )}
-      <mesh castShadow receiveShadow>
+      <mesh
+        castShadow
+        receiveShadow
+        onPointerOver={(e) => {
+          if (!tilted) return;
+          e.stopPropagation();
+          setHovered(true);
+          if (typeof document !== "undefined") document.body.style.cursor = "help";
+        }}
+        onPointerOut={(e) => {
+          if (!tilted) return;
+          e.stopPropagation();
+          setHovered(false);
+          if (typeof document !== "undefined") document.body.style.cursor = "";
+        }}
+      >
         <boxGeometry args={[lm, hm, wm]} />
         <meshStandardMaterial
           color={box.color}
@@ -1028,8 +1048,10 @@ function CargoBox({
           metalness={0.05}
           transparent={fragile}
           opacity={fragile ? 0.85 : 1}
+          emissive={hovered ? tiltColor : "#000000"}
+          emissiveIntensity={hovered ? 0.25 : 0}
         />
-        <Edges color="rgba(0,0,0,0.35)" />
+        <Edges color={hovered ? tiltColor : "rgba(0,0,0,0.35)"} />
       </mesh>
       {/* Non-stackable warning stripe on top */}
       {nonStack && (
@@ -1038,7 +1060,8 @@ function CargoBox({
           <meshStandardMaterial color="#dc2626" />
         </mesh>
       )}
-      {/* Tilt indicator: hazard band wrapping all 4 vertical faces + always-on billboard */}
+      {/* Tilt indicator: discreet hazard band on the four vertical faces — no
+          always-on text. Hover the box to see the full instructions popover. */}
       {tilted && (
         <>
           <mesh position={[0, hm / 2 - hm * 0.12, wm / 2 + 0.002]}>
@@ -1064,19 +1087,62 @@ function CargoBox({
             <boxGeometry args={[Math.min(lm, wm) * 0.95, 0.012, 0.06]} />
             <meshStandardMaterial color={tiltColor} />
           </mesh>
-          {/* Compact corner glyph — fixed pixel size, doesn't grow with zoom.
-              Hover the box in the 3D view to see full TIPPED/TURNED label. */}
-          <Html position={[0, hm / 2 + 0.04, 0]} center zIndexRange={[5, 0]}>
-            <span
-              className="pointer-events-none flex size-3.5 items-center justify-center rounded-full border border-white text-[8px] font-black leading-none shadow"
-              style={{ background: tiltColor, color: "#1a1a1a" }}
-              title={box.rotated === "axis" ? "Tipped on side" : "Rotated sideways"}
-            >
-              {box.rotated === "axis" ? "⤾" : "↻"}
-            </span>
-          </Html>
+          {/* Hover-only rich popover with full instructions + axis diagram. */}
+          {hovered && (
+            <Html position={[0, hm / 2 + 0.06, 0]} center zIndexRange={[100, 0]}>
+              <TiltInfoCard mode={box.rotated === "axis" ? "tipped" : "turned"} color={tiltColor} />
+            </Html>
+          )}
         </>
       )}
     </group>
+  );
+}
+
+/* --------------- Tilt info card (shown on hover) --------------- */
+
+function TiltInfoCard({ mode, color }: { mode: "tipped" | "turned"; color: string }) {
+  const isTipped = mode === "tipped";
+  return (
+    <div
+      className="pointer-events-none w-56 rounded-lg border-2 bg-background/95 p-2.5 shadow-xl backdrop-blur"
+      style={{ borderColor: color }}
+    >
+      <div className="mb-2 flex items-center gap-1.5">
+        <span
+          className="flex size-5 items-center justify-center rounded-full text-[11px] font-black leading-none"
+          style={{ background: color, color: "#1a1a1a" }}
+        >
+          {isTipped ? "⤾" : "↻"}
+        </span>
+        <span className="text-[11px] font-bold uppercase tracking-wide text-brand-navy">
+          {isTipped ? "Tipped on side" : "Rotated sideways"}
+        </span>
+      </div>
+      {/* Mini ASCII-style axis diagram. SVG so it renders identically across browsers. */}
+      <svg viewBox="0 0 220 70" className="mb-1.5 w-full">
+        {/* Original outline (dashed) */}
+        <rect x="14" y="14" width="60" height="42" fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 2" />
+        <text x="44" y="68" textAnchor="middle" fontSize="7" fill="#64748b">original</text>
+        {/* Arrow */}
+        <path d="M 90 35 L 122 35 M 116 30 L 122 35 L 116 40" stroke={color} strokeWidth="2" fill="none" />
+        {isTipped ? (
+          <>
+            <rect x="138" y="22" width="42" height="34" fill="none" stroke={color} strokeWidth="2" />
+            <text x="159" y="68" textAnchor="middle" fontSize="7" fill="#1a1a1a" fontWeight="700">tipped (H ↔ L)</text>
+          </>
+        ) : (
+          <>
+            <rect x="138" y="6" width="42" height="50" fill="none" stroke={color} strokeWidth="2" />
+            <text x="159" y="68" textAnchor="middle" fontSize="7" fill="#1a1a1a" fontWeight="700">turned 90° (L ↔ W)</text>
+          </>
+        )}
+      </svg>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        {isTipped
+          ? "Lay this carton on its side so the height becomes the length. Mark the new top before banding."
+          : "Rotate this carton 90° around the vertical axis so the long edge runs along the container width."}
+      </p>
+    </div>
   );
 }
