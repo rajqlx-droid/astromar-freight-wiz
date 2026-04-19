@@ -224,6 +224,11 @@ export function LoadingRowsPanel({ pack }: Props) {
                         no-stack
                       </span>
                     )}
+                    {row.needsSeparator && (
+                      <span className="rounded border border-red-300 bg-red-100 px-1 text-[9px] font-medium uppercase text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                        ⚠ mixed pallet
+                      </span>
+                    )}
                     {row.rotatedCount > 0 && (
                       <span className="rounded bg-yellow-100 px-1 text-[9px] font-medium uppercase text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200">
                         ↻ {row.rotatedCount} tilted
@@ -285,6 +290,16 @@ export function LoadingRowsPanel({ pack }: Props) {
                       </div>
                     ))}
                   </div>
+
+                  {row.needsSeparator && (
+                    <div className="flex items-start gap-1.5 rounded-md border border-red-300 bg-red-50 px-2 py-1.5 text-[11px] leading-relaxed text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+                      <span aria-hidden>⚠</span>
+                      <span>
+                        <strong className="font-semibold">Mixed pallet:</strong>{" "}
+                        Insert a plywood or cardboard separator board between the heavy non-fragile units and the fragile units before stacking.
+                      </span>
+                    </div>
+                  )}
 
                   {/* Instruction */}
                   <div className="rounded-md border-l-2 border-brand-orange bg-background px-2 py-1.5 text-[11px] leading-relaxed text-brand-navy">
