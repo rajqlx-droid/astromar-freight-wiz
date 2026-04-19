@@ -82,36 +82,33 @@ export interface GeneratedVideo {
  * Returns a stable order array of indices into pack.placed.
  */
 function loadingOrder(pack: AdvancedPackResult): number[] {
+  // Match the 2D row viewer + 3D loading-sequence panel: pure spatial order,
+  // back-wall first (low x), bottom layer first (low z), then side-to-side
+  // (low y). This ensures the video plays the SAME sequence the user sees
+  // in the 2D rows panel and the 3D step list.
   const idx = pack.placed.map((_, i) => i);
-  // Loading rule: completely fill the back wall (full width × full height)
-  // before advancing toward the door. Within a wall slab, fill side-to-side
-  // along the floor first, then build upward. Use a tight 300 mm depth slab
-  // so a single column of pallets is treated as one "wall".
-  const SLAB_MM = 300;
   idx.sort((a, b) => {
     const A = pack.placed[a];
     const B = pack.placed[b];
-    const sa = pack.perItem[A.itemIdx];
-    const sb = pack.perItem[B.itemIdx];
-
-    // Fragile last (always loaded on top, very end)
-    if (!!sa?.fragile !== !!sb?.fragile) return sa?.fragile ? 1 : -1;
-    // Non-stackable last (loaded near door / top of stack)
-    if (sa?.stackable !== sb?.stackable) return sa?.stackable ? -1 : 1;
-
-    // Back wall → door: bucket by x slab so we finish the entire back wall
-    // before any box is placed in the next column toward the door.
+    // Back-to-front along container length (x slab of 300mm = one column).
+    const SLAB_MM = 300;
     const slabA = Math.floor(A.x / SLAB_MM);
     const slabB = Math.floor(B.x / SLAB_MM);
     if (slabA !== slabB) return slabA - slabB;
-
-    // Within the same wall slab: fill the floor across the width first (low z),
-    // then build upward layer by layer (side-to-side within each layer).
+    // Within a column: bottom layer first.
     if (A.z !== B.z) return A.z - B.z;
+    // Side-to-side across width.
     if (A.y !== B.y) return A.y - B.y;
     return A.x - B.x;
   });
   return idx;
+}
+
+/** True if this placed box represents a pallet (forklift-loaded). */
+function isPalletBox(pack: AdvancedPackResult, placedIdx: number): boolean {
+  const box = pack.placed[placedIdx];
+  const stat = pack.perItem[box.itemIdx];
+  return stat?.packageType === "pallet";
 }
 
 /* -------------------------------------------------------------------------- */
