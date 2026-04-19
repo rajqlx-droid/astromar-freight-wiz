@@ -383,6 +383,10 @@ function SceneContents({
   gapHeatmapRow,
   flyInPlacedSet,
   flyInKey,
+  activePalletIdx,
+  nextPalletIdx,
+  followCam,
+  showForkliftToken,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -395,14 +399,22 @@ function SceneContents({
   gapHeatmapRow: RowGroup | null;
   flyInPlacedSet: Set<number> | null;
   flyInKey: number;
+  activePalletIdx: number | null;
+  nextPalletIdx: number | null;
+  followCam: boolean;
+  showForkliftToken: boolean;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
   const target = useMemo(() => new THREE.Vector3(0, Cm.h / 2, 0), [Cm.h]);
 
-  // Apply preset only when not recording (recording drives the camera externally).
+  // Active / next pallet boxes for highlights + follow cam.
+  const activeBox = activePalletIdx != null ? pack.placed[activePalletIdx] ?? null : null;
+  const nextBox = nextPalletIdx != null ? pack.placed[nextPalletIdx] ?? null : null;
+
+  // Apply preset only when not recording AND not in follow-cam mode.
   useEffect(() => {
-    if (recording) return;
+    if (recording || followCam) return;
     if (!camera) return;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
