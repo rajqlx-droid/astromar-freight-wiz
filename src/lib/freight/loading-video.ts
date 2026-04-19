@@ -636,6 +636,7 @@ export async function generateLoadingVideo(
     fps,
     timeline.totalFrames,
     driveFrame,
+    timeline,
     opts.onProgress,
     opts.videoBitsPerSecond ?? 8_000_000,
   );
