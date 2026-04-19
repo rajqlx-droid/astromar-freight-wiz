@@ -191,7 +191,8 @@ function FreightIntelligencePage() {
   }, [exp.currency, exp.baseCurrency, exp.fxRate]);
 
   // Cross-calc: copy Landed line items → Export with default margin.
-  const duplicateLandedToExport = (defaultMargin = 20) => {
+  const duplicateLandedToExport = () => {
+    const DEFAULT_MARGIN = 20;
     setExp((prev) => ({
       ...prev,
       currency: landed.currency,
@@ -206,12 +207,12 @@ function FreightIntelligencePage() {
         hsCode: l.hsCode,
         qty: l.qty,
         unitValue: l.unitValue,
-        margin: defaultMargin,
+        margin: DEFAULT_MARGIN,
       })),
     }));
     setActive("export");
     toast.success("Copied to Export Price", {
-      description: `${landed.lines.length} line item(s) duplicated with ${defaultMargin}% default margin.`,
+      description: `${landed.lines.length} line item(s) duplicated with ${DEFAULT_MARGIN}% default margin.`,
     });
   };
 
