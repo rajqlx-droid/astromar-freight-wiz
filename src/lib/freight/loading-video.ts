@@ -49,11 +49,13 @@ export interface GenerateOptions {
   pack: AdvancedPackResult;
   controls: VideoControls;
   fps?: number;
-  /** Total target duration in seconds (default 20). */
+  /** Total target duration in seconds (default 12). */
   durationSec?: number;
   /** Width × height of output. Should match canvas pixel size. */
   width: number;
   height: number;
+  /** Encoder bitrate in bits/sec. Defaults to 8 Mbps. */
+  videoBitsPerSecond?: number;
   onProgress?: (frame: number, total: number) => void;
 }
 
