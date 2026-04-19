@@ -21,8 +21,8 @@ export interface CalcMeta {
 export const CALCULATORS: CalcMeta[] = [
   {
     key: "cbm",
-    label: "CBM",
-    sub: "Sea / Volume",
+    label: "Load Optimizer",
+    sub: "CBM",
     emoji: "📦",
     tip: "Pro tip: For sea freight, chargeable weight uses CBM × 1000 ÷ 5. Add multiple item rows for mixed cargo.",
   },
