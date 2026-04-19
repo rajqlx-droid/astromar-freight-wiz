@@ -158,7 +158,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
 
   return (
     <div
-      className="relative overflow-hidden rounded-lg border bg-gradient-to-b from-[oklch(0.97_0.005_240)] to-[oklch(0.92_0.01_240)] dark:from-[oklch(0.18_0.01_240)] dark:to-[oklch(0.12_0.01_240)]"
+      className="relative overflow-hidden rounded-lg border"
       style={{ height }}
     >
       <Canvas
@@ -170,6 +170,9 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
           glRef.current = gl;
           sceneRef.current = scene;
           cameraRef.current = camera as THREE.PerspectiveCamera;
+          // Realistic warehouse sky gradient + atmospheric fog.
+          scene.background = makeSkyTexture();
+          scene.fog = new THREE.Fog(0xb8c2cc, Cm.l * 4, Cm.l * 14);
         }}
       >
         <Suspense fallback={<Html center>Loading 3D…</Html>}>
@@ -210,6 +213,74 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     </div>
   );
 });
+
+/* --------------- Procedural textures (real container look) --------------- */
+
+function makeSkyTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 8;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, "#7ea9c9");
+  g.addColorStop(0.55, "#cfd8dc");
+  g.addColorStop(0.6, "#8a8378");
+  g.addColorStop(1, "#5a534a");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 8, 256);
+  return new THREE.CanvasTexture(c);
+}
+
+function makeCorrugatedTexture(color: string): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 64;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 256, 64);
+  for (let x = 0; x < 256; x += 16) {
+    const grad = ctx.createLinearGradient(x, 0, x + 16, 0);
+    grad.addColorStop(0, "rgba(0,0,0,0.38)");
+    grad.addColorStop(0.5, "rgba(255,255,255,0.2)");
+    grad.addColorStop(1, "rgba(0,0,0,0.38)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, 0, 16, 64);
+  }
+  ctx.globalAlpha = 0.08;
+  for (let i = 0; i < 80; i++) {
+    ctx.fillStyle = i % 2 ? "#5a2e1a" : "#1a1a1a";
+    ctx.fillRect(Math.random() * 256, Math.random() * 64, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function makePlywoodTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#a07a4e";
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 60; i++) {
+    ctx.strokeStyle = `rgba(${50 + Math.random() * 40}, ${30 + Math.random() * 20}, 10, ${0.18 + Math.random() * 0.2})`;
+    ctx.lineWidth = 0.5 + Math.random() * 1.2;
+    ctx.beginPath();
+    const y = Math.random() * 256;
+    ctx.moveTo(0, y);
+    for (let x = 0; x < 256; x += 8) ctx.lineTo(x, y + Math.sin(x * 0.05 + i) * 3);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  for (let y = 0; y < 256; y += 64) ctx.fillRect(0, y, 256, 1);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
 
 /* --------------- Scene contents --------------- */
 
@@ -276,18 +347,27 @@ function SceneContents({
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
 
-      {/* Floor grid in metres */}
+      {/* Tarmac ground extending past the container — sells the "real yard" */}
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.02, 0]}
+      >
+        <planeGeometry args={[Math.max(Cm.l, Cm.w) * 12, Math.max(Cm.l, Cm.w) * 12]} />
+        <meshStandardMaterial color="#6e6660" roughness={0.95} />
+      </mesh>
+      {/* Subtle parking grid only directly under the container */}
       <Grid
-        position={[0, 0, 0]}
-        args={[Math.max(Cm.l, Cm.w) * 2, Math.max(Cm.l, Cm.w) * 2]}
+        position={[0, 0.001, 0]}
+        args={[Cm.l * 1.4, Cm.w * 1.4]}
         cellSize={0.5}
-        cellThickness={0.5}
+        cellThickness={0.4}
         sectionSize={1}
-        sectionThickness={1.2}
-        sectionColor="#1B3A6B"
-        cellColor="#94a3b8"
-        fadeDistance={Math.max(Cm.l, Cm.w) * 3}
-        fadeStrength={1}
+        sectionThickness={0.8}
+        sectionColor="#3a3530"
+        cellColor="#7a716a"
+        fadeDistance={Math.max(Cm.l, Cm.w) * 1.6}
+        fadeStrength={1.2}
         infiniteGrid={false}
       />
 
@@ -336,42 +416,108 @@ function SceneContents({
 }
 
 function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
-  // Centered at origin.
+  // Real container: corrugated steel walls, plywood floor, painted steel frame.
+  // Door is at +x (open), so rear wall is at -x. We render a 3-walls + roof
+  // silhouette so the camera can always see inside through the door.
+  const wallColor = "#2c4a6b";
+
+  const plywoodTex = useMemo(() => {
+    const t = makePlywoodTexture();
+    t.repeat.set(Math.max(2, Cm.l / 1.2), Math.max(2, Cm.w / 1.2));
+    return t;
+  }, [Cm.l, Cm.w]);
+
+  const wallTexX = useMemo(() => {
+    const t = makeCorrugatedTexture(wallColor);
+    t.repeat.set(Math.max(4, Cm.l / 0.3), Math.max(2, Cm.h / 1.5));
+    return t;
+  }, [Cm.l, Cm.h]);
+  const wallTexZ = useMemo(() => {
+    const t = makeCorrugatedTexture(wallColor);
+    t.repeat.set(Math.max(2, Cm.w / 0.3), Math.max(2, Cm.h / 1.5));
+    return t;
+  }, [Cm.w, Cm.h]);
+
+  const FRAME = "#1a2433";
+  const frameThk = 0.06;
+
+  const corners: Array<[number, number]> = [
+    [-Cm.l / 2, -Cm.w / 2],
+    [-Cm.l / 2, Cm.w / 2],
+    [Cm.l / 2, -Cm.w / 2],
+    [Cm.l / 2, Cm.w / 2],
+  ];
+
   return (
     <group>
-      {/* Floor — solid */}
-      <mesh receiveShadow position={[0, -0.005, 0]}>
-        <boxGeometry args={[Cm.l, 0.01, Cm.w]} />
-        <meshStandardMaterial color="#cbd5e1" />
-      </mesh>
-
-      {/* Translucent walls */}
-      <mesh position={[0, Cm.h / 2, -Cm.w / 2]}>
-        <boxGeometry args={[Cm.l, Cm.h, 0.02]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.18} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-      <mesh position={[-Cm.l / 2, Cm.h / 2, 0]}>
-        <boxGeometry args={[0.02, Cm.h, Cm.w]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.18} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-      <mesh position={[Cm.l / 2, Cm.h / 2, 0]}>
-        <boxGeometry args={[0.02, Cm.h, Cm.w]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.10} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-      <mesh position={[0, Cm.h / 2, Cm.w / 2]}>
-        <boxGeometry args={[Cm.l, Cm.h, 0.02]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.08} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-
-      {/* Top frame edges */}
-      <mesh position={[0, Cm.h, 0]}>
+      {/* Plywood floor */}
+      <mesh receiveShadow position={[0, 0.01, 0]}>
         <boxGeometry args={[Cm.l, 0.02, Cm.w]} />
-        <meshStandardMaterial color="#1B3A6B" transparent opacity={0.08} />
-        <Edges color="#1B3A6B" />
+        <meshStandardMaterial map={plywoodTex} roughness={0.85} />
+      </mesh>
+
+      {/* Back wall (-x) — solid corrugated */}
+      <mesh receiveShadow castShadow position={[-Cm.l / 2, Cm.h / 2, 0]}>
+        <boxGeometry args={[0.05, Cm.h, Cm.w]} />
+        <meshStandardMaterial map={wallTexZ} roughness={0.7} metalness={0.2} />
+      </mesh>
+
+      {/* Left side wall (-z) — solid corrugated */}
+      <mesh receiveShadow position={[0, Cm.h / 2, -Cm.w / 2]}>
+        <boxGeometry args={[Cm.l, Cm.h, 0.05]} />
+        <meshStandardMaterial map={wallTexX} roughness={0.7} metalness={0.2} />
+      </mesh>
+
+      {/* Right side wall (+z) — translucent so the camera can see inside */}
+      <mesh position={[0, Cm.h / 2, Cm.w / 2]}>
+        <boxGeometry args={[Cm.l, Cm.h, 0.04]} />
+        <meshStandardMaterial
+          map={wallTexX}
+          roughness={0.7}
+          metalness={0.2}
+          transparent
+          opacity={0.18}
+        />
+      </mesh>
+
+      {/* Roof — translucent */}
+      <mesh position={[0, Cm.h, 0]}>
+        <boxGeometry args={[Cm.l, 0.04, Cm.w]} />
+        <meshStandardMaterial color={wallColor} transparent opacity={0.12} />
+      </mesh>
+
+      {/* Steel corner posts (the iconic container silhouette) */}
+      {corners.map(([x, z], i) => (
+        <mesh key={`post-${i}`} castShadow position={[x, Cm.h / 2, z]}>
+          <boxGeometry args={[frameThk, Cm.h + 0.06, frameThk]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Top length rails */}
+      {[-Cm.w / 2, Cm.w / 2].map((z, i) => (
+        <mesh key={`top-l-${i}`} position={[0, Cm.h, z]}>
+          <boxGeometry args={[Cm.l + 0.06, frameThk, frameThk]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Top width rails */}
+      {[-Cm.l / 2, Cm.l / 2].map((x, i) => (
+        <mesh key={`top-w-${i}`} position={[x, Cm.h, 0]}>
+          <boxGeometry args={[frameThk, frameThk, Cm.w + 0.06]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Bottom length rails */}
+      {[-Cm.w / 2, Cm.w / 2].map((z, i) => (
+        <mesh key={`bot-l-${i}`} position={[0, 0, z]}>
+          <boxGeometry args={[Cm.l + 0.06, frameThk, frameThk]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Door header above the open door (+x) */}
+      <mesh position={[Cm.l / 2, Cm.h - 0.08, 0]}>
+        <boxGeometry args={[0.08, 0.16, Cm.w]} />
+        <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
       </mesh>
     </group>
   );
@@ -420,28 +566,39 @@ function CargoBox({
           <meshStandardMaterial color="#dc2626" />
         </mesh>
       )}
-      {/* Tilt indicator: diagonal stripe on top + small floating badge */}
+      {/* Tilt indicator: hazard band wrapping all 4 vertical faces + always-on billboard */}
       {tilted && (
         <>
+          <mesh position={[0, hm / 2 - hm * 0.12, wm / 2 + 0.002]}>
+            <planeGeometry args={[lm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[0, hm / 2 - hm * 0.12, -wm / 2 - 0.002]} rotation={[0, Math.PI, 0]}>
+            <planeGeometry args={[lm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[lm / 2 + 0.002, hm / 2 - hm * 0.12, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <planeGeometry args={[wm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[-lm / 2 - 0.002, hm / 2 - hm * 0.12, 0]} rotation={[0, -Math.PI / 2, 0]}>
+            <planeGeometry args={[wm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
           <mesh
             position={[0, hm / 2 + 0.006, 0]}
             rotation={[0, box.rotated === "axis" ? Math.PI / 4 : Math.PI / 2, 0]}
           >
-            <boxGeometry args={[Math.min(lm, wm) * 0.9, 0.012, 0.05]} />
+            <boxGeometry args={[Math.min(lm, wm) * 0.95, 0.012, 0.06]} />
             <meshStandardMaterial color={tiltColor} />
           </mesh>
-          <Html
-            position={[0, hm / 2 + 0.08, 0]}
-            center
-            distanceFactor={4}
-            occlude
-          >
+          <Html position={[0, hm / 2 + 0.12, 0]} center distanceFactor={6}>
             <span
-              className="rounded-full border border-white px-1.5 py-0.5 text-[9px] font-bold text-white shadow"
+              className="whitespace-nowrap rounded-full border-2 border-white px-2 py-0.5 text-[10px] font-extrabold shadow-lg"
               style={{ background: tiltColor, color: "#1a1a1a" }}
               title={box.rotated === "axis" ? "Tipped on side" : "Rotated sideways"}
             >
-              {box.rotated === "axis" ? "⤾ TIP" : "↻ TURN"}
+              {box.rotated === "axis" ? "⤾ TIPPED" : "↻ TURNED"}
             </span>
           </Html>
         </>

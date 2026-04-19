@@ -83,22 +83,29 @@ export interface GeneratedVideo {
  */
 function loadingOrder(pack: AdvancedPackResult): number[] {
   const idx = pack.placed.map((_, i) => i);
+  // Bucket boxes by depth slab (~600 mm) so we finish a back-wall column
+  // (back→top) before moving the column toward the door.
+  const SLAB_MM = 600;
   idx.sort((a, b) => {
     const A = pack.placed[a];
     const B = pack.placed[b];
     const sa = pack.perItem[A.itemIdx];
     const sb = pack.perItem[B.itemIdx];
 
-    // Fragile last
+    // Fragile last (always loaded on top, very end)
     if (!!sa?.fragile !== !!sb?.fragile) return sa?.fragile ? 1 : -1;
-    // Non-stackable last (loaded near door / top)
+    // Non-stackable last (loaded near door / top of stack)
     if (sa?.stackable !== sb?.stackable) return sa?.stackable ? -1 : 1;
-    // Bottom first (lower z = z is "up" in scene; PlacedBox.z is up)
+
+    // Back wall → door: bucket by x slab so we don't ping-pong along the length
+    const slabA = Math.floor(A.x / SLAB_MM);
+    const slabB = Math.floor(B.x / SLAB_MM);
+    if (slabA !== slabB) return slabA - slabB;
+
+    // Within a slab: side-to-side first (lower y), then bottom-to-top (lower z)
+    if (A.y !== B.y) return A.y - B.y;
     if (A.z !== B.z) return A.z - B.z;
-    // Back to front (lower x first; x runs from rear to door)
-    if (A.x !== B.x) return A.x - B.x;
-    // Then by y (depth)
-    return A.y - B.y;
+    return A.x - B.x;
   });
   return idx;
 }
@@ -270,15 +277,20 @@ export function cameraForFrame(
   const Cl = pack.container.inner.l / MM_PER_M;
   const Cw = pack.container.inner.w / MM_PER_M;
   const Ch = pack.container.inner.h / MM_PER_M;
-  const target: [number, number, number] = [0, Ch / 2, 0];
-
-  // Slow orbit around the container during loading; closer during intro.
+  // Door is at world +x (cargo group sits at -Cl/2, so high box.x → world +x).
+  // Start looking THROUGH THE OPEN DOOR toward the back wall, then slowly
+  // arc out to a 3/4 hero view as the loading progresses.
   const t = frame / Math.max(1, timeline.totalFrames - 1);
-  const angle = -Math.PI / 4 + t * Math.PI * 1.4; // ~250° arc
-  const dist = Math.max(Cl, Cw) * (1.6 + 0.3 * Math.sin(t * Math.PI));
-  const height = Ch * (1.2 + 0.4 * Math.sin(t * Math.PI * 2));
+  const startAngle = 0;          // straight in from door
+  const endAngle = -Math.PI / 4; // 3/4 view
+  const angle = startAngle + (endAngle - startAngle) * t;
+  const dist = Math.max(Cl, Cw) * (1.5 + 0.25 * t);
+  const height = Ch * (0.9 + 0.4 * t);
+  // Aim slightly toward the back wall during loading so the user sees boxes
+  // stack from the back forward.
+  const target: [number, number, number] = [-Cl * 0.15 * (1 - t), Ch / 2, 0];
   return {
-    position: [Math.sin(angle) * dist, height, Math.cos(angle) * dist],
+    position: [Math.cos(angle) * dist, height, Math.sin(angle) * dist],
     target,
   };
 }
