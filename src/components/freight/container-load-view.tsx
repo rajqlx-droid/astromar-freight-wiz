@@ -140,27 +140,37 @@ export function ContainerLoadView({
             {c.name}
           </PillButton>
         ))}
-        <div className="ml-auto flex rounded-full border border-brand-navy/30 p-0.5">
-          <button
-            type="button"
-            onClick={() => setIs3D(false)}
-            className={cn(
-              "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
-              !is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-            )}
-          >
-            2D
-          </button>
-          <button
-            type="button"
-            onClick={() => setIs3D(true)}
-            className={cn(
-              "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
-              is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-            )}
-          >
-            <BoxIcon className="size-3" /> 3D
-          </button>
+        <div className="ml-auto flex items-center gap-2">
+          <LoadingVideoButton
+            pack={activePack}
+            containerLabel={activePack.container.name}
+            getHandle={() => view3DRef.current}
+            ensure3DReady={async () => {
+              if (!is3D) setIs3D(true);
+            }}
+          />
+          <div className="flex rounded-full border border-brand-navy/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => setIs3D(false)}
+              className={cn(
+                "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                !is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
+              )}
+            >
+              2D
+            </button>
+            <button
+              type="button"
+              onClick={() => setIs3D(true)}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
+              )}
+            >
+              <BoxIcon className="size-3" /> 3D
+            </button>
+          </div>
         </div>
       </div>
 
