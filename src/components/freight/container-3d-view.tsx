@@ -913,8 +913,7 @@ function ForkliftDriver() {
     </group>
   );
 }
-
-
+function CargoBox({
   box,
   stat,
   offset,
