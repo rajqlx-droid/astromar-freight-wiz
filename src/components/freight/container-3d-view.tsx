@@ -388,6 +388,8 @@ function SceneContents({
         infiniteGrid={false}
       />
 
+      <WarehouseAmbience Cm={Cm} />
+
       <ContainerShell Cm={Cm} doorOpen={doorOpen} />
 
       {/* Cargo */}
@@ -651,6 +653,104 @@ function WoodenPallet({ lm, wm }: { lm: number; wm: number }) {
           <meshStandardMaterial color={BOT} roughness={0.9} />
         </mesh>
       ))}
+    </group>
+  );
+}
+
+/* --------------- Warehouse ambience (yard dressing) --------------- */
+
+function WarehouseAmbience({ Cm }: { Cm: { l: number; w: number; h: number } }) {
+  // Subtle yard dressing OUTSIDE the container footprint:
+  //  - Two stacks of empty pallets on the back-left side
+  //  - A few traffic cones flanking the door
+  //  - Painted yellow yard guide lines on the tarmac
+  const PALLET_H = 0.12;
+  const palletL = 1.2;
+  const palletW = 1.0;
+
+  // Stacks of empty pallets behind the container (x = -Cl/2 - 1.5 m), to the side.
+  const stacks: Array<{ pos: [number, number, number]; count: number }> = [
+    { pos: [-Cm.l / 2 - 1.6, 0, -Cm.w / 2 - 1.4], count: 5 },
+    { pos: [-Cm.l / 2 - 1.6, 0, Cm.w / 2 + 1.4], count: 4 },
+    { pos: [-Cm.l / 2 - 3.0, 0, -Cm.w / 2 - 1.6], count: 6 },
+  ];
+
+  // Traffic cones flanking the door (door is at +Cl/2). Two pairs forming a lane.
+  const cones: Array<[number, number, number]> = [
+    [Cm.l / 2 + 1.2, 0, -Cm.w / 2 - 0.4],
+    [Cm.l / 2 + 1.2, 0, Cm.w / 2 + 0.4],
+    [Cm.l / 2 + 3.5, 0, -Cm.w / 2 - 0.4],
+    [Cm.l / 2 + 3.5, 0, Cm.w / 2 + 0.4],
+  ];
+
+  // Yard guide lines (painted yellow stripes on tarmac) — flank the loading lane.
+  const laneZ = Cm.w / 2 + 1.0;
+  const laneLen = Cm.l + 6;
+
+  return (
+    <group>
+      {/* Stacked empty pallets */}
+      {stacks.map((s, i) => (
+        <group key={`stk-${i}`} position={s.pos}>
+          {Array.from({ length: s.count }).map((_, k) => (
+            <group key={k} position={[0, k * (PALLET_H + 0.005) + PALLET_H / 2, 0]}>
+              <WoodenPallet lm={palletL} wm={palletW} />
+            </group>
+          ))}
+        </group>
+      ))}
+
+      {/* Traffic cones */}
+      {cones.map((p, i) => (
+        <TrafficCone key={`cone-${i}`} position={p} />
+      ))}
+
+      {/* Painted yellow yard lines along the loading lane */}
+      <mesh position={[Cm.l / 2 + 1.5, 0.005, -laneZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[laneLen, 0.12]} />
+        <meshStandardMaterial color="#f5c518" roughness={0.85} />
+      </mesh>
+      <mesh position={[Cm.l / 2 + 1.5, 0.005, laneZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[laneLen, 0.12]} />
+        <meshStandardMaterial color="#f5c518" roughness={0.85} />
+      </mesh>
+      {/* Dashed center stripe in the loading lane */}
+      {Array.from({ length: 8 }).map((_, i) => (
+        <mesh
+          key={`dash-${i}`}
+          position={[Cm.l / 2 + 1.5 + i * 0.7 - 2.4, 0.005, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[0.4, 0.08]} />
+          <meshStandardMaterial color="#f5c518" roughness={0.85} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function TrafficCone({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      {/* Black square base */}
+      <mesh castShadow receiveShadow position={[0, 0.015, 0]}>
+        <boxGeometry args={[0.3, 0.03, 0.3]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.9} />
+      </mesh>
+      {/* Orange cone body */}
+      <mesh castShadow position={[0, 0.28, 0]}>
+        <coneGeometry args={[0.13, 0.5, 16]} />
+        <meshStandardMaterial color="#f97316" roughness={0.7} />
+      </mesh>
+      {/* White reflective stripes */}
+      <mesh position={[0, 0.32, 0]}>
+        <coneGeometry args={[0.092, 0.05, 16]} />
+        <meshStandardMaterial color="#f5f5f5" roughness={0.4} emissive="#f5f5f5" emissiveIntensity={0.15} />
+      </mesh>
+      <mesh position={[0, 0.2, 0]}>
+        <coneGeometry args={[0.122, 0.05, 16]} />
+        <meshStandardMaterial color="#f5f5f5" roughness={0.4} emissive="#f5f5f5" emissiveIntensity={0.15} />
+      </mesh>
     </group>
   );
 }
