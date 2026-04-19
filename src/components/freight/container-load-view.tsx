@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Layers } from "lucide-react";
+import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Layers, Play, Pause } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -334,6 +334,38 @@ function SinglePlanBody({
     return s;
   }, [stepMode, stepIdx, rows, pack.placed]);
 
+  // Fly-in tracking — the set of placedIdx for the row that was JUST revealed.
+  // Increments `flyInKey` on every reveal so CargoBox restarts its anim.
+  const [flyInPlacedSet, setFlyInPlacedSet] = useState<Set<number> | null>(null);
+  const [flyInKey, setFlyInKey] = useState(0);
+  const prevStepIdxRef = useRef(-1);
+  useEffect(() => {
+    const prev = prevStepIdxRef.current;
+    prevStepIdxRef.current = stepIdx;
+    if (!stepMode) {
+      setFlyInPlacedSet(null);
+      return;
+    }
+    // Only animate when stepIdx INCREASED by 1+ (forward reveal). On reset or
+    // back-step, just snap — no fly-in.
+    if (stepIdx > prev) {
+      const newRow = rows[stepIdx];
+      if (!newRow) return;
+      const s = new Set<number>();
+      for (const b of newRow.boxes) {
+        const idx = pack.placed.indexOf(b);
+        if (idx >= 0) s.add(idx);
+      }
+      setFlyInPlacedSet(s);
+      setFlyInKey((k) => k + 1);
+      // Clear fly-in flag after 700ms so subsequent renders don't re-animate.
+      const t = setTimeout(() => setFlyInPlacedSet(null), 700);
+      return () => clearTimeout(t);
+    } else {
+      setFlyInPlacedSet(null);
+    }
+  }, [stepIdx, stepMode, rows, pack.placed]);
+
   // Reset the stepper when leaving 3D. When entering 3D, auto-enable step mode
   // starting from EMPTY so the user sees an empty container and reveals each
   // row by clicking the row card (Row 1 → row 1 only, Row 2 → rows 1+2, etc.).
@@ -362,6 +394,43 @@ function SinglePlanBody({
   const gapHeatmapRow =
     stepMode && showGapHeatmap && activeRow && activeRow.gapWarning ? activeRow : null;
 
+  // ── Play-all walkthrough ────────────────────────────────────────────
+  // Auto-advances stepIdx every PLAY_INTERVAL_MS until the last row.
+  const PLAY_INTERVAL_MS = 1500;
+  const [isPlaying, setIsPlaying] = useState(false);
+  const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopPlay = () => {
+    setIsPlaying(false);
+    if (playTimerRef.current) {
+      clearTimeout(playTimerRef.current);
+      playTimerRef.current = null;
+    }
+  };
+  const startPlay = () => {
+    if (rows.length === 0) return;
+    // Always start from empty for a clean walkthrough.
+    setStepIdx(-1);
+    setIsPlaying(true);
+  };
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (stepIdx >= rows.length - 1) {
+      // Reached the last row — stop after a final beat.
+      const t = setTimeout(() => setIsPlaying(false), PLAY_INTERVAL_MS);
+      return () => clearTimeout(t);
+    }
+    playTimerRef.current = setTimeout(() => {
+      setStepIdx((i) => Math.min(rows.length - 1, i + 1));
+    }, PLAY_INTERVAL_MS);
+    return () => {
+      if (playTimerRef.current) clearTimeout(playTimerRef.current);
+    };
+  }, [isPlaying, stepIdx, rows.length]);
+  // Stop play when leaving 3D / step mode.
+  useEffect(() => {
+    if (!is3D || !stepMode) stopPlay();
+  }, [is3D, stepMode]);
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
@@ -383,6 +452,8 @@ function SinglePlanBody({
                   visiblePlacedSet={visiblePlacedSet}
                   hideDoors={stepMode}
                   gapHeatmapRow={gapHeatmapRow}
+                  flyInPlacedSet={flyInPlacedSet}
+                  flyInKey={flyInKey}
                 />
               </Suspense>
             ) : (
@@ -392,14 +463,24 @@ function SinglePlanBody({
               <RowStepperBar
                 stepMode={stepMode}
                 onToggleStepMode={() => {
+                  stopPlay();
                   setStepMode((v) => !v);
-                  setStepIdx(-1); // start EMPTY so user can inspect floor first
+                  setStepIdx(-1);
                 }}
                 stepIdx={stepIdx}
                 totalRows={rows.length}
-                onPrev={() => setStepIdx((i) => Math.max(-1, i - 1))}
-                onNext={() => setStepIdx((i) => Math.min(rows.length - 1, i + 1))}
-                onReset={() => setStepIdx(-1)}
+                onPrev={() => {
+                  stopPlay();
+                  setStepIdx((i) => Math.max(-1, i - 1));
+                }}
+                onNext={() => {
+                  stopPlay();
+                  setStepIdx((i) => Math.min(rows.length - 1, i + 1));
+                }}
+                onReset={() => {
+                  stopPlay();
+                  setStepIdx(-1);
+                }}
                 canStep={canStep}
                 atEmpty={atEmpty}
                 atFirst={atFirst}
@@ -407,6 +488,8 @@ function SinglePlanBody({
                 showGapHeatmap={showGapHeatmap}
                 onToggleGapHeatmap={() => setShowGapHeatmap((v) => !v)}
                 activeRowHasGap={!!activeRow?.gapWarning}
+                isPlaying={isPlaying}
+                onTogglePlay={() => (isPlaying ? stopPlay() : startPlay())}
               />
             )}
           </div>
@@ -423,6 +506,7 @@ function SinglePlanBody({
             // Clicking a row card in 3D reveals rows 0..idx cumulatively.
             // In 2D, just leave it to the accordion toggle.
             if (is3D) {
+              stopPlay();
               if (!stepMode) setStepMode(true);
               setStepIdx(idx);
             }
@@ -454,6 +538,8 @@ function RowStepperBar({
   showGapHeatmap,
   onToggleGapHeatmap,
   activeRowHasGap,
+  isPlaying,
+  onTogglePlay,
 }: {
   stepMode: boolean;
   onToggleStepMode: () => void;
@@ -469,6 +555,8 @@ function RowStepperBar({
   showGapHeatmap: boolean;
   onToggleGapHeatmap: () => void;
   activeRowHasGap: boolean;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
 }) {
   const nextRowNum = Math.min(totalRows, stepIdx + 2); // 1-indexed for label
   const statusLabel = atEmpty
@@ -522,6 +610,34 @@ function RowStepperBar({
                 }
               >
                 ⚠ Gaps
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={isPlaying ? "default" : "outline"}
+                onClick={onTogglePlay}
+                disabled={!canStep}
+                className={cn(
+                  "h-7 px-2 text-[11px]",
+                  isPlaying && "bg-emerald-600 text-white hover:bg-emerald-700",
+                )}
+                aria-pressed={isPlaying}
+                aria-label={isPlaying ? "Pause walkthrough" : "Play all rows"}
+                title={
+                  isPlaying
+                    ? "Pause auto-walkthrough"
+                    : "Auto-advance Row 1 → Row N (1.5s per row)"
+                }
+              >
+                {isPlaying ? (
+                  <>
+                    <Pause className="size-3" /> Pause
+                  </>
+                ) : (
+                  <>
+                    <Play className="size-3" /> Play all
+                  </>
+                )}
               </Button>
               <Button
                 type="button"

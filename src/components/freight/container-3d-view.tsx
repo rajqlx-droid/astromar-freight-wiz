@@ -11,7 +11,7 @@
  * Lazy-loaded by container-load-view.tsx (client-only).
  */
 import { Suspense, forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Edges, Grid, Html } from "@react-three/drei";
 import { Maximize2, Minimize2 } from "lucide-react";
 import * as THREE from "three";
@@ -73,6 +73,17 @@ interface Props {
    * re-shuffle is needed. Cleared when null.
    */
   gapHeatmapRow?: RowGroup | null;
+  /**
+   * placedIdx of boxes that should fly in from the door this reveal. Boxes in
+   * this set animate from a staging position (high + toward the door) to their
+   * slot over ~600ms. Boxes NOT in this set render in place (already loaded).
+   */
+  flyInPlacedSet?: Set<number> | null;
+  /**
+   * Increments each time a new row is revealed — forces CargoBox to restart
+   * its fly-in animation even if the same set reference is passed.
+   */
+  flyInKey?: number;
 }
 
 /**
@@ -81,7 +92,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0 },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -219,6 +230,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             visiblePlacedSet={visiblePlacedSet}
             hideDoors={hideDoors}
             gapHeatmapRow={gapHeatmapRow}
+            flyInPlacedSet={flyInPlacedSet}
+            flyInKey={flyInKey}
           />
         </Suspense>
       </Canvas>
@@ -342,6 +355,8 @@ function SceneContents({
   visiblePlacedSet,
   hideDoors,
   gapHeatmapRow,
+  flyInPlacedSet,
+  flyInKey,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -352,6 +367,8 @@ function SceneContents({
   visiblePlacedSet: Set<number> | null;
   hideDoors: boolean;
   gapHeatmapRow: RowGroup | null;
+  flyInPlacedSet: Set<number> | null;
+  flyInKey: number;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -454,6 +471,7 @@ function SceneContents({
             (t?.offset[2] ?? 0) + shuffleZ,
           ];
           const isPreviewed = !recording && shuffleZ !== 0;
+          const flyIn = !recording && !!flyInPlacedSet?.has(i);
           return (
             <CargoBox
               key={i}
@@ -462,6 +480,10 @@ function SceneContents({
               offset={offset}
               scale={t?.scale}
               previewHighlight={isPreviewed}
+              flyIn={flyIn}
+              flyInKey={flyInKey}
+              containerL={Cm.l}
+              containerH={Cm.h}
             />
           );
         })}
@@ -1001,12 +1023,20 @@ function CargoBox({
   offset,
   scale = 1,
   previewHighlight = false,
+  flyIn = false,
+  flyInKey = 0,
+  containerL = 12,
+  containerH = 2.6,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
   offset?: [number, number, number];
   scale?: number;
   previewHighlight?: boolean;
+  flyIn?: boolean;
+  flyInKey?: number;
+  containerL?: number;
+  containerH?: number;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1021,19 +1051,53 @@ function CargoBox({
   const tiltColor = box.rotated === "axis" ? "#d946ef" : "#facc15";
 
   // Wooden pallet under every box (only when sitting on the floor — z≈0).
-  // Pallet is ~12 cm tall; we shift the box up by pallet height so visuals
-  // stay correct without changing the underlying packing math.
   const onFloor = box.z < 10; // mm
   const PALLET_H = 0.12;
   const palletLift = onFloor ? PALLET_H : 0;
 
-  // Hover state — drives the rich tilt popover. Pointer events fire from the
-  // mesh itself; we stop propagation so only the topmost box hovers (otherwise
-  // the cursor would light up every box behind the camera ray).
+  // Hover state — drives the rich tilt popover.
   const [hovered, setHovered] = useState(false);
 
+  // ── Fly-in animation ──────────────────────────────────────────────
+  // When `flyIn` is true (this box was just revealed by the row stepper),
+  // animate the group from a staging position (high above + toward the door,
+  // i.e. positive container-x in scene-x space) to its slot over ~600ms.
+  // Door = +x side of the container in this scene (group is centred on origin
+  // with translation `[-Cm.l/2, 0, -Cm.w/2]`, so the +x face is the door).
+  const groupRef = useRef<THREE.Group | null>(null);
+  const animStartRef = useRef<number | null>(null);
+  // Reset animation start whenever flyInKey changes AND this box is part of
+  // the new reveal — guarantees a re-trigger even if React reuses the group.
+  useEffect(() => {
+    if (flyIn) animStartRef.current = null;
+    // Boxes that aren't part of this reveal stay at rest (no anim).
+  }, [flyIn, flyInKey]);
+
+  const FLY_DURATION = 0.6; // seconds
+  // Staging offset (relative to slot): up by container height, +x toward door.
+  const stageOffsetX = Math.max(2, containerL * 0.55);
+  const stageOffsetY = Math.max(1.2, containerH * 0.7);
+
+  useFrame((_state, delta) => {
+    const g = groupRef.current;
+    if (!g) return;
+    if (!flyIn) {
+      // Snap to rest pose.
+      g.position.set(cx, cy + palletLift, cz);
+      return;
+    }
+    if (animStartRef.current === null) animStartRef.current = 0;
+    animStartRef.current += delta;
+    const t = Math.min(1, animStartRef.current / FLY_DURATION);
+    // Ease-out cubic
+    const e = 1 - Math.pow(1 - t, 3);
+    const dx = stageOffsetX * (1 - e);
+    const dy = stageOffsetY * (1 - e);
+    g.position.set(cx + dx, cy + palletLift + dy, cz);
+  });
+
   return (
-    <group position={[cx, cy + palletLift, cz]} scale={scale}>
+    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && <WoodenPallet lm={lm} wm={wm} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
