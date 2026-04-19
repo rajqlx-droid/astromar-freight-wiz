@@ -127,6 +127,13 @@ function FreightIntelligencePage() {
     setBannerOpen(stored !== "0");
   }, []);
 
+  // Auto-scroll active tab into view (covers click + keyboard nav).
+  useEffect(() => {
+    const idx = CALCULATORS.findIndex((c) => c.key === active);
+    const btn = tabsRef.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[idx];
+    btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [active]);
+
   const dismissBanner = () => {
     setBannerOpen(false);
     localStorage.setItem(BANNER_KEY, "0");
@@ -137,6 +144,38 @@ function FreightIntelligencePage() {
   };
 
   const meta = CALCULATORS.find((c) => c.key === active)!;
+  const activeIdx = CALCULATORS.findIndex((c) => c.key === active);
+
+  // Compute current result + inputs at the route level so the mobile bottom bar
+  // can mirror the same data shown by ResultsCard inside each calculator.
+  const { mobileResult, mobileInputs } = useMemo(() => {
+    switch (active) {
+      case "cbm":
+        return {
+          mobileResult: calcCbm(cbmItems),
+          mobileInputs: cbmItems.flatMap((it, idx) => [
+            { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
+            { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+          ]),
+        };
+      case "air":
+        return {
+          mobileResult: calcAir(airItems, airDivisor),
+          mobileInputs: airItems.flatMap((it, idx) => [
+            { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
+            { label: `Item ${idx + 1} Qty / Actual Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+          ]),
+        };
+      case "landed":
+        return { mobileResult: calcLanded(landed), mobileInputs: undefined };
+      case "export":
+        return { mobileResult: calcExport(exp), mobileInputs: undefined };
+      case "compare":
+        return { mobileResult: calcCompare(compare), mobileInputs: undefined };
+      case "risk":
+        return { mobileResult: calcRisk(risk), mobileInputs: undefined };
+    }
+  }, [active, cbmItems, airItems, airDivisor, landed, exp, compare, risk]);
 
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
@@ -146,7 +185,6 @@ function FreightIntelligencePage() {
       setActive(CALCULATORS[next].key);
       const btn = tabsRef.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next];
       btn?.focus();
-      btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
   };
 
