@@ -189,6 +189,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             preset={preset}
             recording={recordingTimeline}
             frame={currentFrame}
+            shufflePreview={shufflePreview}
           />
         </Suspense>
       </Canvas>
