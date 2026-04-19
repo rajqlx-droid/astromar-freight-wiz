@@ -102,6 +102,7 @@ export function NumberField({
           min={min}
           value={display}
           onChange={handle}
+          onFocus={(e) => e.target.select()}
           placeholder={placeholder}
           aria-invalid={!!error}
           className={cn(
