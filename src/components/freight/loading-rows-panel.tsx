@@ -6,19 +6,42 @@
  * the container) should build that row from the floor up before advancing
  * to the next row toward the door.
  */
-import { useMemo, useState } from "react";
-import { ChevronDown, Layers, Printer } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Layers, Printer, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
   buildRowFrontViewSvg,
   buildRowSideViewSvg,
   buildRows,
+  DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
   instructionFor,
   itemCountsForRow,
   type RowGroup,
 } from "@/lib/freight/loading-rows";
+
+const HEAVY_THRESHOLD_STORAGE_KEY = "freight:heavyKgPerPkg";
+const HEAVY_MIN = 5;
+const HEAVY_MAX = 100;
+
+function clampHeavy(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+  return Math.min(HEAVY_MAX, Math.max(HEAVY_MIN, Math.round(n)));
+}
+
+/** Read the persisted user threshold (browser only — safe during SSR, returns default). */
+export function readHeavyThreshold(): number {
+  if (typeof window === "undefined") return DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+  const raw = window.localStorage.getItem(HEAVY_THRESHOLD_STORAGE_KEY);
+  if (!raw) return DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+  const n = Number(raw);
+  return Number.isFinite(n) ? clampHeavy(n) : DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+}
 
 interface Props {
   pack: AdvancedPackResult;
