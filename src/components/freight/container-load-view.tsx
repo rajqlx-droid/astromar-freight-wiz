@@ -25,6 +25,8 @@ import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
 import type { Container3DHandle } from "./container-3d-view";
+import { buildRows } from "@/lib/freight/loading-rows";
+import { readHeavyThreshold } from "./loading-rows-panel";
 
 // Lazy 3D view — keeps initial bundle light and avoids SSR.
 const Container3DView = lazy(() =>
