@@ -110,11 +110,46 @@ interface LenProps {
   onChange: (u: LengthUnit) => void;
   id?: string;
   label?: string;
+  /** Compact pill chip variant: 32px tall, inline label as prefix. */
+  compact?: boolean;
 }
 
-export function UnitSelector({ value, onChange, id, label = "Length unit" }: LenProps) {
+export function UnitSelector({
+  value,
+  onChange,
+  id,
+  label = "Length unit",
+  compact = false,
+}: LenProps) {
   const handle = (e: ChangeEvent<HTMLSelectElement>) =>
     onChange(e.target.value as LengthUnit);
+
+  if (compact) {
+    return (
+      <div className="inline-flex h-8 items-center overflow-hidden rounded-full border-2 border-brand-navy/30 bg-background transition-colors hover:border-brand-orange focus-within:border-brand-orange">
+        <label
+          htmlFor={id}
+          className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+        >
+          Len
+        </label>
+        <select
+          id={id}
+          value={value}
+          onChange={handle}
+          aria-label={label}
+          className="h-full cursor-pointer appearance-none border-l border-brand-navy/20 bg-background pl-2 pr-6 text-xs font-semibold text-brand-navy focus:outline-none"
+        >
+          {LENGTH_UNITS.map((u) => (
+            <option key={u.value} value={u.value}>
+              {u.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
       <label htmlFor={id} className="text-xs font-semibold text-brand-navy">
@@ -141,11 +176,45 @@ interface WtProps {
   onChange: (u: WeightUnit) => void;
   id?: string;
   label?: string;
+  compact?: boolean;
 }
 
-export function WeightUnitSelector({ value, onChange, id, label = "Weight unit" }: WtProps) {
+export function WeightUnitSelector({
+  value,
+  onChange,
+  id,
+  label = "Weight unit",
+  compact = false,
+}: WtProps) {
   const handle = (e: ChangeEvent<HTMLSelectElement>) =>
     onChange(e.target.value as WeightUnit);
+
+  if (compact) {
+    return (
+      <div className="inline-flex h-8 items-center overflow-hidden rounded-full border-2 border-brand-navy/30 bg-background transition-colors hover:border-brand-orange focus-within:border-brand-orange">
+        <label
+          htmlFor={id}
+          className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+        >
+          Wt
+        </label>
+        <select
+          id={id}
+          value={value}
+          onChange={handle}
+          aria-label={label}
+          className="h-full cursor-pointer appearance-none border-l border-brand-navy/20 bg-background pl-2 pr-6 text-xs font-semibold text-brand-navy focus:outline-none"
+        >
+          {WEIGHT_UNITS.map((u) => (
+            <option key={u.value} value={u.value}>
+              {u.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
       <label htmlFor={id} className="text-xs font-semibold text-brand-navy">

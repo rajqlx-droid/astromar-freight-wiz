@@ -1,6 +1,7 @@
 /**
  * Reusable labeled number input with tooltip helper text and error state.
  * Mobile-friendly: 44px tall touch targets and optional ± steppers.
+ * `compact` mode hides steppers on narrow layouts and tightens spacing.
  */
 import type { ChangeEvent } from "react";
 import { Info, Minus, Plus } from "lucide-react";
@@ -23,6 +24,8 @@ interface Props {
   suffix?: string;
   /** Show ±steppers for thumb-friendly editing on mobile. Defaults to true. */
   steppers?: boolean;
+  /** Tighter layout: hides steppers on narrow viewports, removes gap. */
+  compact?: boolean;
 }
 
 export function NumberField({
@@ -38,6 +41,7 @@ export function NumberField({
   error,
   suffix,
   steppers = true,
+  compact = false,
 }: Props) {
   const handle = (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -57,8 +61,21 @@ export function NumberField({
     onChange(Math.max(min, next));
   };
 
+  // In compact mode, steppers hide on small screens (segmented look on md+)
+  const stepperVisibility = compact ? "hidden md:flex" : "flex";
+  const gapClass = compact ? "gap-0" : "gap-1";
+  const stepperRadiusLeft = compact
+    ? "rounded-r-none border-r-0"
+    : "";
+  const stepperRadiusRight = compact
+    ? "rounded-l-none border-l-0"
+    : "";
+  const inputRadius = compact && steppers
+    ? "rounded-none border-x-0 md:border-x-2 md:rounded-md"
+    : "";
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <div className="flex items-center gap-1.5">
         <Label htmlFor={id} className="text-xs font-semibold text-brand-navy">
           {label}
@@ -80,15 +97,17 @@ export function NumberField({
           </Tooltip>
         )}
       </div>
-      <div className="flex items-stretch gap-1">
+      <div className={cn("flex items-stretch", gapClass)}>
         {steppers && (
           <button
             type="button"
             aria-label={`Decrease ${label}`}
             onClick={() => bump(-1)}
             className={cn(
-              "flex h-11 w-9 shrink-0 items-center justify-center rounded-md border-2 transition-colors md:h-10 md:w-8",
+              stepperVisibility,
+              "h-11 w-9 shrink-0 items-center justify-center rounded-md border-2 transition-colors md:h-10 md:w-8",
               "border-brand-navy/30 text-brand-navy hover:border-brand-orange hover:text-brand-orange active:scale-95",
+              stepperRadiusLeft,
             )}
           >
             <Minus className="size-3.5" />
@@ -110,6 +129,7 @@ export function NumberField({
             error
               ? "border-destructive focus-visible:border-destructive"
               : "border-brand-navy/30 focus-visible:border-brand-orange",
+            inputRadius,
           )}
         />
         {steppers && (
@@ -118,8 +138,10 @@ export function NumberField({
             aria-label={`Increase ${label}`}
             onClick={() => bump(1)}
             className={cn(
-              "flex h-11 w-9 shrink-0 items-center justify-center rounded-md border-2 transition-colors md:h-10 md:w-8",
+              stepperVisibility,
+              "h-11 w-9 shrink-0 items-center justify-center rounded-md border-2 transition-colors md:h-10 md:w-8",
               "border-brand-navy/30 text-brand-navy hover:border-brand-orange hover:text-brand-orange active:scale-95",
+              stepperRadiusRight,
             )}
           >
             <Plus className="size-3.5" />

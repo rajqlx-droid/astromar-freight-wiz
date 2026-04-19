@@ -38,36 +38,34 @@ export function LandedCalculator({ state, setState }: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-4">
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="mb-3 flex items-end gap-3">
-            <div className="flex-1 space-y-1.5">
-              <Label className="text-xs font-semibold text-brand-navy">Currency</Label>
-              <Select value={state.currency} onValueChange={(v) => set({ currency: v })}>
-                <SelectTrigger className="h-10 border-2 border-brand-navy/30">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="₹">₹ Indian Rupee</SelectItem>
-                  <SelectItem value="$">$ US Dollar</SelectItem>
-                  <SelectItem value="€">€ Euro</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="space-y-3">
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <div className="mb-2 flex items-center gap-2">
+            <Label className="text-xs font-semibold text-brand-navy">Currency</Label>
+            <Select value={state.currency} onValueChange={(v) => set({ currency: v })}>
+              <SelectTrigger className="h-8 w-auto min-w-[120px] border-2 border-brand-navy/30 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="₹">₹ Indian Rupee</SelectItem>
+                <SelectItem value="$">$ US Dollar</SelectItem>
+                <SelectItem value="€">€ Euro</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <NumberField id="lp" label="Product Cost" required value={state.product} onChange={(n) => set({ product: n })} hint="Invoice value of goods." />
-            <NumberField id="lf" label="Freight" required value={state.freight} onChange={(n) => set({ freight: n })} hint="Total inward freight charges." />
-            <NumberField id="li" label="Insurance" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Marine / cargo insurance premium." />
-            <NumberField id="ld" label="Duty Rate" suffix="%" value={state.dutyRate} onChange={(n) => set({ dutyRate: n })} hint="BCD rate from your HSN code (default 10%)." />
-            <NumberField id="lg" label="GST Rate" suffix="%" value={state.gstRate} onChange={(n) => set({ gstRate: n })} hint="IGST rate, typically 5/12/18/28%." />
-            <NumberField id="la" label="Additional" value={state.additional} onChange={(n) => set({ additional: n })} hint="Port handling, documentation, CFS etc." />
-            <NumberField id="lq" label="Quantity" step={1} value={state.qty} onChange={(n) => set({ qty: Math.max(0, Math.round(n)) })} hint="Optional — gives per-unit cost." />
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+            <NumberField compact id="lp" label="Product Cost" required value={state.product} onChange={(n) => set({ product: n })} hint="Invoice value of goods." />
+            <NumberField compact id="lf" label="Freight" required value={state.freight} onChange={(n) => set({ freight: n })} hint="Total inward freight charges." />
+            <NumberField compact id="li" label="Insurance" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Marine / cargo insurance premium." />
+            <NumberField compact id="ld" label="Duty Rate" suffix="%" value={state.dutyRate} onChange={(n) => set({ dutyRate: n })} hint="BCD rate from your HSN code (default 10%)." />
+            <NumberField compact id="lg" label="GST Rate" suffix="%" value={state.gstRate} onChange={(n) => set({ gstRate: n })} hint="IGST rate, typically 5/12/18/28%." />
+            <NumberField compact id="la" label="Additional" value={state.additional} onChange={(n) => set({ additional: n })} hint="Port handling, documentation, CFS etc." />
+            <NumberField compact id="lq" label="Quantity" step={1} value={state.qty} onChange={(n) => set({ qty: Math.max(0, Math.round(n)) })} hint="Optional — gives per-unit cost." />
           </div>
         </Card>
 
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <h4 className="mb-3 text-sm font-semibold text-brand-navy">Cost Breakdown</h4>
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <h4 className="mb-2 text-sm font-semibold text-brand-navy">Cost Breakdown</h4>
           <div className="space-y-2">
             {bars.map((b) => {
               const pct = total > 0 ? (b.val / total) * 100 : 0;
