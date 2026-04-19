@@ -218,6 +218,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             shufflePreview={shufflePreview}
             visiblePlacedSet={visiblePlacedSet}
             hideDoors={hideDoors}
+            gapHeatmapRow={gapHeatmapRow}
           />
         </Suspense>
       </Canvas>
@@ -340,6 +341,7 @@ function SceneContents({
   shufflePreview,
   visiblePlacedSet,
   hideDoors,
+  gapHeatmapRow,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -349,6 +351,7 @@ function SceneContents({
   shufflePreview: Map<number, number> | null;
   visiblePlacedSet: Set<number> | null;
   hideDoors: boolean;
+  gapHeatmapRow: RowGroup | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
