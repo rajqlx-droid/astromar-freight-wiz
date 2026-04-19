@@ -438,6 +438,72 @@ export function cameraForFrame(
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Reverse-beep audio (synced to between-box reverse-out motion)             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Compute the [startSec, endSec] intervals during which the forklift is
+ * reversing out of the container (between two box deliveries). Used to place
+ * "beep beep beep" reverse-warning sounds in the soundtrack.
+ */
+function reverseGapIntervalsSec(timeline: Timeline): Array<[number, number]> {
+  const fps = timeline.fps;
+  const out: Array<[number, number]> = [];
+  for (let i = 0; i < timeline.anims.length - 1; i++) {
+    const prev = timeline.anims[i];
+    const next = timeline.anims[i + 1];
+    if (next.startFrame <= prev.endFrame) continue; // no real gap
+    // Only the FIRST half of the gap is the reverse-out (see stagingForFrame).
+    const gapStart = prev.endFrame;
+    const gapEnd = prev.endFrame + Math.floor((next.startFrame - prev.endFrame) / 2);
+    if (gapEnd > gapStart) out.push([gapStart / fps, gapEnd / fps]);
+  }
+  return out;
+}
+
+/**
+ * Build an AudioBuffer of `durationSec` containing classic warehouse "beep …
+ * beep … beep" reverse-warning tones during each reverse interval. ~1 kHz
+ * square-ish tone, 250 ms on / 250 ms off, gentle envelope so it doesn't pop.
+ */
+function buildBeepBuffer(
+  ctx: AudioContext,
+  durationSec: number,
+  intervals: Array<[number, number]>,
+): AudioBuffer {
+  const sr = ctx.sampleRate;
+  const totalSamples = Math.ceil(durationSec * sr);
+  const buf = ctx.createBuffer(1, totalSamples, sr);
+  const data = buf.getChannelData(0);
+  const freq = 1050;
+  const beepOn = 0.22;   // seconds on
+  const beepOff = 0.28;  // seconds silent
+  const period = beepOn + beepOff;
+  const attack = 0.008;  // seconds — soft envelope to avoid clicks
+  const amp = 0.32;
+
+  for (const [start, end] of intervals) {
+    const startSample = Math.floor(start * sr);
+    const endSample = Math.min(totalSamples, Math.floor(end * sr));
+    for (let i = startSample; i < endSample; i++) {
+      const tInGap = (i - startSample) / sr;
+      const phase = tInGap % period;
+      if (phase >= beepOn) continue; // silent half
+      // Soft attack/release envelope inside the on-phase
+      let env = 1;
+      if (phase < attack) env = phase / attack;
+      else if (phase > beepOn - attack) env = Math.max(0, (beepOn - phase) / attack);
+      // Square-ish tone (sine + slight 3rd harmonic for warehouse feel)
+      const s =
+        Math.sin(2 * Math.PI * freq * tInGap) * 0.85 +
+        Math.sin(2 * Math.PI * freq * 3 * tInGap) * 0.12;
+      data[i] += s * env * amp;
+    }
+  }
+  return buf;
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Encoder                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -446,16 +512,44 @@ async function encodeWithMediaRecorder(
   fps: number,
   totalFrames: number,
   driveFrame: (n: number) => Promise<void>,
+  timeline: Timeline,
   onProgress?: (n: number, total: number) => void,
   bitrate = 8_000_000,
 ): Promise<{ blob: Blob; mime: string; ext: "mp4" | "webm" }> {
-  const stream = canvas.captureStream(fps);
+  const videoStream = canvas.captureStream(fps);
+
+  // Build reverse-beep audio track and mix it into the recorded stream.
+  let audioCtx: AudioContext | null = null;
+  let audioSource: AudioBufferSourceNode | null = null;
+  const tracks: MediaStreamTrack[] = videoStream.getVideoTracks();
+  try {
+    const intervals = reverseGapIntervalsSec(timeline);
+    if (intervals.length > 0 && typeof AudioContext !== "undefined") {
+      audioCtx = new AudioContext();
+      const durationSec = totalFrames / fps;
+      const buffer = buildBeepBuffer(audioCtx, durationSec, intervals);
+      const dest = audioCtx.createMediaStreamDestination();
+      audioSource = audioCtx.createBufferSource();
+      audioSource.buffer = buffer;
+      audioSource.connect(dest);
+      dest.stream.getAudioTracks().forEach((t) => tracks.push(t));
+    }
+  } catch (e) {
+    console.warn("Reverse-beep audio unavailable, recording video only:", e);
+  }
+
+  const stream = new MediaStream(tracks);
+
   // Prefer H.264 High profile MP4 for crisper output, then fall back.
   const candidates = [
-    "video/mp4;codecs=avc1.640028", // H.264 High @ L4 — best quality
-    "video/mp4;codecs=avc1.42E01E", // H.264 Baseline — broad support
+    "video/mp4;codecs=avc1.640028,mp4a.40.2", // H.264 High + AAC
+    "video/mp4;codecs=avc1.640028",
+    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
+    "video/mp4;codecs=avc1.42E01E",
     "video/mp4",
+    "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp9",
+    "video/webm;codecs=vp8,opus",
     "video/webm;codecs=vp8",
     "video/webm",
   ];
@@ -468,6 +562,7 @@ async function encodeWithMediaRecorder(
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
     videoBitsPerSecond: bitrate,
+    audioBitsPerSecond: 96_000,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
@@ -479,6 +574,10 @@ async function encodeWithMediaRecorder(
   });
 
   recorder.start();
+  // Start the audio AT the same moment recording starts so timings align.
+  if (audioSource && audioCtx) {
+    audioSource.start(audioCtx.currentTime);
+  }
 
   const frameDurationMs = 1000 / fps;
   for (let f = 0; f < totalFrames; f++) {
@@ -494,6 +593,13 @@ async function encodeWithMediaRecorder(
   recorder.stop();
   await stopped;
   stream.getTracks().forEach((t) => t.stop());
+  videoStream.getTracks().forEach((t) => t.stop());
+  if (audioSource) {
+    try { audioSource.stop(); } catch { /* already stopped */ }
+  }
+  if (audioCtx) {
+    try { await audioCtx.close(); } catch { /* ignore */ }
+  }
   return { blob: new Blob(chunks, { type: mime }), mime, ext };
 }
 
