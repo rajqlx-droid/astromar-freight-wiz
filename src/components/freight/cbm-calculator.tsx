@@ -185,75 +185,121 @@ export function CbmCalculator({ items, setItems }: Props) {
               className="border-2 p-3 transition-shadow"
               style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
             >
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="size-3 rounded-sm border border-black/10"
-                    style={{ background: color }}
-                    aria-hidden
-                  />
-                  <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
-                  {idx === 0 && (
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <UnitSelector id="cbm-len-unit" value={lenUnit} onChange={setLenUnit} compact />
-                      <WeightUnitSelector id="cbm-wt-unit" value={wtUnit} onChange={setWtUnit} compact />
+              {(() => {
+                const rowLen = lenUnitFor(it);
+                const rowWt = wtUnitFor(it);
+                const rowCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
+                const rowVolWt = (rowCbm * 1000) / 5;
+                const rowTotalWt = it.qty * it.weight;
+                return (
+                  <>
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span
+                          className="size-3 rounded-sm border border-black/10"
+                          style={{ background: color }}
+                          aria-hidden
+                        />
+                        <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <UnitSelector
+                            id={`cbm-len-unit-${it.id}`}
+                            value={rowLen}
+                            onChange={setRowLenUnit(it, idx)}
+                            compact
+                          />
+                          <WeightUnitSelector
+                            id={`cbm-wt-unit-${it.id}`}
+                            value={rowWt}
+                            onChange={setRowWtUnit(it, idx)}
+                            compact
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-1">
+                        {/* Packing options chip — sits next to row actions to save vertical space */}
+                        <Popover
+                          open={openPopoverId === it.id}
+                          onOpenChange={(o) => setOpenPopoverId(o ? it.id : null)}
+                        >
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className={cn(
+                                "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                                confirmed
+                                  ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
+                                  : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
+                              )}
+                            >
+                              {confirmed ? (
+                                <CheckCircle2 className="size-3.5 shrink-0" />
+                              ) : (
+                                <Settings2 className="size-3.5 shrink-0" />
+                              )}
+                              <span className="truncate">
+                                {confirmed ? buildSummary(it) : "Packing options"}
+                              </span>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-4">
+                            {renderPackingPopoverContent({
+                              it,
+                              idx,
+                              items,
+                              updatePacking,
+                              applyToAll,
+                              closePopover: () => setOpenPopoverId(null),
+                            })}
+                          </PopoverContent>
+                        </Popover>
+                        <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
+                          <Copy className="size-3.5" />
+                        </Button>
+                        {items.length > 1 && (
+                          <Button size="icon" variant="ghost" className="size-7 text-destructive" onClick={() => remove(it.id)} aria-label="Remove">
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-1">
-                  {/* Packing options chip — sits next to row actions to save vertical space */}
-                  <Popover
-                    open={openPopoverId === it.id}
-                    onOpenChange={(o) => setOpenPopoverId(o ? it.id : null)}
-                  >
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className={cn(
-                          "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                          confirmed
-                            ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
-                            : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
-                        )}
+                    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,200px)]">
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+                        <NumberField compact id={`l-${it.id}`} label="Length" suffix={rowLen} required value={showLen(it.length, rowLen)} onChange={setLen(it.id, "length", rowLen)} hint={`Outer length of one carton in ${rowLen}.`} />
+                        <NumberField compact id={`w-${it.id}`} label="Width" suffix={rowLen} required value={showLen(it.width, rowLen)} onChange={setLen(it.id, "width", rowLen)} hint={`Outer width in ${rowLen}.`} />
+                        <NumberField compact id={`h-${it.id}`} label="Height" suffix={rowLen} required value={showLen(it.height, rowLen)} onChange={setLen(it.id, "height", rowLen)} hint={`Outer height in ${rowLen}.`} />
+                        <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
+                        <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
+                      </div>
+                      <div
+                        className="rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 p-2.5"
+                        aria-label={`Item ${idx + 1} totals`}
                       >
-                        {confirmed ? (
-                          <CheckCircle2 className="size-3.5 shrink-0" />
-                        ) : (
-                          <Settings2 className="size-3.5 shrink-0" />
-                        )}
-                        <span className="truncate">
-                          {confirmed ? buildSummary(it) : "Packing options"}
-                        </span>
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-4">
-                      {renderPackingPopoverContent({
-                        it,
-                        idx,
-                        items,
-                        updatePacking,
-                        applyToAll,
-                        closePopover: () => setOpenPopoverId(null),
-                      })}
-                    </PopoverContent>
-                  </Popover>
-                  <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
-                    <Copy className="size-3.5" />
-                  </Button>
-                  {items.length > 1 && (
-                    <Button size="icon" variant="ghost" className="size-7 text-destructive" onClick={() => remove(it.id)} aria-label="Remove">
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-                <NumberField compact id={`l-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} hint={`Outer length of one carton in ${lenUnit}.`} />
-                <NumberField compact id={`w-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} hint={`Outer width in ${lenUnit}.`} />
-                <NumberField compact id={`h-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} hint={`Outer height in ${lenUnit}.`} />
-                <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
-                <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} hint={`Actual weight of ONE carton (gross) in ${wtUnit}.`} />
-              </div>
+                        <div className="mb-1 flex items-baseline justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CBM</span>
+                          <span className="text-base font-bold leading-tight" style={{ color: "var(--brand-orange)" }}>
+                            {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
+                            <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vol. wt</span>
+                          <span className="text-sm font-semibold text-brand-navy">
+                            {Number.isFinite(rowVolWt) ? rowVolWt.toFixed(2) : "—"}
+                            <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">kg</span>
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-baseline justify-between gap-2 border-t border-brand-navy/10 pt-1">
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total wt</span>
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {Number.isFinite(rowTotalWt) ? rowTotalWt.toFixed(2) : "—"} kg
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </Card>
           );
         })}
