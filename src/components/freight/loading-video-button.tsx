@@ -216,7 +216,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
                 className="w-full max-w-md"
               />
               <p className="text-[11px] text-muted-foreground">
-                Recording in real-time — please keep this dialog visible.
+                Encoding as fast as possible — usually 3-5× faster than playback.
               </p>
             </div>
           ) : url && video ? (
