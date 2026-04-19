@@ -30,10 +30,14 @@ export type PackageType = "carton" | "pallet" | "crate" | "drum" | "bag";
 
 export interface CbmItem {
   id: string;
+  /** Always stored in cm internally. */
   length: number;
+  /** Always stored in cm internally. */
   width: number;
+  /** Always stored in cm internally. */
   height: number;
   qty: number;
+  /** Always stored in kg internally. */
   weight: number;
   packageType?: PackageType;
   stackable?: boolean;
@@ -42,6 +46,10 @@ export interface CbmItem {
   allowSidewaysRotation?: boolean;
   allowAxisRotation?: boolean;
   packingConfirmed?: boolean;
+  /** Per-row display unit for L/W/H. Falls back to global preference. */
+  lenUnit?: "cm" | "mm" | "m" | "in" | "ft";
+  /** Per-row display unit for weight. Falls back to global preference. */
+  wtUnit?: "kg" | "g" | "lb";
 }
 
 export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
