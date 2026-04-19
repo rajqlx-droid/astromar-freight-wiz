@@ -134,6 +134,26 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     getCanvas() {
       return glRef.current?.domElement ?? null;
     },
+    setRenderSize(width: number, height: number) {
+      const gl = glRef.current;
+      const cam = cameraRef.current;
+      if (!gl || !cam) return;
+      // false = don't update CSS size; keep on-screen layout stable.
+      gl.setSize(width, height, false);
+      cam.aspect = width / height;
+      cam.updateProjectionMatrix();
+    },
+    restoreRenderSize() {
+      const gl = glRef.current;
+      const cam = cameraRef.current;
+      if (!gl || !cam) return;
+      const el = gl.domElement;
+      const w = el.clientWidth || el.width;
+      const h = el.clientHeight || el.height;
+      gl.setSize(w, h, false);
+      cam.aspect = w / h;
+      cam.updateProjectionMatrix();
+    },
   }));
 
   return (
