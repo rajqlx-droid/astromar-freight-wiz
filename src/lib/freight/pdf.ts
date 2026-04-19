@@ -23,6 +23,8 @@ export interface PdfLoadingRow {
   rotatedCount: number;
   items: { itemIdx: number; count: number; color: string; packageType: string }[];
   instruction: string;
+  /** Optional pre-rasterised side-view PNG dataURL for this row. */
+  sideViewPng?: string;
 }
 
 export interface PdfExtras {
