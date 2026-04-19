@@ -26,7 +26,7 @@ import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
-import { ScenarioSnapshotButton } from "./scenario-snapshot-button";
+
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
 import { readHeavyThreshold } from "./loading-rows-panel";
