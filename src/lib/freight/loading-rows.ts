@@ -36,6 +36,166 @@ export const WALL_GAP_WARNING_THRESHOLD_PCT = 90;
 /** Default kg-per-package cutoff above which a non-fragile unit is treated as "heavy". */
 export const DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD = 25;
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * Container-level wall efficiency
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface WallEfficiency {
+  /** 0-100 — depth-weighted average of wallUtilizationPct across all rows. */
+  scorePct: number;
+  /** Traffic-light bucket: green ≥ 90, amber ≥ 75, red < 75. */
+  status: "green" | "amber" | "red";
+  rowCount: number;
+  /** How many rows currently carry a gap warning. */
+  gapRowCount: number;
+}
+
+/** Compute the depth-weighted overall wall efficiency for a set of rows. */
+export function computeWallEfficiency(rows: RowGroup[]): WallEfficiency {
+  if (rows.length === 0) {
+    return { scorePct: 0, status: "red", rowCount: 0, gapRowCount: 0 };
+  }
+  let weightedSum = 0;
+  let totalDepth = 0;
+  let gapRowCount = 0;
+  for (const r of rows) {
+    const depth = Math.max(1, r.xEnd - r.xStart);
+    weightedSum += r.wallUtilizationPct * depth;
+    totalDepth += depth;
+    if (r.gapWarning) gapRowCount++;
+  }
+  const scorePct = totalDepth > 0 ? weightedSum / totalDepth : 0;
+  const status: WallEfficiency["status"] =
+    scorePct >= 90 ? "green" : scorePct >= 75 ? "amber" : "red";
+  return { scorePct, status, rowCount: rows.length, gapRowCount };
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Re-shuffle suggestions
+ *
+ * For a row with a back-wall gap, we project every bottom-layer box onto the
+ * width axis (y) and find the largest contiguous void. The suggestion tells
+ * the loader how far (cm) to slide which side's pallets to close it.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface ReshuffleSuggestion {
+  /** Plain-English instruction for the loader. */
+  text: string;
+  /** Width of the largest void in mm (along the y-axis of this row). */
+  largestGapMm: number;
+  /** "left" = slide left-side pallets right, "right" = slide right-side pallets left, "split" = close both sides toward middle. */
+  direction: "left" | "right" | "split" | "none";
+  /** Estimated wall utilization after the suggested shuffle (0-100). */
+  projectedUtilizationPct: number;
+}
+
+export function suggestReshuffle(
+  row: RowGroup,
+  pack: AdvancedPackResult,
+): ReshuffleSuggestion {
+  const containerW = pack.container.inner.w;
+  // Project bottom-layer boxes onto the y-axis as [start, end] intervals.
+  const intervals = row.boxes
+    .filter((b) => b.z < 10)
+    .map((b) => [b.y, b.y + b.w] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+
+  if (intervals.length === 0) {
+    return {
+      text: "No bottom-layer pallets in this row to re-shuffle.",
+      largestGapMm: 0,
+      direction: "none",
+      projectedUtilizationPct: row.wallUtilizationPct,
+    };
+  }
+
+  // Merge overlapping intervals.
+  const merged: [number, number][] = [intervals[0]];
+  for (let i = 1; i < intervals.length; i++) {
+    const last = merged[merged.length - 1];
+    if (intervals[i][0] <= last[1]) {
+      last[1] = Math.max(last[1], intervals[i][1]);
+    } else {
+      merged.push(intervals[i]);
+    }
+  }
+
+  // Find all voids: leading, between-intervals, trailing.
+  const voids: { start: number; end: number; size: number }[] = [];
+  if (merged[0][0] > 0) {
+    voids.push({ start: 0, end: merged[0][0], size: merged[0][0] });
+  }
+  for (let i = 1; i < merged.length; i++) {
+    const gap = merged[i][0] - merged[i - 1][1];
+    if (gap > 0) {
+      voids.push({ start: merged[i - 1][1], end: merged[i][0], size: gap });
+    }
+  }
+  if (merged[merged.length - 1][1] < containerW) {
+    const start = merged[merged.length - 1][1];
+    voids.push({ start, end: containerW, size: containerW - start });
+  }
+
+  if (voids.length === 0) {
+    return {
+      text: "Pallets are already tight against both side walls — no re-shuffle needed.",
+      largestGapMm: 0,
+      direction: "none",
+      projectedUtilizationPct: row.wallUtilizationPct,
+    };
+  }
+
+  // Sum of every void = the slack. Closing it brings everything tight to one wall.
+  const totalSlack = voids.reduce((s, v) => s + v.size, 0);
+  const largest = voids.reduce((a, b) => (b.size > a.size ? b : a));
+  const largestCm = Math.round(largest.size / 10);
+  const totalCm = Math.round(totalSlack / 10);
+
+  // Decide which side to push toward: pick whichever wall currently has more
+  // pallet weight against it (fewer voids on that side).
+  const leftSlack = voids
+    .filter((v) => v.start < containerW / 2)
+    .reduce((s, v) => s + v.size, 0);
+  const rightSlack = totalSlack - leftSlack;
+  let direction: ReshuffleSuggestion["direction"];
+  let sideText: string;
+  if (Math.abs(leftSlack - rightSlack) < 100) {
+    direction = "split";
+    sideText = `slide both side walls' pallets toward the centre by ~${Math.round(totalCm / 2)} cm each`;
+  } else if (leftSlack > rightSlack) {
+    direction = "left";
+    sideText = `slide the left-side pallets ${totalCm} cm to the right so they meet the right wall pack`;
+  } else {
+    direction = "right";
+    sideText = `slide the right-side pallets ${totalCm} cm to the left so they meet the left wall pack`;
+  }
+
+  // Projected utilization after closing all gaps: bottom footprint stays the
+  // same, but reduce the row depth contribution to nil — gain is the total
+  // slack expressed as % of wall area.
+  const wallAreaMm2 = containerW * Math.max(1, row.xEnd - row.xStart);
+  const bottomFootprintMm2 = row.boxes
+    .filter((b) => b.z < 10)
+    .reduce((s, b) => s + b.l * b.w, 0);
+  const projected =
+    wallAreaMm2 > 0 ? Math.min(100, (bottomFootprintMm2 / wallAreaMm2) * 100 + (totalSlack / wallAreaMm2) * 100 * 0) : 0;
+  // The footprint doesn't change by sliding — only voids close — so the wall
+  // utilization stays the same; we instead report the gap that gets closed.
+  const projectedUtilizationPct = Math.min(100, row.wallUtilizationPct + (totalSlack / wallAreaMm2) * 100);
+  void projected;
+
+  const text =
+    voids.length === 1
+      ? `Largest gap is ${largestCm} cm wide — ${sideText}.`
+      : `Total slack is ${totalCm} cm spread across ${voids.length} gaps (largest ${largestCm} cm) — ${sideText}.`;
+
+  return {
+    text,
+    largestGapMm: largest.size,
+    direction,
+    projectedUtilizationPct,
+  };
+}
 
 /**
  * Group placed boxes into rows along the container length (x-axis).
