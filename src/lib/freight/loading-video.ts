@@ -253,10 +253,23 @@ export function computeBoxTransforms(
       item.scale = 1;
       continue;
     }
-    // Three phases (mirrors stagingForFrame): pickup at yard stack, drive in,
-    // settle into final slot. Box is invisible until forks complete pickup
-    // (it "materialises" on the forks as if lifted from the stack).
     const t = (frame - a.startFrame) / Math.max(1, a.endFrame - a.startFrame);
+    const isPallet = isPalletBox(pack, a.placedIdx);
+
+    // NON-PALLET (cartons, bags, drums, crates): no forklift involved.
+    // The item simply appears in its slot with a quick fade/scale-in so the
+    // viewer can see WHICH item just got loaded, but the forklift keeps moving
+    // pallets only.
+    if (!isPallet) {
+      item.visible = true;
+      item.offset = [0, 0, 0];
+      const ease = easeInOutQuad(Math.min(1, t * 2));
+      item.scale = 0.6 + 0.4 * ease;
+      item.onForklift = false;
+      continue;
+    }
+
+    // PALLET: full forklift pickup → drive-in → settle sequence.
     const box = pack.placed[a.placedIdx];
     const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
     const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
@@ -265,11 +278,7 @@ export function computeBoxTransforms(
     const pickupX = yardStackX;
     const pickupZ = side * yardStackZ;
 
-    // Box.x/y in scene-local coords = box's slot. We compute an OFFSET to
-    // shift it from its slot toward the pickup point or carry height.
-    // Container scene uses box at slot when offset = [0, 0, 0].
     if (t < 0.20) {
-      // PICKUP: box hidden until ease > 0.5 (forks fully under it).
       const r = t / 0.20;
       const ease = easeInOutQuad(r);
       if (ease <= 0.5) {
@@ -277,8 +286,6 @@ export function computeBoxTransforms(
         continue;
       }
       item.visible = true;
-      // Position the box AT the yard stack at fork height. Compute offset
-      // from its final slot to that yard pickup position.
       const carryY = 0.55 - restY;
       const dx = pickupX - boxWorldX;
       const dz = pickupZ - boxWorldZ;
@@ -286,7 +293,6 @@ export function computeBoxTransforms(
       item.onForklift = true;
       item.scale = 0.95;
     } else if (t < 0.75) {
-      // DRIVE-IN: interpolate from yard pickup to final slot at fork height.
       const r = (t - 0.20) / (0.75 - 0.20);
       const ease = 1 - Math.pow(1 - r, 3);
       item.visible = true;
@@ -297,7 +303,6 @@ export function computeBoxTransforms(
       item.onForklift = true;
       item.scale = 0.95 + 0.05 * ease;
     } else {
-      // SETTLE: at slot, lower from carry height to rest.
       const r = (t - 0.75) / 0.25;
       const ease = easeInOutQuad(r);
       item.visible = true;
