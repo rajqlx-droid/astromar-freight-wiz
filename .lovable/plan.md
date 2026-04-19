@@ -1,58 +1,49 @@
 
 
-## What's wrong today
-- "Play all" = rows pop in every 1.5s. No context, no per-pallet guidance, no orientation cues. A loader watching this learns nothing they couldn't get from a static image.
-- It "runs like a train" because every row reveals as a single block of N boxes simultaneously.
-- Fragile / non-stack / rotated flags exist in data but the 3D never highlights them at the moment they matter.
-- No camera movement to show *where on the floor* the loader stands or *which pallet enters next*.
+## The bug
 
-## Goal
-Turn the walkthrough into a **per-pallet, dock-loader's POV simulation** with on-screen instructions tied to each box as it enters — so a real loader can pause at any point and know exactly what to do next.
+`buildRows()` in `src/lib/freight/loading-rows.ts` groups boxes into a "row" purely by **x-span overlap** along the container length:
 
-## What I'll build
+```
+if (last && b.x < last.xEnd - 1) {
+  last.boxes.push(b);          // merge into current row
+  if (bxEnd > last.xEnd) last.xEnd = bxEnd;
+}
+```
 
-### 1. Per-pallet sequencing (not per-row)
-Inside each row, sort boxes back→front, left→right, bottom→top (the actual loader hand-order). Reveal one pallet at a time with a short fly-in (~350ms) plus a 250ms settle pause. So Row 3 with 8 pallets takes ~5s, not 1.5s. The viewer can *see* the build order.
+The packer (`packing-advanced.ts`, score `x * 10_000 + z * 100 + y * 0.1`) fills the back wall first — so back-wall pallets often have *different lengths* (e.g. a 1170 mm deep pallet next to a 1200 mm deep one with 4 stacked cartons). Once one big pallet sets `xEnd = 1170`, every shorter pallet starting at `x < 1170` gets folded into the same row — even pallets sitting on the opposite side wall with completely different stack configurations.
 
-### 2. Loader instruction overlay (HUD)
-A persistent top-left card that updates per pallet:
-- **Step X / Y** — "Pallet 3 of 24"
-- **Item name + dimensions** — "Item 2 — 1200×800×1100 mm, 420 kg"
-- **Action verb** — `PLACE` / `STACK ON` / `ROTATE 90° THEN PLACE` / `INSERT DUNNAGE` / `CAP WITH FRAGILE`
-- **Position cue** — "Back wall, left corner, floor" or "On top of pallet 2, centred"
-- **Warnings inline** — ⚠ FRAGILE — load last in this row · ⚠ NO-STACK — leave top clear · ↻ ROTATE before placing
+That's exactly what the screenshot shows: "Row 1" balloons to 5 stacks on one side + 7 stacks + cap cartons on the other side, because all of them happen to overlap somewhere along the x-axis with the deepest back-wall pallet.
 
-### 3. Spatial highlights on the active pallet
-- Pulsing yellow outline on the **next** pallet's target slot before it flies in (so a paused viewer sees the target).
-- Red dashed footprint on the floor when a gap forms (uses existing `gapHeatmapRow`).
-- Green checkmark stamp on each completed pallet for 400ms.
-- Orange arrow on rotated pallets pointing the rotation axis.
+## The fix
 
-### 4. Camera that follows the work
-Replace static iso during play with a **shoulder-of-loader cam**:
-- Camera sits ~1.5m off the door, ~1.7m up (loader eye height).
-- Pans laterally to track the active pallet's y-position.
-- Lifts higher when stacking 2nd+ layer.
-- Returns to free orbit when paused or completed.
+Change row grouping to be **back-wall-aligned**, not overlap-merged. A row should be defined by the bottom-floor pallets that share roughly the same `x` start position (the actual loader-visible "rank against the wall"), and only those pallets + everything stacked directly on top of them.
 
-### 5. Real playback controls
-Replace the binary Play/Pause with: **⏮ Prev pallet · ⏯ Play/Pause · ⏭ Next pallet · 0.5× / 1× / 2× speed · "Jump to row N"** dropdown. Speed slider drives the per-pallet step duration (default 600ms total, 0.5×=1.2s, 2×=300ms).
+### Algorithm
+1. Take all boxes on the floor (`z < 10`), sort by `x`.
+2. Cluster them into ranks by `x`-start: a new rank starts when the next floor box's `x` is more than `TOL` (e.g. 200 mm) past the **minimum `x`** of the current rank. This keeps slightly staggered same-wall pallets together without absorbing the next rank back.
+3. For each rank, claim every non-floor box whose footprint sits **directly above** one of that rank's floor boxes (overlap test on x and y).
+4. `xStart` = min floor-box `x` in the rank, `xEnd` = max `x + l` of any box claimed by the rank.
 
-### 6. Forklift token (lightweight)
-A simple low-poly forklift sprite (just a coloured box with forks — no 3D model needed) that drives in from the door, lifts the active pallet, places it, reverses out. Toggleable in case it distracts. This is the visual anchor that makes it feel like a *load*, not an *animation*.
+This produces what the user expects:
+- Row 1 = the leftmost rank against the back wall = 2 pallets stacked (one on top of the other) on one side, plus the 7-stack column with 4 cartons capped on top, **only if they share the same `x` start**. If they don't (different depth), they become separate rows.
+- The next rank forward = Row 2, etc.
 
-### 7. Stay synced with the right panel
-The Loading-Rows-Panel row card highlights the current row, and we already scroll-to-view it. Add: highlight the current pallet's chip in the row's item-counts list too.
+### Safety nets
+- Keep `TOL = 200 mm` configurable; tune so visually-aligned pallets don't accidentally split.
+- Stacked boxes whose footprints don't overlap any single rank's floor pallet (rare — a box bridging two ranks) get assigned to the rank under their **majority footprint**.
+- Existing fields (`hasFragile`, `wallUtilizationPct`, `layers`, etc.) recompute the same way — no API change.
+- Pallet-sequence (`buildPalletSequence`) consumes `RowGroup[]` so it auto-corrects.
+- 3D viewer's `visiblePlacedSet` is built from `palletSequence[].placedIdx`, so step-mode reveal stays in sync automatically.
 
 ## Files to change
-- `src/lib/freight/loading-rows.ts` — add `buildPalletSequence(pack)` returning ordered `{box, action, positionText, warnings, layer}[]`.
-- `src/components/freight/container-3d-view.tsx` — add `activePalletIdx`, `nextPalletIdx`, `palletSequenceKey` props; render pulsing target, checkmark stamp, rotation arrow, follow-cam mode; CargoBox uses these to drive its fly-in instead of row sets.
-- `src/components/freight/container-load-view.tsx` — replace row-stepper state with pallet-stepper state; new playback controls; HUD card overlay; speed setting.
-- New: `src/components/freight/loader-hud.tsx` — the per-step instruction card overlay.
-- New: `src/components/freight/forklift-token.tsx` — three.js group component.
 
-## What I'm NOT doing (out of scope, ask if you want)
-- Full GLB forklift model (low-poly box stand-in instead — keeps perf tight)
-- Voiceover (you've kept captions-only as the rule)
-- Re-rendering the Remotion video — separate workflow
+- **`src/lib/freight/loading-rows.ts`** — replace the body of `buildRows()` with the back-wall-aligned algorithm above. Keep the same return type and field semantics. ~50 lines changed.
+
+That's it. No UI changes, no 3D-viewer changes, no panel-component changes. The bug is one function deep.
+
+## Out of scope
+
+- Changing the packer itself (it places correctly; only the post-hoc row-labelling is wrong).
+- Re-rendering the Remotion video.
 
