@@ -35,7 +35,7 @@ export function RiskCalculator({ state, setState }: Props) {
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -66,7 +66,7 @@ export function RiskCalculator({ state, setState }: Props) {
         </Card>
 
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             <NumberField compact id="rd" label="Days at Port" required step={1} value={state.daysAtPort} onChange={(n) => set({ daysAtPort: Math.max(0, Math.round(n)) })} hint="Total days the container has been at the port." />
             <NumberField compact id="rfd" label="Free Days" step={1} value={state.freeDays} onChange={(n) => set({ freeDays: Math.max(0, Math.round(n)) })} hint="Grace period offered by the shipping line / port (typical: 5)." />
             <NumberField compact id="rrate" label="Daily Rate" suffix="₹/day" required value={state.dailyRate} onChange={(n) => set({ dailyRate: n })} hint="Demurrage rate per day per container." />
@@ -90,7 +90,9 @@ export function RiskCalculator({ state, setState }: Props) {
           </p>
         </div>
       </div>
-      <ResultsCard result={result} inputsTable={inputsTable} />
+      <div className="xl:sticky xl:top-[140px] xl:self-start">
+        <ResultsCard result={result} inputsTable={inputsTable} />
+      </div>
     </div>
   );
 }

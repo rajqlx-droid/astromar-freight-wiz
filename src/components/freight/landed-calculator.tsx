@@ -50,7 +50,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
         {/* Currency + FX */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
@@ -175,7 +175,9 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
           </div>
         </Card>
       </div>
-      <ResultsCard result={result} inputsTable={inputsTable} />
+      <div className="xl:sticky xl:top-[140px] xl:self-start">
+        <ResultsCard result={result} inputsTable={inputsTable} />
+      </div>
     </div>
   );
 }
