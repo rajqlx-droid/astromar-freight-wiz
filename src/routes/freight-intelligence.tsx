@@ -310,6 +310,19 @@ function FreightIntelligencePage() {
               );
             })}
           </div>
+          {/* Active-tab progress indicator (hidden on lg where layout is calmer) */}
+          <div className="relative mx-auto max-w-7xl px-3 md:px-4" aria-hidden>
+            <div className="h-0.5 w-full overflow-hidden bg-brand-navy/10">
+              <div
+                className="h-full transition-all duration-300 ease-out"
+                style={{
+                  width: `${100 / CALCULATORS.length}%`,
+                  marginLeft: `${(100 / CALCULATORS.length) * activeIdx}%`,
+                  background: "var(--brand-orange)",
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* HERO + BREADCRUMB + BANNER */}
@@ -401,9 +414,12 @@ function FreightIntelligencePage() {
               >
                 <HistoryPanel />
               </div>
-            </aside>
+          </aside>
           </div>
         </section>
+
+        {/* Mobile-only sticky bottom result bar (mirrors active calculator's result) */}
+        <MobileResultBar result={mobileResult ?? null} inputsTable={mobileInputs} />
 
         {/* CTA */}
         <section className="mx-3 mb-10 md:mx-auto md:max-w-7xl md:px-4">
