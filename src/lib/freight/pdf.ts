@@ -189,46 +189,113 @@ export function downloadResultPdf(
     );
     ry += 16;
 
-    autoTable(doc, {
-      startY: ry,
-      head: [["Done", "Row", "Position", "Pkg", "Layers", "CBM", "Weight", "Flags", "Loader Action"]],
-      body: extras.loadingRows.map((r) => {
-        const flags: string[] = [];
-        if (r.hasFragile) flags.push("FRAGILE");
-        if (r.hasNonStack) flags.push("NO-STACK");
-        if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
-        const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
-        return [
-          "[ ]",
-          `R${r.rowIdx + 1}`,
-          `${r.xStartM.toFixed(2)}-${r.xEndM.toFixed(2)} m`,
-          String(r.pkgCount),
-          String(r.layers),
-          r.cbm.toFixed(2),
-          r.weightKg > 0
-            ? `~${r.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
-            : "-",
-          flags.join(" "),
-          `${itemsTxt}\n${r.instruction}`,
-        ];
-      }),
-      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold", fontSize: 9 },
-      bodyStyles: { textColor: 40, valign: "top" },
-      alternateRowStyles: { fillColor: [240, 245, 251] },
-      styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak" },
-      columnStyles: {
-        0: { cellWidth: 22, halign: "center", fontStyle: "bold" },
-        1: { cellWidth: 26, fontStyle: "bold", textColor: NAVY },
-        2: { cellWidth: 58 },
-        3: { cellWidth: 26, halign: "right" },
-        4: { cellWidth: 36, halign: "right" },
-        5: { cellWidth: 36, halign: "right" },
-        6: { cellWidth: 50, halign: "right" },
-        7: { cellWidth: 54, fontSize: 7, fontStyle: "bold" },
-        8: { cellWidth: "auto" },
-      },
-      margin: { left: 40, right: 40 },
-    });
+    const cardX = 40;
+    const cardW = pageWidth - 80;
+    const svgW = 130;
+    const svgH = 52;
+    const cardPad = 8;
+
+    for (const r of extras.loadingRows) {
+      // Card height: enough for the SVG + a few text lines.
+      const flags: string[] = [];
+      if (r.hasFragile) flags.push("FRAGILE");
+      if (r.hasNonStack) flags.push("NO-STACK");
+      if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
+      const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
+      const wt =
+        r.weightKg > 0
+          ? `~${r.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
+          : "-";
+      const instructionLines = doc.splitTextToSize(
+        `Loader: ${r.instruction}`,
+        cardW - svgW - cardPad * 3,
+      ) as string[];
+      const itemsLines = doc.splitTextToSize(
+        itemsTxt,
+        cardW - svgW - cardPad * 3,
+      ) as string[];
+      const textBlockH = 14 + 12 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
+      const cardH = Math.max(svgH + cardPad * 2, textBlockH + cardPad * 2);
+
+      // Page-break check
+      if (ry + cardH > doc.internal.pageSize.getHeight() - 90) {
+        doc.addPage();
+        ry = 60;
+      }
+
+      // Card background
+      doc.setDrawColor(214, 221, 232);
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(cardX, ry, cardW, cardH, 4, 4, "S");
+
+      // Tick box
+      doc.setDrawColor(...NAVY);
+      doc.setLineWidth(0.8);
+      doc.rect(cardX + cardW - 22, ry + 8, 12, 12, "S");
+
+      // Side view image (left)
+      if (r.sideViewPng) {
+        try {
+          doc.addImage(
+            r.sideViewPng,
+            "PNG",
+            cardX + cardPad,
+            ry + (cardH - svgH) / 2,
+            svgW,
+            svgH,
+            undefined,
+            "FAST",
+          );
+        } catch {
+          /* ignore broken dataURL */
+        }
+      }
+
+      // Right text block
+      const tx = cardX + svgW + cardPad * 2;
+      let ty = ry + cardPad + 4;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(...NAVY);
+      doc.text(
+        `R${r.rowIdx + 1}  ${r.xStartM.toFixed(2)}–${r.xEndM.toFixed(2)} m from rear wall`,
+        tx,
+        ty,
+      );
+      ty += 11;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(110, 110, 110);
+      doc.text(
+        `${r.pkgCount} pkg · ${r.layers} layer${r.layers > 1 ? "s" : ""} · ${r.cbm.toFixed(2)} m³ · ${wt}`,
+        tx,
+        ty,
+      );
+      ty += 10;
+
+      if (flags.length) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(...ORANGE);
+        doc.text(flags.join("  ·  "), tx, ty);
+        ty += 9;
+      }
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text(itemsLines, tx, ty);
+      ty += itemsLines.length * 10;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(...NAVY);
+      doc.text(instructionLines, tx, ty);
+
+      ry += cardH + 8;
+    }
   }
 
   const ph = doc.internal.pageSize.getHeight();
