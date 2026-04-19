@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
+  buildRowFrontViewSvg,
   buildRowSideViewSvg,
   buildRows,
   instructionFor,
@@ -29,14 +30,17 @@ function itemCounts(row: RowGroup, pack: AdvancedPackResult) {
 }
 
 /**
- * Mini side-view of a single row — wraps the shared SVG builder so the panel,
+ * Mini projection of a single row — wraps a shared SVG builder so the panel,
  * print HTML, and PDF all render the exact same artwork.
  */
-function RowSideView({ row, pack }: { row: RowGroup; pack: AdvancedPackResult }) {
-  const svg = buildRowSideViewSvg(row, pack);
+function RowProjection({
+  svg,
+}: {
+  svg: string;
+}) {
   return (
     <div
-      className="row-side-view h-[90px] w-full max-w-[260px] overflow-hidden rounded border bg-background [&_svg]:h-full [&_svg]:w-full"
+      className="h-[90px] w-full overflow-hidden rounded border bg-background [&_svg]:h-full [&_svg]:w-full"
       // SVG is built from sanitised numeric data + theme constants — safe to inject.
       dangerouslySetInnerHTML={{ __html: svg }}
     />
