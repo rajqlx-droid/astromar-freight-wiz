@@ -506,6 +506,7 @@ function SinglePlanBody({
             // Clicking a row card in 3D reveals rows 0..idx cumulatively.
             // In 2D, just leave it to the accordion toggle.
             if (is3D) {
+              stopPlay();
               if (!stepMode) setStepMode(true);
               setStepIdx(idx);
             }
