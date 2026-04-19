@@ -73,6 +73,17 @@ interface Props {
    * re-shuffle is needed. Cleared when null.
    */
   gapHeatmapRow?: RowGroup | null;
+  /**
+   * placedIdx of boxes that should fly in from the door this reveal. Boxes in
+   * this set animate from a staging position (high + toward the door) to their
+   * slot over ~600ms. Boxes NOT in this set render in place (already loaded).
+   */
+  flyInPlacedSet?: Set<number> | null;
+  /**
+   * Increments each time a new row is revealed — forces CargoBox to restart
+   * its fly-in animation even if the same set reference is passed.
+   */
+  flyInKey?: number;
 }
 
 /**
