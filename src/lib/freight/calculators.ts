@@ -26,6 +26,8 @@ export const safeNum = (v: unknown, fallback = 0): number => {
 };
 
 /* ---------------- CBM ---------------- */
+export type PackageType = "carton" | "pallet" | "crate" | "drum" | "bag";
+
 export interface CbmItem {
   id: string;
   length: number;
@@ -33,6 +35,12 @@ export interface CbmItem {
   height: number;
   qty: number;
   weight: number;
+  /** Optional advanced packing constraints. Defaults below when absent. */
+  packageType?: PackageType;
+  stackable?: boolean;
+  fragile?: boolean;
+  /** Max weight (kg) of cargo that may sit on top of one of these. 0 = unlimited. */
+  maxStackWeightKg?: number;
 }
 
 export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
@@ -42,6 +50,10 @@ export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
   height: 0,
   qty: 1,
   weight: 0,
+  packageType: "carton",
+  stackable: true,
+  fragile: false,
+  maxStackWeightKg: 0,
 });
 
 export function calcCbm(items: CbmItem[]): CalcResult {
