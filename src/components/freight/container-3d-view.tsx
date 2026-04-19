@@ -84,6 +84,26 @@ interface Props {
    * its fly-in animation even if the same set reference is passed.
    */
   flyInKey?: number;
+  /**
+   * placedIdx of the pallet currently being placed. Drives the green
+   * checkmark stamp and the follow-cam target. null = none active.
+   */
+  activePalletIdx?: number | null;
+  /**
+   * placedIdx of the pallet to be placed next (preview). Renders a pulsing
+   * yellow target outline at its slot before the box flies in.
+   */
+  nextPalletIdx?: number | null;
+  /**
+   * When true, drives the camera to a "shoulder of loader" position behind
+   * the door, tracking the active pallet. False = normal orbit/presets.
+   */
+  followCam?: boolean;
+  /**
+   * Show a low-poly forklift token that slides in from the door to the
+   * active pallet column. Toggleable from the HUD.
+   */
+  showForkliftToken?: boolean;
 }
 
 /**
