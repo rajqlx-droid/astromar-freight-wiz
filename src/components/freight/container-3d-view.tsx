@@ -21,6 +21,7 @@ import type { PlacedBox } from "@/lib/freight/packing";
 import {
   buildTimeline,
   cameraInfoForFrame,
+  stagingForFrame,
   transformsForFrame,
   type Timeline,
   type VideoFrameInfo,
