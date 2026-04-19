@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
+import { ContainerLoadView } from "@/components/freight/container-load-view";
 import { calcCbm, emptyCbmItem, type CbmItem } from "@/lib/freight/calculators";
 import { nextId } from "@/lib/freight/ids";
 
@@ -67,6 +68,7 @@ export function CbmCalculator({ items, setItems }: Props) {
             Clear all
           </Button>
         </div>
+        <ContainerLoadView items={items} />
       </div>
       <ResultsCard result={result} inputsTable={inputsTable} />
     </div>
