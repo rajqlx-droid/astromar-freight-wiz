@@ -99,10 +99,10 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
     }
   };
 
-  const waUrl = `https://wa.me/?text=${encodeURIComponent(result.text + "\n\n— via Astromar Logistics")}`;
-  const mailUrl = `mailto:sales@astromarfreezone.com?subject=${encodeURIComponent(
+  const waUrl = `https://wa.me/?text=${encodeURIComponent(result.text + "\n\n— via Smart Tool")}`;
+  const mailUrl = `mailto:?subject=${encodeURIComponent(
     `[${result.title}] Calculation`,
-  )}&body=${encodeURIComponent(result.text)}`;
+  )}&body=${encodeURIComponent(result.text + "\n\n— via Smart Tool")}`;
 
   return (
     <>
