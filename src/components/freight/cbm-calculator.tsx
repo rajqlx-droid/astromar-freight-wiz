@@ -70,13 +70,15 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const captureRef = useRef<(() => Promise<{ iso: string; front: string; side: string } | null>) | null>(null);
+  const [optimizationRequested, setOptimizationRequested] = useState(false);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const result = useMemo(() => calcCbm(items), [items]);
   const recommendation = useMemo(
     () => recommendContainers(sumCbm(items), sumWeight(items)),
     [items],
   );
 
-  // Gate: every cargo row with real dimensions must have packingConfirmed === true.
+  // Items that have real dimensions but haven't had packing options confirmed yet.
   const unconfirmed = useMemo(
     () =>
       items.filter(
@@ -85,9 +87,8 @@ export function CbmCalculator({ items, setItems }: Props) {
     [items],
   );
   const allConfirmed = unconfirmed.length === 0 && items.some((it) => it.length > 0);
-  const gateReason = !allConfirmed
-    ? "Confirm packing options for every cargo item to enable container optimization, 3D loading and PDF export."
-    : null;
+  const hasAnyDims = items.some((it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0);
+  const showOptimization = optimizationRequested && allConfirmed;
 
   const update = (id: string, patch: Partial<CbmItem>) => {
     setItems(items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
