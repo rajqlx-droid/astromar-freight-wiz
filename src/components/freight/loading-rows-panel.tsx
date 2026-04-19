@@ -127,6 +127,9 @@ export function LoadingRowsPanel({
   // Refs to each row <li> so we can scroll the active row into view when the
   // 3D step-load mode advances. Map is rebuilt every render — cheap and safe.
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
+  // Track previous active row idx so we only scroll on row transitions, not
+  // on every pallet step within the same row during Play All.
+  const prevActiveRowIdx = useRef<number | null>(null);
 
   // Clear preview if the pack changes (re-pack invalidates placedIdx mapping).
   useEffect(() => {
