@@ -228,7 +228,7 @@ export function downloadResultPdf(
         : [];
       const textBlockH =
         14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
-      const cardH = Math.max(svgH + cardPad * 2, textBlockH + cardPad * 2);
+      const cardH = Math.max(imageColH + cardPad * 2, textBlockH + cardPad * 2);
 
       // Page-break check
       if (ry + cardH > doc.internal.pageSize.getHeight() - 90) {
@@ -246,19 +246,25 @@ export function downloadResultPdf(
       doc.setLineWidth(0.8);
       doc.rect(cardX + cardW - 22, ry + 8, 12, 12, "S");
 
-      // Side view image (left)
+      // Two stacked projection images (left): door view on top, side view below.
+      const imgX = cardX + cardPad;
+      const imgY0 = ry + cardPad;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6);
+      doc.setTextColor(120, 120, 120);
+      doc.text("DOOR VIEW (W × H)", imgX, imgY0 + 5);
       if (r.sideViewPng) {
         try {
-          doc.addImage(
-            r.sideViewPng,
-            "PNG",
-            cardX + cardPad,
-            ry + (cardH - svgH) / 2,
-            svgW,
-            svgH,
-            undefined,
-            "FAST",
-          );
+          doc.addImage(r.sideViewPng, "PNG", imgX, imgY0 + 7, svgW, svgH, undefined, "FAST");
+        } catch {
+          /* ignore broken dataURL */
+        }
+      }
+      const imgY1 = imgY0 + 7 + svgH + svgGap;
+      doc.text("SIDE VIEW (DEPTH × H)", imgX, imgY1 + 5);
+      if (r.frontViewPng) {
+        try {
+          doc.addImage(r.frontViewPng, "PNG", imgX, imgY1 + 7, svgW, svgH, undefined, "FAST");
         } catch {
           /* ignore broken dataURL */
         }
