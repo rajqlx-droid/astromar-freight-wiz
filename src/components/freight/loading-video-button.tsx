@@ -301,8 +301,9 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
                 </Button>
               </div>
               <p className="text-[10px] leading-relaxed text-muted-foreground">
-                Format: {video.mime}. {video.ext === "webm"
-                  ? "MP4 not supported by your browser — exported as WebM (plays in Chrome / Firefox / VLC)."
+                Format: {video.mime}. Downloaded MP4 plays at 0.5× speed by default so warehouse loaders can follow each placement. Use any video player's speed control to play faster.
+                {video.ext === "webm"
+                  ? " MP4 not supported by your browser — exported as WebM (plays in Chrome / Firefox / VLC)."
                   : ""}
               </p>
             </div>
