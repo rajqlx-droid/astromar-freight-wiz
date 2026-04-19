@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
@@ -11,7 +12,6 @@ interface Props {
   setState: (v: RiskInput) => void;
 }
 
-const PORTS = ["Chennai", "Mumbai (JNPT)", "Mundra", "Tuticorin", "Kolkata", "Cochin", "Visakhapatnam"];
 const CARGOS = ["General", "Perishable", "Hazardous", "Machinery", "Textiles", "Electronics"];
 const CONTAINERS = ["20ft", "40ft", "40ft HC", "Reefer 20ft", "Reefer 40ft"];
 
@@ -48,10 +48,12 @@ export function RiskCalculator({ state, setState }: Props) {
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-brand-navy">Port</Label>
-              <Select value={state.port} onValueChange={(v) => set({ port: v })}>
-                <SelectTrigger className="h-10 border-2 border-brand-navy/30"><SelectValue /></SelectTrigger>
-                <SelectContent>{PORTS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
+              <Input
+                value={state.port}
+                onChange={(e) => set({ port: e.target.value })}
+                placeholder="Enter port name (e.g. Chennai, Shanghai, Rotterdam)"
+                className="h-10 border-2 border-brand-navy/30 text-sm"
+              />
             </div>
             <div className="space-y-1">
               <Label className="text-xs font-semibold text-brand-navy">Cargo Type</Label>

@@ -3,7 +3,7 @@
  * All numbers are validated upstream; here we just compute.
  */
 
-import type { CalcResult } from "./types";
+import type { CalcResult, CargoLine } from "./types";
 import { nextId, seedId } from "./ids";
 
 export const fmt = (n: number, digits = 2) =>
@@ -35,21 +35,12 @@ export interface CbmItem {
   height: number;
   qty: number;
   weight: number;
-  /** Optional advanced packing constraints. Defaults below when absent. */
   packageType?: PackageType;
   stackable?: boolean;
   fragile?: boolean;
-  /** Max weight (kg) of cargo that may sit on top of one of these. 0 = unlimited. */
   maxStackWeightKg?: number;
-  /** Packer may swap L↔W (yaw 90° on floor). */
   allowSidewaysRotation?: boolean;
-  /** Packer may tip box onto its side (swap H with L or W). */
   allowAxisRotation?: boolean;
-  /**
-   * User has explicitly reviewed/confirmed the packing options for this item.
-   * Required (CBM calculator only) before container optimization, 3D loading
-   * view, loading video, and PDF export are available.
-   */
   packingConfirmed?: boolean;
 }
 
@@ -157,82 +148,185 @@ export function calcAir(items: AirItem[], divisor = 6000): CalcResult {
   };
 }
 
-/* ---------------- Landed Cost ---------------- */
+/* ---------------- Cargo line helpers ---------------- */
+export const emptyLandedLine = (seedIndex?: number): CargoLine => ({
+  id: typeof seedIndex === "number" ? seedId("ll", seedIndex) : nextId("ll"),
+  description: "",
+  hsCode: "",
+  qty: 1,
+  unitValue: 0,
+  weightKg: 0,
+  dutyRate: 10,
+});
+
+export const emptyExportLine = (seedIndex?: number): CargoLine => ({
+  id: typeof seedIndex === "number" ? seedId("el", seedIndex) : nextId("el"),
+  description: "",
+  hsCode: "",
+  qty: 1,
+  unitValue: 0,
+  margin: 20,
+});
+
+/* ---------------- Landed Cost (multi-line) ---------------- */
 export interface LandedInput {
-  product: number;
+  lines: CargoLine[];
   freight: number;
   insurance: number;
-  dutyRate: number;
-  gstRate: number;
   additional: number;
-  qty: number;
+  gstRate: number;
   currency: string;
+  /** How many base-currency units (e.g. INR) per 1 unit of `currency`. Optional. */
+  fxRate?: number;
+  /** Base-currency code shown in the FX hint, e.g. "INR". */
+  baseCurrency?: string;
 }
 
 export function calcLanded(i: LandedInput): CalcResult {
-  const subtotal = i.product + i.freight + i.insurance + i.additional;
-  const duty = subtotal * (i.dutyRate / 100);
-  const gst = (subtotal + duty) * (i.gstRate / 100);
-  const total = subtotal + duty + gst;
-  const perUnit = i.qty > 0 ? total / i.qty : 0;
+  const lineRows: string[][] = [];
+  let goodsValue = 0;
+  let totalDuty = 0;
+  let totalQty = 0;
+
+  for (const ln of i.lines ?? []) {
+    const lineSubtotal = ln.qty * ln.unitValue;
+    const lineDuty = lineSubtotal * ((ln.dutyRate ?? 0) / 100);
+    goodsValue += lineSubtotal;
+    totalDuty += lineDuty;
+    totalQty += ln.qty;
+    lineRows.push([
+      ln.description || "—",
+      ln.hsCode || "—",
+      fmtInt(ln.qty),
+      fmtMoney(ln.unitValue, i.currency),
+      fmtMoney(lineSubtotal, i.currency),
+      `${fmt(ln.dutyRate ?? 0, 2)}%`,
+      fmtMoney(lineDuty, i.currency),
+    ]);
+  }
+
+  const cif = goodsValue + i.freight + i.insurance + i.additional;
+  const gst = (cif + totalDuty) * (i.gstRate / 100);
+  const total = cif + totalDuty + gst;
+  const perUnit = totalQty > 0 ? total / totalQty : 0;
+
+  const fx = i.fxRate && i.fxRate > 0 ? i.fxRate : 0;
+  const base = i.baseCurrency || "INR";
+  const fxHint = (n: number) => (fx > 0 ? ` (≈ ${base} ${fmt(n * fx, 2)})` : "");
 
   return {
     type: "landed",
     title: "Landed Cost",
     items: [
-      { label: "Subtotal (CIF + Add'l)", value: fmtMoney(subtotal, i.currency) },
-      { label: `Customs Duty (${i.dutyRate}%)`, value: fmtMoney(duty, i.currency) },
-      { label: `GST (${i.gstRate}%)`, value: fmtMoney(gst, i.currency) },
-      { label: "Total Landed Cost", value: fmtMoney(total, i.currency), highlight: true },
-      ...(i.qty > 0
-        ? [{ label: "Per Unit Cost", value: fmtMoney(perUnit, i.currency) }]
+      { label: "Goods Value (sum of lines)", value: fmtMoney(goodsValue, i.currency) },
+      { label: "Freight + Insurance + Other", value: fmtMoney(i.freight + i.insurance + i.additional, i.currency) },
+      { label: "CIF Value", value: fmtMoney(cif, i.currency) },
+      { label: "Total Customs Duty", value: fmtMoney(totalDuty, i.currency) },
+      { label: `${i.gstRate}% GST/VAT on (CIF + Duty)`, value: fmtMoney(gst, i.currency) },
+      {
+        label: "Total Landed Cost" + fxHint(total),
+        value: fmtMoney(total, i.currency),
+        highlight: true,
+      },
+      ...(totalQty > 0
+        ? [{ label: "Avg. Per Unit Cost", value: fmtMoney(perUnit, i.currency) }]
         : []),
     ],
     text:
-      `Landed Cost Breakdown\n` +
-      `Subtotal: ${fmtMoney(subtotal, i.currency)}\n` +
-      `Duty (${i.dutyRate}%): ${fmtMoney(duty, i.currency)}\n` +
-      `GST (${i.gstRate}%): ${fmtMoney(gst, i.currency)}\n` +
+      `Landed Cost (${i.currency})\n` +
+      `${(i.lines ?? []).length} line item(s) • Goods: ${fmtMoney(goodsValue, i.currency)}\n` +
+      `Duty: ${fmtMoney(totalDuty, i.currency)} | GST/VAT: ${fmtMoney(gst, i.currency)}\n` +
       `Total Landed Cost: ${fmtMoney(total, i.currency)}`,
+    lines: {
+      headers: ["Description", "HS Code", "Qty", "Unit Value", "Subtotal", "Duty %", "Duty"],
+      rows: lineRows,
+    },
   };
 }
 
-/* ---------------- Export Price ---------------- */
+/* ---------------- Export Price (multi-line) ---------------- */
 export interface ExportInput {
-  cost: number;
+  lines: CargoLine[];
   freight: number;
   insurance: number;
-  margin: number;
   additional: number;
-  qty: number;
   currency: string;
+  fxRate?: number;
+  baseCurrency?: string;
 }
 
 export function calcExport(i: ExportInput): CalcResult {
-  const fob = i.cost + i.freight + i.additional;
-  const cif = fob + i.insurance;
-  const selling = cif * (1 + i.margin / 100);
-  const profit = selling - i.cost;
-  const realMargin = i.cost > 0 ? (profit / i.cost) * 100 : 0;
-  const perUnit = i.qty > 0 ? selling / i.qty : 0;
+  const lineRows: string[][] = [];
+  let totalCost = 0;
+  let totalQty = 0;
+  // First pass: per-line cost share
+  const baseCosts: number[] = (i.lines ?? []).map((ln) => ln.qty * ln.unitValue);
+  totalCost = baseCosts.reduce((a, b) => a + b, 0);
+  totalQty = (i.lines ?? []).reduce((a, b) => a + b.qty, 0);
+
+  const sharedFI = i.freight + i.insurance + i.additional;
+
+  let totalFob = 0;
+  let totalCif = 0;
+  let totalSelling = 0;
+
+  (i.lines ?? []).forEach((ln, idx) => {
+    const lineCost = baseCosts[idx];
+    const share = totalCost > 0 ? lineCost / totalCost : 0;
+    const lineFI = sharedFI * share;
+    const lineFob = lineCost + i.freight * share + i.additional * share;
+    const lineCif = lineFob + i.insurance * share;
+    const lineSelling = lineCif * (1 + (ln.margin ?? 0) / 100);
+    totalFob += lineFob;
+    totalCif += lineCif;
+    totalSelling += lineSelling;
+    lineRows.push([
+      ln.description || "—",
+      ln.hsCode || "—",
+      fmtInt(ln.qty),
+      fmtMoney(ln.unitValue, i.currency),
+      fmtMoney(lineCost, i.currency),
+      fmtMoney(lineFI, i.currency),
+      `${fmt(ln.margin ?? 0, 2)}%`,
+      fmtMoney(lineSelling, i.currency),
+    ]);
+  });
+
+  const profit = totalSelling - totalCost;
+  const blendedMargin = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+  const perUnit = totalQty > 0 ? totalSelling / totalQty : 0;
+
+  const fx = i.fxRate && i.fxRate > 0 ? i.fxRate : 0;
+  const base = i.baseCurrency || "INR";
+  const fxHint = (n: number) => (fx > 0 ? ` (≈ ${base} ${fmt(n * fx, 2)})` : "");
 
   return {
     type: "export",
     title: "Export Price",
     items: [
-      { label: "FOB Price", value: fmtMoney(fob, i.currency) },
-      { label: "CIF Price", value: fmtMoney(cif, i.currency) },
-      { label: "Selling Price", value: fmtMoney(selling, i.currency), highlight: true },
-      { label: "Profit", value: fmtMoney(profit, i.currency) },
-      { label: "Effective Margin", value: `${fmt(realMargin, 2)} %` },
-      ...(i.qty > 0
-        ? [{ label: "Per Unit Selling Price", value: fmtMoney(perUnit, i.currency) }]
+      { label: "Total Cost (sum of lines)", value: fmtMoney(totalCost, i.currency) },
+      { label: "Total FOB", value: fmtMoney(totalFob, i.currency) },
+      { label: "Total CIF", value: fmtMoney(totalCif, i.currency) },
+      {
+        label: "Total Selling Price" + fxHint(totalSelling),
+        value: fmtMoney(totalSelling, i.currency),
+        highlight: true,
+      },
+      { label: "Total Profit", value: fmtMoney(profit, i.currency) },
+      { label: "Blended Margin", value: `${fmt(blendedMargin, 2)} %` },
+      ...(totalQty > 0
+        ? [{ label: "Avg. Per Unit Selling Price", value: fmtMoney(perUnit, i.currency) }]
         : []),
     ],
     text:
-      `Export Price\n` +
-      `FOB: ${fmtMoney(fob, i.currency)} | CIF: ${fmtMoney(cif, i.currency)}\n` +
-      `Selling: ${fmtMoney(selling, i.currency)} | Profit: ${fmtMoney(profit, i.currency)}`,
+      `Export Price (${i.currency})\n` +
+      `${(i.lines ?? []).length} line item(s) • Cost: ${fmtMoney(totalCost, i.currency)}\n` +
+      `FOB: ${fmtMoney(totalFob, i.currency)} | CIF: ${fmtMoney(totalCif, i.currency)}\n` +
+      `Selling: ${fmtMoney(totalSelling, i.currency)} | Profit: ${fmtMoney(profit, i.currency)}`,
+    lines: {
+      headers: ["Description", "HS Code", "Qty", "Unit Cost", "Line Cost", "F+I Share", "Margin %", "Selling"],
+      rows: lineRows,
+    },
   };
 }
 
@@ -242,7 +336,7 @@ export interface CompareInput {
   seaDays: number;
   airFreight: number;
   airDays: number;
-  dailyRate: number; // % per day on product value (working capital)
+  dailyRate: number;
   productValue: number;
   handling: number;
 }
@@ -302,7 +396,7 @@ export function calcRisk(i: RiskInput): CalcResult {
   if (exposurePct > 50 || chargeableDays > 10) risk = "High";
   else if (exposurePct > 15 || chargeableDays > 3) risk = "Medium";
 
-  const totalCost = demurrage + exposure * 0.05; // 5% expected loss factor
+  const totalCost = demurrage + exposure * 0.05;
 
   return {
     type: "risk",
@@ -317,7 +411,7 @@ export function calcRisk(i: RiskInput): CalcResult {
       { label: "Estimated Total Cost", value: fmtMoney(totalCost) },
     ],
     text:
-      `Demurrage & Risk (${i.port})\n` +
+      `Demurrage & Risk (${i.port || "—"})\n` +
       `Container: ${i.containerType} | Cargo: ${i.cargoType}\n` +
       `Demurrage: ${fmtMoney(demurrage)} (${chargeableDays} chargeable days)\n` +
       `Risk Level: ${risk}`,

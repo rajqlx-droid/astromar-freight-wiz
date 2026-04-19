@@ -1,10 +1,19 @@
 import { useMemo } from "react";
+import { Plus, Trash2, Copy as CopyIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
-import { calcExport, type ExportInput } from "@/lib/freight/calculators";
+import {
+  calcExport,
+  emptyExportLine,
+  fmt,
+  type ExportInput,
+} from "@/lib/freight/calculators";
+import type { CargoLine } from "@/lib/freight/types";
+import { nextId } from "@/lib/freight/ids";
 
 interface Props {
   state: ExportInput;
@@ -15,61 +24,139 @@ export function ExportCalculator({ state, setState }: Props) {
   const result = useMemo(() => calcExport(state), [state]);
   const set = (patch: Partial<ExportInput>) => setState({ ...state, ...patch });
 
-  const marginPct = Math.min(100, Math.max(0, state.margin));
+  const updateLine = (id: string, patch: Partial<CargoLine>) =>
+    set({ lines: state.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
+
+  const addLine = () => set({ lines: [...state.lines, emptyExportLine()] });
+  const removeLine = (id: string) =>
+    set({ lines: state.lines.length > 1 ? state.lines.filter((l) => l.id !== id) : state.lines });
+  const dupLine = (id: string) => {
+    const src = state.lines.find((l) => l.id === id);
+    if (!src) return;
+    set({ lines: [...state.lines, { ...src, id: nextId("el") }] });
+  };
 
   const inputsTable = [
-    { label: "Cost Price", value: `${state.currency}${state.cost}` },
+    { label: "Currency", value: `${state.currency}${state.fxRate && state.fxRate > 0 ? ` (1 ${state.currency} ≈ ${state.baseCurrency || "INR"} ${fmt(state.fxRate, 4)})` : ""}` },
+    { label: "Line Items", value: String(state.lines.length) },
     { label: "Freight", value: `${state.currency}${state.freight}` },
     { label: "Insurance", value: `${state.currency}${state.insurance}` },
-    { label: "Additional", value: `${state.currency}${state.additional}` },
-    { label: "Margin", value: `${state.margin}%` },
-    { label: "Quantity", value: String(state.qty || "—") },
+    { label: "Other Charges", value: `${state.currency}${state.additional}` },
   ];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
+        {/* Currency + FX */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="mb-2 flex items-center gap-2">
-            <Label className="text-xs font-semibold text-brand-navy">Currency</Label>
-            <Select value={state.currency} onValueChange={(v) => set({ currency: v })}>
-              <SelectTrigger className="h-8 w-auto min-w-[120px] border-2 border-brand-navy/30 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="₹">₹ Indian Rupee</SelectItem>
-                <SelectItem value="$">$ US Dollar</SelectItem>
-                <SelectItem value="€">€ Euro</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-3">
-            <NumberField compact id="ec" label="Cost Price" required value={state.cost} onChange={(n) => set({ cost: n })} hint="Your COGS for the export shipment." />
-            <NumberField compact id="ef" label="Freight" required value={state.freight} onChange={(n) => set({ freight: n })} hint="Outbound freight to destination." />
-            <NumberField compact id="ei" label="Insurance" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Premium added to FOB to derive CIF." />
-            <NumberField compact id="em" label="Margin" suffix="%" required value={state.margin} onChange={(n) => set({ margin: n })} hint="Markup over CIF you want to charge." />
-            <NumberField compact id="ea" label="Additional" value={state.additional} onChange={(n) => set({ additional: n })} hint="Packaging, handling, documentation." />
-            <NumberField compact id="eq" label="Quantity" step={1} value={state.qty} onChange={(n) => set({ qty: Math.max(0, Math.round(n)) })} hint="Optional — derives per-unit selling price." />
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-brand-navy">Currency Code</Label>
+              <Input
+                value={state.currency}
+                onChange={(e) => set({ currency: e.target.value.toUpperCase().slice(0, 5) })}
+                placeholder="USD, EUR, INR…"
+                className="h-9 border-2 border-brand-navy/30 text-sm uppercase"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-brand-navy">Base Currency</Label>
+              <Input
+                value={state.baseCurrency ?? "INR"}
+                onChange={(e) => set({ baseCurrency: e.target.value.toUpperCase().slice(0, 5) })}
+                placeholder="INR"
+                className="h-9 border-2 border-brand-navy/30 text-sm uppercase"
+              />
+            </div>
+            <NumberField
+              compact
+              id="efx"
+              label={`FX Rate (1 ${state.currency || "—"} → ${state.baseCurrency || "INR"})`}
+              value={state.fxRate ?? 0}
+              onChange={(n) => set({ fxRate: n })}
+              hint="Manual exchange rate. Leave 0 to skip the conversion hint."
+            />
           </div>
         </Card>
 
+        {/* Line items */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-brand-navy">Margin</span>
-            <span className="font-semibold text-brand-orange">{marginPct.toFixed(1)}%</span>
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-brand-navy">Cargo Line Items</h4>
+            <Button size="sm" onClick={addLine} className="text-white" style={{ background: "var(--brand-orange)" }}>
+              <Plus className="size-3.5" /> Add line
+            </Button>
           </div>
-          <div className="mt-2 h-3 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{
-                width: `${marginPct}%`,
-                background: "linear-gradient(90deg, var(--brand-orange), var(--brand-orange-strong))",
-              }}
-            />
+          <div className="space-y-3">
+            {state.lines.map((ln, idx) => {
+              const lineCost = ln.qty * ln.unitValue;
+              const selling = lineCost * (1 + (ln.margin ?? 0) / 100);
+              return (
+                <div
+                  key={ln.id}
+                  className="rounded-lg border p-2"
+                  style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 15%, transparent)" }}
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-brand-navy">Line {idx + 1}</span>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" className="size-7" onClick={() => dupLine(ln.id)} title="Duplicate">
+                        <CopyIcon className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-7 text-destructive"
+                        onClick={() => removeLine(ln.id)}
+                        disabled={state.lines.length === 1}
+                        title="Remove"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+                    <div className="col-span-2 space-y-1 md:col-span-2">
+                      <Label className="text-[11px] text-muted-foreground">Description</Label>
+                      <Input
+                        value={ln.description}
+                        onChange={(e) => updateLine(ln.id, { description: e.target.value })}
+                        placeholder="e.g. Brass valves"
+                        className="h-9 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">HS Code</Label>
+                      <Input
+                        value={ln.hsCode}
+                        onChange={(e) => updateLine(ln.id, { hsCode: e.target.value })}
+                        placeholder="7419.99"
+                        className="h-9 text-xs"
+                      />
+                    </div>
+                    <NumberField compact id={`eq-${ln.id}`} label="Qty" step={1} value={ln.qty} onChange={(n) => updateLine(ln.id, { qty: Math.max(0, Math.round(n)) })} />
+                    <NumberField compact id={`euc-${ln.id}`} label={`Unit Cost (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
+                    <NumberField compact id={`em-${ln.id}`} label="Margin %" suffix="%" value={ln.margin ?? 0} onChange={(n) => updateLine(ln.id, { margin: n })} />
+                  </div>
+                  <div className="mt-1 text-right text-[11px] text-muted-foreground">
+                    Cost: <span className="font-semibold text-brand-navy">{state.currency}{fmt(lineCost)}</span>
+                    {" • "}Selling (excl. F&I share): <span className="font-semibold text-brand-orange">{state.currency}{fmt(selling)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <p className="mt-2 text-[11px] text-muted-foreground">
-            Healthy export margins typically sit between 15–35% depending on category and incoterm.
-          </p>
+        </Card>
+
+        {/* Shared charges */}
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <h4 className="mb-2 text-sm font-semibold text-brand-navy">Shared Outbound Charges</h4>
+          <p className="mb-2 text-[11px] text-muted-foreground">Allocated across lines by value share.</p>
+          <div className="grid grid-cols-3 gap-2">
+            <NumberField compact id="ef" label={`Freight (${state.currency})`} required value={state.freight} onChange={(n) => set({ freight: n })} hint="Outbound freight to destination." />
+            <NumberField compact id="ei" label={`Insurance (${state.currency})`} value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Premium added to FOB to derive CIF." />
+            <NumberField compact id="ea" label={`Other (${state.currency})`} value={state.additional} onChange={(n) => set({ additional: n })} hint="Packaging, handling, documentation." />
+          </div>
         </Card>
       </div>
       <ResultsCard result={result} inputsTable={inputsTable} />

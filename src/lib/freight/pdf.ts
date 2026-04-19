@@ -67,6 +67,22 @@ export function downloadResultPdf(
     y = (doc.lastAutoTable?.finalY ?? y) + 20;
   }
 
+  // Per-line breakdown (Landed / Export multi-line)
+  if (result.lines && result.lines.rows.length) {
+    autoTable(doc, {
+      startY: y,
+      head: [result.lines.headers],
+      body: result.lines.rows,
+      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold" },
+      bodyStyles: { textColor: 40 },
+      alternateRowStyles: { fillColor: [240, 245, 251] },
+      styles: { fontSize: 9, cellPadding: 5 },
+      margin: { left: 40, right: 40 },
+    });
+    // @ts-expect-error autotable injects lastAutoTable
+    y = (doc.lastAutoTable?.finalY ?? y) + 16;
+  }
+
   autoTable(doc, {
     startY: y,
     head: [["Result", "Value"]],
