@@ -127,6 +127,9 @@ export function LoadingRowsPanel({
   // Refs to each row <li> so we can scroll the active row into view when the
   // 3D step-load mode advances. Map is rebuilt every render — cheap and safe.
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
+  // Track previous active row idx so we only scroll on row transitions, not
+  // on every pallet step within the same row during Play All.
+  const prevActiveRowIdx = useRef<number | null>(null);
 
   // Clear preview if the pack changes (re-pack invalidates placedIdx mapping).
   useEffect(() => {
@@ -139,16 +142,45 @@ export function LoadingRowsPanel({
   // Keep this panel in sync with the 3D row stepper: auto-open the active row
   // and scroll it into view so the user sees the matching loader instructions.
   useEffect(() => {
-    if (activeRowIdx == null) return;
+    if (activeRowIdx == null) {
+      prevActiveRowIdx.current = null;
+      return;
+    }
     setOpenRows((prev) => {
       if (prev.has(activeRowIdx)) return prev;
       const next = new Set(prev);
       next.add(activeRowIdx);
       return next;
     });
+
+    // Only scroll when the row index actually changes (not on every pallet
+    // tick within the same row during Play All).
+    const rowChanged = prevActiveRowIdx.current !== activeRowIdx;
+    prevActiveRowIdx.current = activeRowIdx;
+    if (!rowChanged) return;
+
     const el = rowRefs.current.get(activeRowIdx);
-    if (el && typeof el.scrollIntoView === "function") {
-      el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (!el) return;
+
+    // Find the nearest scrollable ancestor. If none, skip — never scroll the
+    // window, which would yank the user away from the 3D viewer above.
+    let parent: HTMLElement | null = el.parentElement;
+    while (parent && parent !== document.body) {
+      const style = window.getComputedStyle(parent);
+      const overflowY = style.overflowY;
+      const scrollable =
+        (overflowY === "auto" || overflowY === "scroll") &&
+        parent.scrollHeight > parent.clientHeight;
+      if (scrollable) {
+        const offset = el.offsetTop - parent.offsetTop;
+        const max = parent.scrollHeight - parent.clientHeight;
+        parent.scrollTo({
+          top: Math.max(0, Math.min(offset, max)),
+          behavior: "smooth",
+        });
+        break;
+      }
+      parent = parent.parentElement;
     }
   }, [activeRowIdx]);
 
