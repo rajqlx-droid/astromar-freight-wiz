@@ -10,12 +10,30 @@ import type { CalcResult } from "./types";
 const NAVY: [number, number, number] = [27, 58, 107];      // #1B3A6B
 const ORANGE: [number, number, number] = [249, 115, 22];   // #F97316
 
+export interface PdfLoadingRow {
+  rowIdx: number;
+  xStartM: number;
+  xEndM: number;
+  pkgCount: number;
+  layers: number;
+  cbm: number;
+  weightKg: number;
+  hasFragile: boolean;
+  hasNonStack: boolean;
+  rotatedCount: number;
+  items: { itemIdx: number; count: number; color: string; packageType: string }[];
+  instruction: string;
+}
+
 export interface PdfExtras {
   /** Optional 3D snapshots (PNG dataURLs) for container load visualisation. */
   snapshots?: { iso?: string; front?: string; side?: string };
   /** Optional load report rows (per-item fit summary). */
   loadReport?: { label: string; value: string }[];
+  /** Optional row-by-row loading guide (back wall to door). */
+  loadingRows?: PdfLoadingRow[];
 }
+
 
 export function downloadResultPdf(
   result: CalcResult,
