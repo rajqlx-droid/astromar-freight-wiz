@@ -156,7 +156,6 @@ export function ContainerLoadView({
         ))}
         <div className="ml-auto flex items-center gap-2">
           <div title={optimizationDisabledReason ?? undefined} className={cn("flex items-center gap-2", optimizationDisabledReason && "pointer-events-none opacity-50")}>
-            <ScenarioSnapshotButton pack={activePack} items={items} />
             <LoadingVideoButton
               pack={activePack}
               containerLabel={activePack.container.name}
