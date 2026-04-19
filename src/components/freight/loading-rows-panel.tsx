@@ -273,12 +273,20 @@ export function LoadingRowsPanel({ pack }: Props) {
 
               {isOpen && (
                 <div className="space-y-2 bg-muted/20 px-3 pb-3 pt-1">
-                  {/* Mini side-view of just this row */}
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Side view (looking down container length)
-                    </span>
-                    <RowSideView row={row} pack={pack} />
+                  {/* Two projections of just this row */}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Door view (W × H, looking in from door)
+                      </span>
+                      <RowProjection svg={buildRowSideViewSvg(row, pack)} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Side view (depth × H, looking from side wall)
+                      </span>
+                      <RowProjection svg={buildRowFrontViewSvg(row, pack)} />
+                    </div>
                   </div>
 
                   {/* Item color chips */}
