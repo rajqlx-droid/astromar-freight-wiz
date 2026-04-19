@@ -229,10 +229,28 @@ export function LoadingRowsPanel({ pack }: Props) {
         .view-label { font-size: 8px; font-weight: 600; color: #777; letter-spacing: 0.4px; text-transform: uppercase; }
         .row-body-text { display: flex; flex-direction: column; gap: 6px; }
         .footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #d6dde8; color: #777; font-size: 9px; }
+        .eff { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid; }
+        .eff.green { background: #d1fae5; border-color: #059669; color: #065f46; }
+        .eff.amber { background: #fef3c7; border-color: #d97706; color: #92400e; }
+        .eff.red { background: #ffe4e6; border-color: #e11d48; color: #9f1239; }
+        .eff .pct { font-size: 18px; font-weight: 800; min-width: 48px; }
+        .eff .label { font-size: 11px; font-weight: 700; color: #1B3A6B; }
+        .eff .sub { font-size: 10px; }
       </style></head><body>
       <h1>Loading Checklist — Row by Row</h1>
       <div class="sub">${rows.length} row${rows.length > 1 ? "s" : ""} · back wall to door · heavy threshold ${heavyThreshold} kg/pkg · generated ${new Date().toLocaleString("en-IN")}</div>
       <div class="accent"></div>
+      ${
+        efficiency.rowCount > 0
+          ? `<div class="eff ${efficiency.status}"><span class="pct">${Math.round(efficiency.scorePct)}%</span><div><div class="label">Container wall efficiency target</div><div class="sub">${
+              efficiency.status === "green"
+                ? "● Optimal — all rows tight to back wall."
+                : efficiency.status === "amber"
+                  ? `● Close gaps — ${efficiency.gapRowCount} of ${efficiency.rowCount} row${efficiency.rowCount > 1 ? "s" : ""} need re-shuffle.`
+                  : `● Re-shuffle needed — ${efficiency.gapRowCount} of ${efficiency.rowCount} row${efficiency.rowCount > 1 ? "s" : ""} flagged.`
+            }</div></div></div>`
+          : ""
+      }
       <ol>${rowsHtml}</ol>
       <div class="footer">Always work from the back wall outward — never climb on loaded cargo. Build each row to full height before advancing toward the door. Tick the box once a row is fully loaded and verified.</div>
       <script>window.addEventListener('load', () => { setTimeout(() => window.print(), 250); });</script>
