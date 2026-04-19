@@ -671,9 +671,6 @@ const CogOverlay: React.FC<{
   cogFrac: number;
   safeOk: boolean;
 }> = ({ cam, containerL, containerW, cogFrac, safeOk }) => {
-  // Lazily import project to keep this scene self-contained
-  // We use SVG positioned absolutely on top of the ContainerScene SVG.
-  const { project } = require("./projection") as typeof import("./projection");
   // Safe zone polygon (40-60% of L)
   const x1 = 0.4 * containerL;
   const x2 = 0.6 * containerL;
