@@ -477,41 +477,28 @@ function FreightIntelligencePage() {
           )}
         </section>
 
-        {/* CALCULATOR + (desktop) sticky history */}
+        {/* CALCULATOR — full width; History is in the header sheet */}
         <section className="mx-auto max-w-7xl px-3 pb-10 md:px-4">
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="mb-4 flex items-center gap-3">
+            <div
+              aria-hidden
+              className="h-8 w-1.5 rounded-full"
+              style={{ background: "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))" }}
+            />
             <div>
-              <div className="mb-4 flex items-center gap-3">
-                <div
-                  aria-hidden
-                  className="h-8 w-1.5 rounded-full"
-                  style={{ background: "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))" }}
-                />
-                <div>
-                  <h2 className="text-lg font-bold text-brand-navy md:text-xl">{meta.label} Calculator</h2>
-                  <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
-                </div>
-              </div>
-
-              {active === "cbm" && <CbmCalculator items={cbmItems} setItems={setCbmItems} />}
-              {active === "air" && (
-                <AirCalculator items={airItems} setItems={setAirItems} divisor={airDivisor} setDivisor={setAirDivisor} />
-              )}
-              {active === "landed" && <LandedCalculator state={landed} setState={setLanded} onDuplicateToExport={duplicateLandedToExport} />}
-              {active === "export" && <ExportCalculator state={exp} setState={setExp} />}
-              {active === "compare" && <CompareCalculator state={compare} setState={setCompare} />}
-              {active === "risk" && <RiskCalculator state={risk} setState={setRisk} />}
+              <h2 className="text-lg font-bold text-brand-navy md:text-xl">{meta.label} Calculator</h2>
+              <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
             </div>
-
-            <aside className="no-print hidden lg:block">
-              <div
-                className="sticky top-[140px] overflow-hidden rounded-xl border-2 bg-card"
-                style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)", maxHeight: "calc(100vh - 160px)" }}
-              >
-                <HistoryPanel />
-              </div>
-          </aside>
           </div>
+
+          {active === "cbm" && <CbmCalculator items={cbmItems} setItems={setCbmItems} />}
+          {active === "air" && (
+            <AirCalculator items={airItems} setItems={setAirItems} divisor={airDivisor} setDivisor={setAirDivisor} />
+          )}
+          {active === "landed" && <LandedCalculator state={landed} setState={setLanded} onDuplicateToExport={duplicateLandedToExport} />}
+          {active === "export" && <ExportCalculator state={exp} setState={setExp} />}
+          {active === "compare" && <CompareCalculator state={compare} setState={setCompare} />}
+          {active === "risk" && <RiskCalculator state={risk} setState={setRisk} />}
         </section>
 
         {/* Mobile-only sticky bottom result bar (mirrors active calculator's result) */}
