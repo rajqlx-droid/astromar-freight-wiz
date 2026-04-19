@@ -799,6 +799,9 @@ function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
         <meshStandardMaterial color="#111827" />
       </mesh>
 
+      {/* Driver figure — sits in the seat, faces forward (-x toward forks) */}
+      <ForkliftDriver />
+
       {/* Wheels */}
       {([
         [-0.35, 0.18, -0.5],
@@ -849,6 +852,67 @@ function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
   );
 }
 
+/* --------------- Forklift driver figure --------------- */
+
+function ForkliftDriver() {
+  // Tiny stylised driver: hi-vis vest, hard hat, head, arms on the wheel.
+  // Origin = forklift local space; seat sits at x=0.25, y=0.6, facing -x.
+  const VEST = "#facc15"; // hi-vis yellow
+  const SKIN = "#e6b89a";
+  const HAT = "#fb923c";  // orange hard hat
+  const PANTS = "#1f2937";
+  return (
+    <group position={[0.25, 0.6, 0]}>
+      {/* Hips / lap (sitting) */}
+      <mesh castShadow position={[0, 0.08, 0]}>
+        <boxGeometry args={[0.22, 0.12, 0.28]} />
+        <meshStandardMaterial color={PANTS} roughness={0.85} />
+      </mesh>
+      {/* Thighs extend forward toward the steering wheel (-x) */}
+      <mesh castShadow position={[-0.14, 0.06, -0.08]}>
+        <boxGeometry args={[0.22, 0.1, 0.1]} />
+        <meshStandardMaterial color={PANTS} roughness={0.85} />
+      </mesh>
+      <mesh castShadow position={[-0.14, 0.06, 0.08]}>
+        <boxGeometry args={[0.22, 0.1, 0.1]} />
+        <meshStandardMaterial color={PANTS} roughness={0.85} />
+      </mesh>
+      {/* Torso (hi-vis vest) — sits up against backrest */}
+      <mesh castShadow position={[0.06, 0.28, 0]}>
+        <boxGeometry args={[0.18, 0.34, 0.3]} />
+        <meshStandardMaterial color={VEST} roughness={0.7} emissive={VEST} emissiveIntensity={0.18} />
+      </mesh>
+      {/* Reflective stripe on vest */}
+      <mesh position={[0.06, 0.22, 0]}>
+        <boxGeometry args={[0.181, 0.04, 0.301]} />
+        <meshStandardMaterial color="#f5f5f5" roughness={0.4} emissive="#f5f5f5" emissiveIntensity={0.15} />
+      </mesh>
+      {/* Arms reaching forward to wheel */}
+      <mesh castShadow position={[-0.08, 0.32, -0.18]} rotation={[0, 0, 0.3]}>
+        <boxGeometry args={[0.22, 0.07, 0.07]} />
+        <meshStandardMaterial color={VEST} roughness={0.7} />
+      </mesh>
+      <mesh castShadow position={[-0.08, 0.32, 0.18]} rotation={[0, 0, 0.3]}>
+        <boxGeometry args={[0.22, 0.07, 0.07]} />
+        <meshStandardMaterial color={VEST} roughness={0.7} />
+      </mesh>
+      {/* Head */}
+      <mesh castShadow position={[0.08, 0.55, 0]}>
+        <sphereGeometry args={[0.1, 16, 12]} />
+        <meshStandardMaterial color={SKIN} roughness={0.85} />
+      </mesh>
+      {/* Hard hat — flat dome with brim */}
+      <mesh castShadow position={[0.08, 0.62, 0]}>
+        <sphereGeometry args={[0.11, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color={HAT} roughness={0.6} />
+      </mesh>
+      <mesh position={[0.04, 0.62, 0]}>
+        <cylinderGeometry args={[0.13, 0.13, 0.012, 16]} />
+        <meshStandardMaterial color={HAT} roughness={0.6} />
+      </mesh>
+    </group>
+  );
+}
 function CargoBox({
   box,
   stat,

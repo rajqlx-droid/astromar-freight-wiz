@@ -227,7 +227,6 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
                   src={url}
                   controls
                   autoPlay
-                  muted
                   playsInline
                   className="h-auto w-full"
                 />
