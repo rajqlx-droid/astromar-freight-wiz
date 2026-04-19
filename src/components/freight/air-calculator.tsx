@@ -1,9 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2, Copy, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
+import {
+  UnitSelector,
+  type LengthUnit,
+  cmTo,
+  toCm,
+} from "@/components/freight/unit-selector";
 import { calcAir, emptyAirItem, type AirItem } from "@/lib/freight/calculators";
 import { nextId } from "@/lib/freight/ids";
 
@@ -15,6 +21,7 @@ interface Props {
 }
 
 export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
+  const [unit, setUnit] = useState<LengthUnit>("cm");
   const result = useMemo(() => calcAir(items, divisor), [items, divisor]);
 
   const update = (id: string, patch: Partial<AirItem>) =>
@@ -24,6 +31,14 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
     const src = items.find((i) => i.id === id);
     if (src) setItems([...items, { ...src, id: nextId("air") }]);
   };
+
+  const showVal = (cm: number) => {
+    const v = cmTo(cm, unit);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const setLen =
+    (id: string, key: "length" | "width" | "height") => (n: number) =>
+      update(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<AirItem>);
 
   const warn = result.items.find((i) => i.label === "Cost Impact" && i.value.startsWith("+"));
 
@@ -36,8 +51,11 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-4">
         <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <NumberField id="divisor" label="Volumetric Divisor" required step={1} value={divisor} onChange={(n) => setDivisor(n || 6000)} hint="IATA standard is 6000 for air freight. Some couriers use 5000." />
+            <div className="flex items-end">
+              <UnitSelector id="air-unit" value={unit} onChange={setUnit} />
+            </div>
           </div>
         </Card>
 
@@ -57,9 +75,9 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <NumberField id={`al-${it.id}`} label="Length" suffix="cm" required value={it.length} onChange={(n) => update(it.id, { length: n })} />
-              <NumberField id={`aw-${it.id}`} label="Width" suffix="cm" required value={it.width} onChange={(n) => update(it.id, { width: n })} />
-              <NumberField id={`ah-${it.id}`} label="Height" suffix="cm" required value={it.height} onChange={(n) => update(it.id, { height: n })} />
+              <NumberField id={`al-${it.id}`} label="Length" suffix={unit} required value={showVal(it.length)} onChange={setLen(it.id, "length")} />
+              <NumberField id={`aw-${it.id}`} label="Width" suffix={unit} required value={showVal(it.width)} onChange={setLen(it.id, "width")} />
+              <NumberField id={`ah-${it.id}`} label="Height" suffix={unit} required value={showVal(it.height)} onChange={setLen(it.id, "height")} />
               <NumberField id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
               <NumberField id={`awt-${it.id}`} label="Actual Wt" suffix="kg" required value={it.weight} onChange={(n) => update(it.id, { weight: n })} />
             </div>
