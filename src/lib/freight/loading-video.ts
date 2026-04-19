@@ -83,26 +83,38 @@ export interface GeneratedVideo {
  * Returns a stable order array of indices into pack.placed.
  */
 function loadingOrder(pack: AdvancedPackResult): number[] {
-  // Match the 2D row viewer + 3D loading-sequence panel: pure spatial order,
-  // back-wall first (low x), bottom layer first (low z), then side-to-side
-  // (low y). This ensures the video plays the SAME sequence the user sees
-  // in the 2D rows panel and the 3D step list.
-  const idx = pack.placed.map((_, i) => i);
-  idx.sort((a, b) => {
-    const A = pack.placed[a];
-    const B = pack.placed[b];
-    // Back-to-front along container length (x slab of 300mm = one column).
-    const SLAB_MM = 300;
-    const slabA = Math.floor(A.x / SLAB_MM);
-    const slabB = Math.floor(B.x / SLAB_MM);
-    if (slabA !== slabB) return slabA - slabB;
-    // Within a column: bottom layer first.
-    if (A.z !== B.z) return A.z - B.z;
-    // Side-to-side across width.
-    if (A.y !== B.y) return A.y - B.y;
-    return A.x - B.x;
-  });
-  return idx;
+  // Use the SAME row grouping as the on-screen instructions panel and the
+  // Remotion guide video. This guarantees the in-app step animation, the
+  // downloadable MP4, and the right-hand row cards all reveal boxes in the
+  // identical back-wall-first sequence.
+  const rows = buildRows(pack);
+  if (rows.length === 0) return pack.placed.map((_, i) => i);
+
+  // Build a placed-index lookup so we can map RowGroup boxes back to indices
+  // in pack.placed (RowGroup.boxes are the same PlacedBox object refs).
+  const indexOf = new Map<PlacedBox, number>();
+  pack.placed.forEach((b, i) => indexOf.set(b, i));
+
+  const order: number[] = [];
+  for (const row of rows) {
+    // Within each row: bottom layer first (low z), then side-to-side (low y),
+    // then back-to-front (low x). Mirrors RowScene in remotion/src/LoadingGuide.
+    const sorted = [...row.boxes].sort((a, b) => {
+      if (a.z !== b.z) return a.z - b.z;
+      if (a.y !== b.y) return a.y - b.y;
+      return a.x - b.x;
+    });
+    for (const b of sorted) {
+      const idx = indexOf.get(b);
+      if (idx != null) order.push(idx);
+    }
+  }
+  // Safety: append any boxes the row groupings missed (shouldn't happen).
+  if (order.length < pack.placed.length) {
+    const seen = new Set(order);
+    for (let i = 0; i < pack.placed.length; i++) if (!seen.has(i)) order.push(i);
+  }
+  return order;
 }
 
 /** True if this placed box represents a pallet (forklift-loaded). */
