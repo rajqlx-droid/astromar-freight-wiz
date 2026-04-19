@@ -714,8 +714,16 @@ function CargoBox({
   // Stripe color encodes rotation type: yellow=sideways turn, magenta=tipped on side.
   const tiltColor = box.rotated === "axis" ? "#d946ef" : "#facc15";
 
+  // Wooden pallet under every box (only when sitting on the floor — z≈0).
+  // Pallet is ~12 cm tall; we shift the box up by pallet height so visuals
+  // stay correct without changing the underlying packing math.
+  const onFloor = box.z < 10; // mm
+  const PALLET_H = 0.12;
+  const palletLift = onFloor ? PALLET_H : 0;
+
   return (
-    <group position={[cx, cy, cz]} scale={scale}>
+    <group position={[cx, cy + palletLift, cz]} scale={scale}>
+      {onFloor && <WoodenPallet lm={lm} wm={wm} />}
       <mesh castShadow receiveShadow>
         <boxGeometry args={[lm, hm, wm]} />
         <meshStandardMaterial
