@@ -290,9 +290,16 @@ export function packContainerAdvanced(
           }
           if (!weightOk) continue;
 
-          // Score: lowest Z, then tightest to back-left (low x+y), then tightest fit.
+          // Score (back-to-front row-wise loading):
+          //   1. x position has the highest weight — fully fill the row at the
+          //      back wall before advancing forward (loaders can't climb on cargo).
+          //   2. z (height) — bottom of the current row first.
+          //   3. y position — left-to-right within the row.
+          //   4. support quality tie-break.
+          // Coefficients chosen so a 100mm advance in x always outweighs the
+          // tallest possible stack progression at the same x.
           const score =
-            ev.z * 1000 + (x + y) + (1 - ev.supportRatio) * 200;
+            x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
           if (score < bestScore) {
             bestScore = score;
             bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters };
