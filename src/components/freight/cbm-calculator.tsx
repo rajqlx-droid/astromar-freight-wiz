@@ -176,7 +176,7 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   return (
     <div className="space-y-6">
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
         {items.map((it, idx) => {
           const color = ITEM_COLORS[idx % ITEM_COLORS.length];
@@ -334,7 +334,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Card>
         )}
       </div>
-      <div className="lg:sticky lg:top-4 lg:self-start">
+      <div className="xl:sticky xl:top-[140px] xl:self-start">
       <ResultsCard
         result={result}
         inputsTable={inputsTable}

@@ -60,7 +60,7 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
   ]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
         <Card
           className="border-2 p-3"
@@ -101,7 +101,7 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
               <NumberField compact id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
               <NumberField compact id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
               <NumberField compact id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
@@ -133,7 +133,9 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
         )}
       </div>
 
-      <ResultsCard result={result} inputsTable={inputsTable} />
+      <div className="xl:sticky xl:top-[140px] xl:self-start">
+        <ResultsCard result={result} inputsTable={inputsTable} />
+      </div>
     </div>
   );
 }

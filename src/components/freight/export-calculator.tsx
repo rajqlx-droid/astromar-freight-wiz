@@ -47,7 +47,7 @@ export function ExportCalculator({ state, setState }: Props) {
   ];
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
         {/* Currency + FX */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
@@ -158,14 +158,16 @@ export function ExportCalculator({ state, setState }: Props) {
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
           <h4 className="mb-2 text-sm font-semibold text-brand-navy">Shared Outbound Charges</h4>
           <p className="mb-2 text-[11px] text-muted-foreground">Allocated across lines by value share.</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <NumberField compact id="ef" label={`Freight (${state.currency})`} required value={state.freight} onChange={(n) => set({ freight: n })} hint="Outbound freight to destination." />
             <NumberField compact id="ei" label={`Insurance (${state.currency})`} value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Premium added to FOB to derive CIF." />
             <NumberField compact id="ea" label={`Other (${state.currency})`} value={state.additional} onChange={(n) => set({ additional: n })} hint="Packaging, handling, documentation." />
           </div>
         </Card>
       </div>
-      <ResultsCard result={result} inputsTable={inputsTable} />
+      <div className="xl:sticky xl:top-[140px] xl:self-start">
+        <ResultsCard result={result} inputsTable={inputsTable} />
+      </div>
     </div>
   );
 }

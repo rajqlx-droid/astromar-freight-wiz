@@ -75,12 +75,16 @@ export function NumberField({
     : "";
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1.5">
-        <Label htmlFor={id} className="text-xs font-semibold text-brand-navy">
+    <div className="space-y-1 min-w-0">
+      <div className="flex min-w-0 items-center gap-1.5">
+        <Label
+          htmlFor={id}
+          className="min-w-0 flex-1 truncate text-xs font-semibold text-brand-navy"
+          title={`${label}${suffix ? ` (${suffix})` : ""}`}
+        >
           {label}
           {required && <span className="ml-0.5 text-brand-orange">*</span>}
-          {suffix && <span className="ml-1 text-muted-foreground">({suffix})</span>}
+          {suffix && <span className="ml-1 font-normal text-muted-foreground">({suffix})</span>}
         </Label>
         {hint && (
           <Tooltip>
@@ -88,7 +92,7 @@ export function NumberField({
               <button
                 type="button"
                 aria-label={`Help: ${label}`}
-                className="text-muted-foreground transition-colors hover:text-brand-orange"
+                className="shrink-0 text-muted-foreground transition-colors hover:text-brand-orange"
               >
                 <Info className="size-3.5" />
               </button>
