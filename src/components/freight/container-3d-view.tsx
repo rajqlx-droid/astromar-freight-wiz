@@ -494,9 +494,12 @@ function SceneContents({
 function ContainerShell({
   Cm,
   doorOpen = 1,
+  hideDoors = false,
 }: {
   Cm: { l: number; w: number; h: number };
   doorOpen?: number;
+  /** When true, the swing doors are not rendered at all (frame stays). */
+  hideDoors?: boolean;
 }) {
   // Real container: corrugated steel walls, plywood floor, painted steel frame.
   // Door is at +x. Two hinged doors swing outward — left hinges at -z corner,
