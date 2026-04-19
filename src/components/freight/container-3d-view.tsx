@@ -597,6 +597,45 @@ function ContainerShell({
   );
 }
 
+/* --------------- Wooden pallet (under every floor-level box) --------------- */
+
+function WoodenPallet({ lm, wm }: { lm: number; wm: number }) {
+  // Pallet look: top deck planks with gaps, 3×3 feet blocks, 3 bottom runners.
+  // Height = 12 cm total. Sits centred under the box.
+  const TOP = "#b8895a";
+  const BOT = "#8a6038";
+  const planks = Math.max(5, Math.round(wm / 0.18));
+  const plankW = wm / planks;
+  return (
+    <group position={[0, -0.06, 0]}>
+      {Array.from({ length: planks }).map((_, i) => {
+        if (i % 2 === 1 && i !== planks - 1) return null;
+        const z = -wm / 2 + plankW * (i + 0.5);
+        return (
+          <mesh key={`p-${i}`} position={[0, 0.05, z]} castShadow receiveShadow>
+            <boxGeometry args={[lm * 0.98, 0.022, plankW * 0.85]} />
+            <meshStandardMaterial color={TOP} roughness={0.85} />
+          </mesh>
+        );
+      })}
+      {[-lm * 0.4, 0, lm * 0.4].map((px, ix) =>
+        [-wm * 0.4, 0, wm * 0.4].map((pz, iz) => (
+          <mesh key={`b-${ix}-${iz}`} position={[px, 0, pz]} castShadow>
+            <boxGeometry args={[lm * 0.12, 0.06, wm * 0.12]} />
+            <meshStandardMaterial color={BOT} roughness={0.9} />
+          </mesh>
+        )),
+      )}
+      {[-lm * 0.4, 0, lm * 0.4].map((px, i) => (
+        <mesh key={`r-${i}`} position={[px, -0.045, 0]} castShadow receiveShadow>
+          <boxGeometry args={[lm * 0.1, 0.022, wm * 0.98]} />
+          <meshStandardMaterial color={BOT} roughness={0.9} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 /* --------------- Forklift --------------- */
 
 function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
@@ -714,8 +753,16 @@ function CargoBox({
   // Stripe color encodes rotation type: yellow=sideways turn, magenta=tipped on side.
   const tiltColor = box.rotated === "axis" ? "#d946ef" : "#facc15";
 
+  // Wooden pallet under every box (only when sitting on the floor — z≈0).
+  // Pallet is ~12 cm tall; we shift the box up by pallet height so visuals
+  // stay correct without changing the underlying packing math.
+  const onFloor = box.z < 10; // mm
+  const PALLET_H = 0.12;
+  const palletLift = onFloor ? PALLET_H : 0;
+
   return (
-    <group position={[cx, cy, cz]} scale={scale}>
+    <group position={[cx, cy + palletLift, cz]} scale={scale}>
+      {onFloor && <WoodenPallet lm={lm} wm={wm} />}
       <mesh castShadow receiveShadow>
         <boxGeometry args={[lm, hm, wm]} />
         <meshStandardMaterial
