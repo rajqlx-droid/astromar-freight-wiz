@@ -384,7 +384,6 @@ function Legend({ items }: { items: CbmItem[] }) {
   );
 }
 
-}
 
 /* ---------------- Isometric SVG (2D fallback) ---------------- */
 
