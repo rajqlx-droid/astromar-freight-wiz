@@ -686,10 +686,12 @@ async function encodeWithMediaRecorder(
   const tracks: MediaStreamTrack[] = videoStream.getVideoTracks();
   try {
     const intervals = reverseGapIntervalsSec(timeline);
-    if (intervals.length > 0 && typeof AudioContext !== "undefined") {
+    const engineWin = engineWindowSec(timeline);
+    // Always create the audio track (engine hum runs even with no reverse gaps).
+    if (typeof AudioContext !== "undefined") {
       audioCtx = new AudioContext();
       const durationSec = totalFrames / fps;
-      const buffer = buildBeepBuffer(audioCtx, durationSec, intervals);
+      const buffer = buildBeepBuffer(audioCtx, durationSec, intervals, engineWin);
       const dest = audioCtx.createMediaStreamDestination();
       audioSource = audioCtx.createBufferSource();
       audioSource.buffer = buffer;
