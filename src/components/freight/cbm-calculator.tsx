@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
 import { calcCbm, emptyCbmItem, type CbmItem } from "@/lib/freight/calculators";
+import { nextId } from "@/lib/freight/ids";
 
 interface Props {
   items: CbmItem[];
@@ -21,7 +22,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   const duplicate = (id: string) => {
     const src = items.find((it) => it.id === id);
     if (!src) return;
-    setItems([...items, { ...src, id: crypto.randomUUID() }]);
+    setItems([...items, { ...src, id: nextId("cbm") }]);
   };
   const add = () => setItems([...items, emptyCbmItem()]);
   const clear = () => setItems([emptyCbmItem()]);

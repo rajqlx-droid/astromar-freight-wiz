@@ -1,8 +1,9 @@
 /**
  * Reusable labeled number input with tooltip helper text and error state.
+ * Mobile-friendly: 44px tall touch targets and optional ± steppers.
  */
 import type { ChangeEvent } from "react";
-import { Info } from "lucide-react";
+import { Info, Minus, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -20,6 +21,8 @@ interface Props {
   placeholder?: string;
   error?: string;
   suffix?: string;
+  /** Show ±steppers for thumb-friendly editing on mobile. Defaults to true. */
+  steppers?: boolean;
 }
 
 export function NumberField({
@@ -34,6 +37,7 @@ export function NumberField({
   placeholder,
   error,
   suffix,
+  steppers = true,
 }: Props) {
   const handle = (e: ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value;
@@ -46,6 +50,12 @@ export function NumberField({
   };
 
   const display = Number.isFinite(value) ? String(value) : "";
+  const stepSize = step >= 1 ? step : 1;
+  const bump = (dir: 1 | -1) => {
+    const current = Number.isFinite(value) ? (value as number) : 0;
+    const next = current + dir * stepSize;
+    onChange(Math.max(min, next));
+  };
 
   return (
     <div className="space-y-1.5">
@@ -70,23 +80,51 @@ export function NumberField({
           </Tooltip>
         )}
       </div>
-      <Input
-        id={id}
-        type="number"
-        inputMode="decimal"
-        step={step}
-        min={min}
-        value={display}
-        onChange={handle}
-        placeholder={placeholder}
-        aria-invalid={!!error}
-        className={cn(
-          "h-10 border-2 transition-shadow focus-visible:ring-2 focus-visible:ring-brand-orange/30",
-          error
-            ? "border-destructive focus-visible:border-destructive"
-            : "border-brand-navy/30 focus-visible:border-brand-orange",
+      <div className="flex items-stretch gap-1">
+        {steppers && (
+          <button
+            type="button"
+            aria-label={`Decrease ${label}`}
+            onClick={() => bump(-1)}
+            className={cn(
+              "flex h-11 w-9 shrink-0 items-center justify-center rounded-md border-2 transition-colors md:h-10 md:w-8",
+              "border-brand-navy/30 text-brand-navy hover:border-brand-orange hover:text-brand-orange active:scale-95",
+            )}
+          >
+            <Minus className="size-3.5" />
+          </button>
         )}
-      />
+        <Input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          step={step}
+          min={min}
+          value={display}
+          onChange={handle}
+          placeholder={placeholder}
+          aria-invalid={!!error}
+          className={cn(
+            "h-11 min-w-0 flex-1 border-2 transition-shadow focus-visible:ring-2 focus-visible:ring-brand-orange/30 md:h-10",
+            error
+              ? "border-destructive focus-visible:border-destructive"
+              : "border-brand-navy/30 focus-visible:border-brand-orange",
+          )}
+        />
+        {steppers && (
+          <button
+            type="button"
+            aria-label={`Increase ${label}`}
+            onClick={() => bump(1)}
+            className={cn(
+              "flex h-11 w-9 shrink-0 items-center justify-center rounded-md border-2 transition-colors md:h-10 md:w-8",
+              "border-brand-navy/30 text-brand-navy hover:border-brand-orange hover:text-brand-orange active:scale-95",
+            )}
+          >
+            <Plus className="size-3.5" />
+          </button>
+        )}
+      </div>
       {error && <p className="text-[11px] font-medium text-destructive">{error}</p>}
     </div>
   );

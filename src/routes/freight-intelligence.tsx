@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Calculator,
@@ -34,8 +34,15 @@ import { LandedCalculator } from "@/components/freight/landed-calculator";
 import { ExportCalculator } from "@/components/freight/export-calculator";
 import { CompareCalculator } from "@/components/freight/compare-calculator";
 import { RiskCalculator } from "@/components/freight/risk-calculator";
+import { MobileResultBar } from "@/components/freight/mobile-result-bar";
 import { CALCULATORS, type CalcKey } from "@/lib/freight/types";
 import {
+  calcAir,
+  calcCbm,
+  calcCompare,
+  calcExport,
+  calcLanded,
+  calcRisk,
   emptyAirItem,
   emptyCbmItem,
   type AirItem,
@@ -120,6 +127,13 @@ function FreightIntelligencePage() {
     setBannerOpen(stored !== "0");
   }, []);
 
+  // Auto-scroll active tab into view (covers click + keyboard nav).
+  useEffect(() => {
+    const idx = CALCULATORS.findIndex((c) => c.key === active);
+    const btn = tabsRef.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[idx];
+    btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [active]);
+
   const dismissBanner = () => {
     setBannerOpen(false);
     localStorage.setItem(BANNER_KEY, "0");
@@ -130,6 +144,38 @@ function FreightIntelligencePage() {
   };
 
   const meta = CALCULATORS.find((c) => c.key === active)!;
+  const activeIdx = CALCULATORS.findIndex((c) => c.key === active);
+
+  // Compute current result + inputs at the route level so the mobile bottom bar
+  // can mirror the same data shown by ResultsCard inside each calculator.
+  const { mobileResult, mobileInputs } = useMemo(() => {
+    switch (active) {
+      case "cbm":
+        return {
+          mobileResult: calcCbm(cbmItems),
+          mobileInputs: cbmItems.flatMap((it, idx) => [
+            { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
+            { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+          ]),
+        };
+      case "air":
+        return {
+          mobileResult: calcAir(airItems, airDivisor),
+          mobileInputs: airItems.flatMap((it, idx) => [
+            { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
+            { label: `Item ${idx + 1} Qty / Actual Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+          ]),
+        };
+      case "landed":
+        return { mobileResult: calcLanded(landed), mobileInputs: undefined };
+      case "export":
+        return { mobileResult: calcExport(exp), mobileInputs: undefined };
+      case "compare":
+        return { mobileResult: calcCompare(compare), mobileInputs: undefined };
+      case "risk":
+        return { mobileResult: calcRisk(risk), mobileInputs: undefined };
+    }
+  }, [active, cbmItems, airItems, airDivisor, landed, exp, compare, risk]);
 
   const onTabKey = (e: KeyboardEvent<HTMLButtonElement>, idx: number) => {
     if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
@@ -139,7 +185,6 @@ function FreightIntelligencePage() {
       setActive(CALCULATORS[next].key);
       const btn = tabsRef.current?.querySelectorAll<HTMLButtonElement>("[role=tab]")[next];
       btn?.focus();
-      btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
     }
   };
 
@@ -265,6 +310,19 @@ function FreightIntelligencePage() {
               );
             })}
           </div>
+          {/* Active-tab progress indicator (hidden on lg where layout is calmer) */}
+          <div className="relative mx-auto max-w-7xl px-3 md:px-4" aria-hidden>
+            <div className="h-0.5 w-full overflow-hidden bg-brand-navy/10">
+              <div
+                className="h-full transition-all duration-300 ease-out"
+                style={{
+                  width: `${100 / CALCULATORS.length}%`,
+                  marginLeft: `${(100 / CALCULATORS.length) * activeIdx}%`,
+                  background: "var(--brand-orange)",
+                }}
+              />
+            </div>
+          </div>
         </div>
 
         {/* HERO + BREADCRUMB + BANNER */}
@@ -356,9 +414,12 @@ function FreightIntelligencePage() {
               >
                 <HistoryPanel />
               </div>
-            </aside>
+          </aside>
           </div>
         </section>
+
+        {/* Mobile-only sticky bottom result bar (mirrors active calculator's result) */}
+        <MobileResultBar result={mobileResult ?? null} inputsTable={mobileInputs} />
 
         {/* CTA */}
         <section className="mx-3 mb-10 md:mx-auto md:max-w-7xl md:px-4">
