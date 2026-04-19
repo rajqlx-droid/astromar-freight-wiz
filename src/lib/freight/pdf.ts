@@ -10,7 +10,18 @@ import type { CalcResult } from "./types";
 const NAVY: [number, number, number] = [27, 58, 107];      // #1B3A6B
 const ORANGE: [number, number, number] = [249, 115, 22];   // #F97316
 
-export function downloadResultPdf(result: CalcResult, inputsTable?: { label: string; value: string }[]) {
+export interface PdfExtras {
+  /** Optional 3D snapshots (PNG dataURLs) for container load visualisation. */
+  snapshots?: { iso?: string; front?: string; side?: string };
+  /** Optional load report rows (per-item fit summary). */
+  loadReport?: { label: string; value: string }[];
+}
+
+export function downloadResultPdf(
+  result: CalcResult,
+  inputsTable?: { label: string; value: string }[],
+  extras?: PdfExtras,
+) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
 
