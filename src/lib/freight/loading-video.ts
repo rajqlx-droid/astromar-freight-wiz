@@ -282,6 +282,12 @@ export function stagingForFrame(
   forkliftX: number;    // world +x position of forklift center (m)
   forkliftZ: number;    // world z (lateral) position
   forkliftY: number;    // mast lift height for the forks (m)
+  /** Yaw rotation of driver's head (radians). Positive = looking back over right shoulder. */
+  headYaw: number;
+  /** Whether the engine is running (drives the engine-hum audio layer). */
+  engineOn: boolean;
+  /** True while the forklift is reversing (drives the beep audio + head turn). */
+  reversing: boolean;
   carriedBoxIdx: number | null;
 } {
   const Cl = pack.container.inner.l / MM_PER_M;
@@ -301,15 +307,20 @@ export function stagingForFrame(
 
   const Cw = pack.container.inner.w / MM_PER_M;
   const startX = Cl / 2 + 2.5;
+  // Yard feeder stack lateral positions (must match WarehouseAmbience).
+  const yardStackZ = Cw / 2 + 1.4;
+  const yardStackX = Cl / 2 + 4.5;
 
   // Find active anim (box currently being carried) and previous anim (just finished).
   let active: BoxAnim | null = null;
   let prev: BoxAnim | null = null;
   let next: BoxAnim | null = null;
+  let activeIdx = -1;
   for (let i = 0; i < timeline.anims.length; i++) {
     const a = timeline.anims[i];
     if (a.startFrame <= frame && frame < a.endFrame) {
       active = a;
+      activeIdx = i;
       prev = i > 0 ? timeline.anims[i - 1] : null;
       next = i < timeline.anims.length - 1 ? timeline.anims[i + 1] : null;
       break;
@@ -320,7 +331,7 @@ export function stagingForFrame(
     }
   }
 
-  // Outside the loading window — park forklift outside the door.
+  // Outside the loading window — park forklift outside the door, engine off.
   if (frame < introF || frame >= outroStart) {
     return {
       doorOpen,
@@ -328,6 +339,9 @@ export function stagingForFrame(
       forkliftX: startX,
       forkliftZ: 0,
       forkliftY: 0.6,
+      headYaw: 0,
+      engineOn: false,
+      reversing: false,
       carriedBoxIdx: null,
     };
   }
@@ -342,6 +356,9 @@ export function stagingForFrame(
         forkliftX: startX,
         forkliftZ: 0,
         forkliftY: 0.6,
+        headYaw: 0,
+        engineOn: true,
+        reversing: false,
         carriedBoxIdx: null,
       };
     }
@@ -353,49 +370,87 @@ export function stagingForFrame(
     const pBox = pack.placed[prev.placedIdx];
     const pX = pBox.x / MM_PER_M + pBox.l / MM_PER_M / 2 - Cl / 2;
     const pZ = pBox.y / MM_PER_M + pBox.w / MM_PER_M / 2 - Cw / 2;
-    // Next pickup target
-    const nBox = pack.placed[next.placedIdx];
-    const nX = nBox.x / MM_PER_M + nBox.l / MM_PER_M / 2 - Cl / 2;
-    const nZ = nBox.y / MM_PER_M + nBox.w / MM_PER_M / 2 - Cw / 2;
     // First half: reverse out of container to staging point. Second half:
-    // drive forward to align with next box pickup zone (still outside door).
+    // drive forward to align with next yard stack pickup zone.
     let fx: number;
     let fz: number;
+    let reversing = false;
     if (gt < 0.5) {
       const r = gt / 0.5;
       const ease = r * r;
       fx = pX + (startX - pX) * ease;
       fz = pZ * (1 - ease);
+      reversing = true;
     } else {
       const r = (gt - 0.5) / 0.5;
       const ease = r * r;
-      // Slight lateral shuffle outside door toward next box's lateral lane
-      fx = startX;
-      fz = nZ * 0.15 * ease;
+      // Drive from staging out to yard stack (alternating sides per step).
+      const side = (activeNextSide(timeline, prev) ? 1 : -1);
+      fx = startX + (yardStackX - startX) * ease;
+      fz = side * yardStackZ * ease;
     }
+    // Head turns over the right shoulder while reversing (~120°).
+    const headYaw = reversing
+      ? -Math.PI * 0.66 * easeInOutQuad(Math.min(1, gt / 0.4))
+      : 0;
     return {
       doorOpen,
       forkliftActive: true,
       forkliftX: fx,
       forkliftZ: fz,
       forkliftY: 0.35, // forks lowered while empty
+      headYaw,
+      engineOn: true,
+      reversing,
       carriedBoxIdx: null,
     };
   }
 
-  // Active anim: forklift drives in from outside the door, then reverses
-  // briefly during settle as the box drops onto its slot.
+  // Active anim: 3 phases
+  //   pickup (0.00 - 0.20): forks already at yard stack, lift the new pallet
+  //   driveIn (0.20 - 0.75): forklift drives from yard into the box's slot
+  //   settle  (0.75 - 1.00): forks lower, box drops into final position
   const t = (frame - active.startFrame) / Math.max(1, active.endFrame - active.startFrame);
-  const carryT = Math.min(1, t / 0.7);
-  const settleT = Math.max(0, (t - 0.7) / 0.3);
-  const carryEase = 1 - Math.pow(1 - carryT, 3);
   const box = pack.placed[active.placedIdx];
   const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
-  const forkliftX = startX + (boxWorldX - startX) * carryEase;
   const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
-  const forkliftZ = boxWorldZ * carryEase;
   const restY = box.z / MM_PER_M + 0.05;
-  const forkliftY = 0.55 + (restY - 0.55) * settleT;
+  // Pickup yard side alternates per step so both feeder stacks get used.
+  const side = activeIdx % 2 === 0 ? 1 : -1;
+  const pickupX = yardStackX;
+  const pickupZ = side * yardStackZ;
+
+  let forkliftX: number;
+  let forkliftZ: number;
+  let forkliftY: number;
+  let carriedBoxIdx: number | null = null;
+
+  if (t < 0.20) {
+    // PICKUP: forks rise from low (0.15) to carry height (0.55) at the yard stack.
+    const r = t / 0.20;
+    const ease = easeInOutQuad(r);
+    forkliftX = pickupX;
+    forkliftZ = pickupZ;
+    forkliftY = 0.15 + (0.55 - 0.15) * ease;
+    // Box becomes "carried" once forks are halfway up.
+    carriedBoxIdx = ease > 0.5 ? active.placedIdx : null;
+  } else if (t < 0.75) {
+    // DRIVE-IN: forklift travels from yard (pickupX, pickupZ) to box slot.
+    const r = (t - 0.20) / (0.75 - 0.20);
+    const ease = 1 - Math.pow(1 - r, 3);
+    forkliftX = pickupX + (boxWorldX - pickupX) * ease;
+    forkliftZ = pickupZ + (boxWorldZ - pickupZ) * ease;
+    forkliftY = 0.55;
+    carriedBoxIdx = active.placedIdx;
+  } else {
+    // SETTLE: forks lower from 0.55 to restY, box drops into place.
+    const r = (t - 0.75) / 0.25;
+    const ease = easeInOutQuad(r);
+    forkliftX = boxWorldX;
+    forkliftZ = boxWorldZ;
+    forkliftY = 0.55 + (restY - 0.55) * ease;
+    carriedBoxIdx = ease < 1 ? active.placedIdx : null;
+  }
 
   return {
     doorOpen,
@@ -403,8 +458,21 @@ export function stagingForFrame(
     forkliftX,
     forkliftZ,
     forkliftY,
-    carriedBoxIdx: settleT < 1 ? active.placedIdx : null,
+    headYaw: 0,
+    engineOn: true,
+    reversing: false,
+    carriedBoxIdx,
   };
+}
+
+function easeInOutQuad(x: number): number {
+  return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+}
+
+/** Pick which side of yard the next pickup will happen on (alternating). */
+function activeNextSide(timeline: Timeline, prev: BoxAnim): boolean {
+  const idx = timeline.anims.findIndex((a) => a === prev);
+  return ((idx + 1) % 2) === 0;
 }
 
 /* -------------------------------------------------------------------------- */
