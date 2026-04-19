@@ -347,18 +347,27 @@ function SceneContents({
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
 
-      {/* Floor grid in metres */}
+      {/* Tarmac ground extending past the container — sells the "real yard" */}
+      <mesh
+        receiveShadow
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.02, 0]}
+      >
+        <planeGeometry args={[Math.max(Cm.l, Cm.w) * 12, Math.max(Cm.l, Cm.w) * 12]} />
+        <meshStandardMaterial color="#6e6660" roughness={0.95} />
+      </mesh>
+      {/* Subtle parking grid only directly under the container */}
       <Grid
-        position={[0, 0, 0]}
-        args={[Math.max(Cm.l, Cm.w) * 2, Math.max(Cm.l, Cm.w) * 2]}
+        position={[0, 0.001, 0]}
+        args={[Cm.l * 1.4, Cm.w * 1.4]}
         cellSize={0.5}
-        cellThickness={0.5}
+        cellThickness={0.4}
         sectionSize={1}
-        sectionThickness={1.2}
-        sectionColor="#1B3A6B"
-        cellColor="#94a3b8"
-        fadeDistance={Math.max(Cm.l, Cm.w) * 3}
-        fadeStrength={1}
+        sectionThickness={0.8}
+        sectionColor="#3a3530"
+        cellColor="#7a716a"
+        fadeDistance={Math.max(Cm.l, Cm.w) * 1.6}
+        fadeStrength={1.2}
         infiniteGrid={false}
       />
 
