@@ -200,15 +200,16 @@ export function LoadingRowsPanel({ pack }: Props) {
         .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
         .instruction { border-left: 2px solid #F97316; padding: 4px 8px; background: #fafbfd; font-size: 11px; color: #1B3A6B; border-radius: 0 4px 4px 0; }
         .row-body-grid { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: start; }
-        .views { display: flex; flex-direction: column; gap: 6px; }
-        .view { display: flex; flex-direction: column; gap: 3px; }
+        .views { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .view { display: flex; flex-direction: column; gap: 2px; }
+        .view:first-child { grid-column: 1 / -1; }
         .view svg { display: block; width: 100%; height: auto; border: 1px solid #d6dde8; border-radius: 4px; background: #fff; }
         .view-label { font-size: 8px; font-weight: 600; color: #777; letter-spacing: 0.4px; text-transform: uppercase; }
         .row-body-text { display: flex; flex-direction: column; gap: 6px; }
         .footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #d6dde8; color: #777; font-size: 9px; }
       </style></head><body>
       <h1>Loading Checklist — Row by Row</h1>
-      <div class="sub">${rows.length} row${rows.length > 1 ? "s" : ""} · back wall to door · generated ${new Date().toLocaleString("en-IN")}</div>
+      <div class="sub">${rows.length} row${rows.length > 1 ? "s" : ""} · back wall to door · heavy threshold ${heavyThreshold} kg/pkg · generated ${new Date().toLocaleString("en-IN")}</div>
       <div class="accent"></div>
       <ol>${rowsHtml}</ol>
       <div class="footer">Always work from the back wall outward — never climb on loaded cargo. Build each row to full height before advancing toward the door. Tick the box once a row is fully loaded and verified.</div>
@@ -242,10 +243,21 @@ export function LoadingRowsPanel({ pack }: Props) {
               variant="outline"
               size="sm"
               className="ml-2 h-7 gap-1.5 px-2 text-[11px]"
-              aria-label="Mixed-pallet warning settings"
+              aria-label={`Mixed-pallet warning settings — heavy threshold ${heavyThreshold} kg per package`}
+              title={`Heavy threshold: ${heavyThreshold} kg/pkg`}
             >
               <Settings2 className="size-3.5" />
               Settings
+              <span
+                className={cn(
+                  "ml-0.5 rounded px-1 py-0.5 text-[9px] font-bold tabular-nums",
+                  heavyThreshold === DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD
+                    ? "bg-muted text-muted-foreground"
+                    : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+                )}
+              >
+                ⚖ {heavyThreshold}kg
+              </span>
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-72 space-y-3">
