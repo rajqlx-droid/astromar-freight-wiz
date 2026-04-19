@@ -12,7 +12,7 @@ import { loadFont as loadDisplay } from "@remotion/google-fonts/SpaceGrotesk";
 import { loadFont as loadBody } from "@remotion/google-fonts/Inter";
 
 import { ContainerScene } from "./ContainerScene";
-import { CAM_PRESETS, lerpCam, type Camera } from "./projection";
+import { CAM_PRESETS, lerpCam, project, type Camera } from "./projection";
 import type { Scenario, Row } from "./scenario-demo";
 import { buildDemoScenario } from "./scenario-demo";
 
