@@ -240,11 +240,15 @@ export function computeBoxTransforms(
     onForklift: false,
   }));
   const Cl = pack.container.inner.l / MM_PER_M;
-  const Ch = pack.container.inner.h / MM_PER_M;
+  const Cw = pack.container.inner.w / MM_PER_M;
+  // Yard pickup zone (must match stagingForFrame + WarehouseAmbience)
+  const yardStackZ = Cw / 2 + 1.4;
+  const yardStackX = Cl / 2 + 4.5;
 
   if (frame < timeline.introFrames) return result;
 
-  for (const a of timeline.anims) {
+  for (let ai = 0; ai < timeline.anims.length; ai++) {
+    const a = timeline.anims[ai];
     if (a.startFrame > frame) continue;
     const item = result[a.placedIdx];
     if (frame >= a.endFrame) {
@@ -253,20 +257,59 @@ export function computeBoxTransforms(
       item.scale = 1;
       continue;
     }
-    // Two-phase animation: forklift carries box from outside the door (+x)
-    // toward its slot (first 70%), then box settles down to the floor (last 30%).
+    // Three phases (mirrors stagingForFrame): pickup at yard stack, drive in,
+    // settle into final slot. Box is invisible until forks complete pickup
+    // (it "materialises" on the forks as if lifted from the stack).
     const t = (frame - a.startFrame) / Math.max(1, a.endFrame - a.startFrame);
-    const carryT = Math.min(1, t / 0.7);
-    const settleT = Math.max(0, (t - 0.7) / 0.3);
-    const carryEase = 1 - Math.pow(1 - carryT, 3);
-    item.visible = true;
-    // Box rides on forklift forks at fork height (~0.6 m above floor) while carried,
-    // then descends to its true z during settle.
-    const carryX = Cl * 0.9 * (1 - carryEase); // slide from door (+x) into place
-    const liftY = Ch * 0.35 * (1 - settleT);   // hover at fork height, then drop
-    item.offset = [carryX, liftY, 0];
-    item.onForklift = settleT < 1;
-    item.scale = 0.92 + 0.08 * carryEase;
+    const box = pack.placed[a.placedIdx];
+    const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
+    const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
+    const restY = box.z / MM_PER_M;
+    const side = ai % 2 === 0 ? 1 : -1;
+    const pickupX = yardStackX;
+    const pickupZ = side * yardStackZ;
+
+    // Box.x/y in scene-local coords = box's slot. We compute an OFFSET to
+    // shift it from its slot toward the pickup point or carry height.
+    // Container scene uses box at slot when offset = [0, 0, 0].
+    if (t < 0.20) {
+      // PICKUP: box hidden until ease > 0.5 (forks fully under it).
+      const r = t / 0.20;
+      const ease = easeInOutQuad(r);
+      if (ease <= 0.5) {
+        item.visible = false;
+        continue;
+      }
+      item.visible = true;
+      // Position the box AT the yard stack at fork height. Compute offset
+      // from its final slot to that yard pickup position.
+      const carryY = 0.55 - restY;
+      const dx = pickupX - boxWorldX;
+      const dz = pickupZ - boxWorldZ;
+      item.offset = [dx, carryY, dz];
+      item.onForklift = true;
+      item.scale = 0.95;
+    } else if (t < 0.75) {
+      // DRIVE-IN: interpolate from yard pickup to final slot at fork height.
+      const r = (t - 0.20) / (0.75 - 0.20);
+      const ease = 1 - Math.pow(1 - r, 3);
+      item.visible = true;
+      const carryY = 0.55 - restY;
+      const curX = pickupX + (boxWorldX - pickupX) * ease;
+      const curZ = pickupZ + (boxWorldZ - pickupZ) * ease;
+      item.offset = [curX - boxWorldX, carryY, curZ - boxWorldZ];
+      item.onForklift = true;
+      item.scale = 0.95 + 0.05 * ease;
+    } else {
+      // SETTLE: at slot, lower from carry height to rest.
+      const r = (t - 0.75) / 0.25;
+      const ease = easeInOutQuad(r);
+      item.visible = true;
+      const carryY = 0.55 - restY;
+      item.offset = [0, carryY * (1 - ease), 0];
+      item.onForklift = ease < 1;
+      item.scale = 1;
+    }
   }
   return result;
 }
