@@ -108,10 +108,12 @@ export function ResultsCard({ result, inputsTable }: Props) {
           background:
             "linear-gradient(180deg, var(--brand-navy-soft) 0%, var(--background) 70%)",
         }}
+        aria-live="polite"
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-3">
           <h3 className="text-base font-bold text-brand-navy">Results</h3>
-          <div className="no-print flex flex-wrap gap-1.5">
+          {/* Desktop toolbar — mobile uses the sticky MobileResultBar instead */}
+          <div className="no-print hidden flex-wrap gap-1.5 lg:flex">
             <Button
               size="sm"
               onClick={handlePdf}
@@ -158,8 +160,9 @@ export function ResultsCard({ result, inputsTable }: Props) {
             >
               <span className="text-muted-foreground">{it.label}</span>
               <span
+                key={it.value}
                 className={
-                  "rounded-md px-3 py-1 font-semibold " +
+                  "animate-fade-in rounded-md px-3 py-1 font-semibold " +
                   (it.highlight
                     ? "bg-brand-orange-soft text-brand-orange"
                     : "text-foreground")
