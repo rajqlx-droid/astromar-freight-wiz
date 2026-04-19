@@ -1,10 +1,16 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Plus, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
 import { ContainerLoadView } from "@/components/freight/container-load-view";
+import {
+  UnitSelector,
+  type LengthUnit,
+  cmTo,
+  toCm,
+} from "@/components/freight/unit-selector";
 import { calcCbm, emptyCbmItem, type CbmItem } from "@/lib/freight/calculators";
 import { nextId } from "@/lib/freight/ids";
 
@@ -14,6 +20,7 @@ interface Props {
 }
 
 export function CbmCalculator({ items, setItems }: Props) {
+  const [unit, setUnit] = useState<LengthUnit>("cm");
   const result = useMemo(() => calcCbm(items), [items]);
 
   const update = (id: string, patch: Partial<CbmItem>) => {
@@ -26,7 +33,16 @@ export function CbmCalculator({ items, setItems }: Props) {
     setItems([...items, { ...src, id: nextId("cbm") }]);
   };
   const add = () => setItems([...items, emptyCbmItem()]);
-  const clear = () => setItems([emptyCbmItem()]);
+  const clear = () => setItems([emptyCbmItem(0)]);
+
+  // Convert stored cm value to current display unit and back on edit
+  const showVal = (cm: number) => {
+    const v = cmTo(cm, unit);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const setLen =
+    (id: string, key: "length" | "width" | "height") => (n: number) =>
+      update(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<CbmItem>);
 
   const inputsTable = items.flatMap((it, idx) => [
     { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
@@ -36,6 +52,13 @@ export function CbmCalculator({ items, setItems }: Props) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-4">
+        <Card
+          className="border-2 p-3"
+          style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
+        >
+          <UnitSelector id="cbm-unit" value={unit} onChange={setUnit} />
+        </Card>
+
         {items.map((it, idx) => (
           <Card key={it.id} className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
             <div className="mb-3 flex items-center justify-between">
@@ -52,9 +75,9 @@ export function CbmCalculator({ items, setItems }: Props) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <NumberField id={`l-${it.id}`} label="Length" suffix="cm" required value={it.length} onChange={(n) => update(it.id, { length: n })} hint="Outer length of one carton in centimetres." />
-              <NumberField id={`w-${it.id}`} label="Width" suffix="cm" required value={it.width} onChange={(n) => update(it.id, { width: n })} hint="Outer width in centimetres." />
-              <NumberField id={`h-${it.id}`} label="Height" suffix="cm" required value={it.height} onChange={(n) => update(it.id, { height: n })} hint="Outer height in centimetres." />
+              <NumberField id={`l-${it.id}`} label="Length" suffix={unit} required value={showVal(it.length)} onChange={setLen(it.id, "length")} hint={`Outer length of one carton in ${unit}.`} />
+              <NumberField id={`w-${it.id}`} label="Width" suffix={unit} required value={showVal(it.width)} onChange={setLen(it.id, "width")} hint={`Outer width in ${unit}.`} />
+              <NumberField id={`h-${it.id}`} label="Height" suffix={unit} required value={showVal(it.height)} onChange={setLen(it.id, "height")} hint={`Outer height in ${unit}.`} />
               <NumberField id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
               <NumberField id={`wt-${it.id}`} label="Weight" suffix="kg" required value={it.weight} onChange={(n) => update(it.id, { weight: n })} hint="Actual weight of ONE carton (gross)." />
             </div>
