@@ -78,8 +78,6 @@ export function calcCbm(items: CbmItem[]): CalcResult {
     totalWeight += it.weight * it.qty;
     totalQty += it.qty;
   }
-  const volWeight = (totalCbm * 1000) / 5;
-  const chargeable = Math.max(totalWeight, volWeight);
 
   return {
     type: "cbm",
@@ -88,15 +86,11 @@ export function calcCbm(items: CbmItem[]): CalcResult {
       { label: "Total Items", value: fmtInt(totalQty) },
       { label: "Total CBM", value: `${fmt(totalCbm, 4)} m³`, highlight: true },
       { label: "Total Actual Weight", value: `${fmt(totalWeight)} kg` },
-      { label: "Volumetric Weight (÷5000)", value: `${fmt(volWeight)} kg` },
-      { label: "Chargeable Weight", value: `${fmt(chargeable)} kg`, highlight: true },
     ],
     text:
       `CBM Calculation\n` +
       `Total CBM: ${fmt(totalCbm, 4)} m³\n` +
-      `Total Weight: ${fmt(totalWeight)} kg\n` +
-      `Volumetric Weight: ${fmt(volWeight)} kg\n` +
-      `Chargeable Weight: ${fmt(chargeable)} kg`,
+      `Total Weight: ${fmt(totalWeight)} kg`,
   };
 }
 
