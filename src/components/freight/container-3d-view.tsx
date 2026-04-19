@@ -566,28 +566,39 @@ function CargoBox({
           <meshStandardMaterial color="#dc2626" />
         </mesh>
       )}
-      {/* Tilt indicator: diagonal stripe on top + small floating badge */}
+      {/* Tilt indicator: hazard band wrapping all 4 vertical faces + always-on billboard */}
       {tilted && (
         <>
+          <mesh position={[0, hm / 2 - hm * 0.12, wm / 2 + 0.002]}>
+            <planeGeometry args={[lm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[0, hm / 2 - hm * 0.12, -wm / 2 - 0.002]} rotation={[0, Math.PI, 0]}>
+            <planeGeometry args={[lm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[lm / 2 + 0.002, hm / 2 - hm * 0.12, 0]} rotation={[0, Math.PI / 2, 0]}>
+            <planeGeometry args={[wm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
+          <mesh position={[-lm / 2 - 0.002, hm / 2 - hm * 0.12, 0]} rotation={[0, -Math.PI / 2, 0]}>
+            <planeGeometry args={[wm * 0.96, hm * 0.14]} />
+            <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
+          </mesh>
           <mesh
             position={[0, hm / 2 + 0.006, 0]}
             rotation={[0, box.rotated === "axis" ? Math.PI / 4 : Math.PI / 2, 0]}
           >
-            <boxGeometry args={[Math.min(lm, wm) * 0.9, 0.012, 0.05]} />
+            <boxGeometry args={[Math.min(lm, wm) * 0.95, 0.012, 0.06]} />
             <meshStandardMaterial color={tiltColor} />
           </mesh>
-          <Html
-            position={[0, hm / 2 + 0.08, 0]}
-            center
-            distanceFactor={4}
-            occlude
-          >
+          <Html position={[0, hm / 2 + 0.12, 0]} center distanceFactor={6}>
             <span
-              className="rounded-full border border-white px-1.5 py-0.5 text-[9px] font-bold text-white shadow"
+              className="whitespace-nowrap rounded-full border-2 border-white px-2 py-0.5 text-[10px] font-extrabold shadow-lg"
               style={{ background: tiltColor, color: "#1a1a1a" }}
               title={box.rotated === "axis" ? "Tipped on side" : "Rotated sideways"}
             >
-              {box.rotated === "axis" ? "⤾ TIP" : "↻ TURN"}
+              {box.rotated === "axis" ? "⤾ TIPPED" : "↻ TURNED"}
             </span>
           </Html>
         </>
