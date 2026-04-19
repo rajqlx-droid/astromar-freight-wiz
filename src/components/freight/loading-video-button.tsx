@@ -33,8 +33,11 @@ import {
   type VideoFrameInfo,
 } from "@/lib/freight/loading-video";
 import type { Container3DHandle } from "./container-3d-view";
+import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
 interface Props {
+  /** Pack data for the active container — drives the video timeline. */
+  pack: AdvancedPackResult;
   /** Returns the active 3D handle. May be null if 3D view isn't mounted. */
   getHandle: () => Container3DHandle | null;
   /** Called by parent when user clicks "Generate" so it can switch to 3D view. */
