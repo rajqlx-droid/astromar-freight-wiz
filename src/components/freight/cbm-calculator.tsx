@@ -48,8 +48,13 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
   const [wtUnit, setWtUnit] = usePersistentWeightUnit();
   const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
+  const [forcedChoice, setForcedChoice] = useState<"20gp" | "40gp" | "40hc" | null>(null);
   const captureRef = useRef<(() => Promise<{ iso: string; front: string; side: string } | null>) | null>(null);
   const result = useMemo(() => calcCbm(items), [items]);
+  const recommendation = useMemo(
+    () => recommendContainers(sumCbm(items), sumWeight(items)),
+    [items],
+  );
 
   const update = (id: string, patch: Partial<CbmItem>) => {
     setItems(items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
