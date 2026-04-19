@@ -1,74 +1,103 @@
 
 
 ## Goal
-Upgrade the Container Load View into a true interactive 3D planner that helps customers visualize how mixed cargo (different sizes, weights, stackable/non-stackable) fits into a container — at the highest quality.
+Two upgrades to the CBM Calculator:
+1. **In-browser video preview** before download (not just download).
+2. **Smart container recommendation** based on total CBM with auto-multi-container suggestions.
 
-## What customers will see
+---
 
-1. **Real 3D container** (react-three-fiber + three.js)
-   - Drag to orbit, scroll/pinch to zoom, double-tap to reset
-   - Translucent container walls so cargo inside is always visible
-   - Floor grid in metres, dimension labels on edges
-   - Soft shadows, ambient + directional lighting for depth
+## Part 1: In-browser video preview
 
-2. **Camera presets** (one-tap buttons): Iso · Front · Side · Top · Inside walkthrough
+The previously-approved "Generate Loading Video" feature already produces an MP4 blob. Instead of downloading it directly, open a dialog with:
+- `<video>` element with `controls` autoplay-muted preview of the generated MP4
+- Playback speed buttons (0.5× slow-motion, 1×, 2×)
+- Step counter overlay ("Step 4 of 12: Item B — Carton")
+- "Download MP4" button below the player
+- "Regenerate" button if user wants higher resolution (720p ↔ 1080p toggle)
 
-3. **Per-item cargo cards** (above the 3D view)
-   Each item gets:
-   - Color swatch (matches the 3D box color)
-   - **Package type**: Carton · Pallet · Crate · Drum · Bag (icon + affects render style)
-   - **Stackable toggle**: when OFF, that item is forced to floor level only and gets a red ⚠ "no-stack" stripe on top of its 3D boxes
-   - **Fragile toggle**: visually flagged (hatched pattern), packed last/on top
-   - **Max stack weight (kg)**: heavier items can't be placed above this item
+File: edit `loading-video-button.tsx` to render a Dialog with `<video src={URL.createObjectURL(blob)} />` instead of triggering download immediately. Revoke the object URL on dialog close to free memory.
 
-4. **Smarter packer** (`src/lib/freight/packing.ts`)
-   - Sort: non-stackable first → heaviest → largest volume
-   - Non-stackable items reserve full vertical column (nothing stacks on them)
-   - Fragile items only placed in the top layer
-   - Respect max-stack-weight per item
-   - Multi-orientation: try 3 rotations per box, pick best fit
-   - Returns per-item placement stats (placed/unplaced count, reason if unplaced)
+---
 
-5. **Live load report panel** (right side on desktop, below on mobile)
-   - Per-item: planned qty / placed qty / status badge (✓ Fits, ⚠ Partial, ✗ Won't fit)
-   - Total CBM used / capacity (progress bar)
-   - Total weight / payload limit (progress bar)
-   - Center of gravity indicator (good / forward-heavy / rear-heavy)
-   - Unplaced cargo warning with reason ("3 cartons of Item B didn't fit — exceeds height after stacking Item A")
+## Part 2: Smart container recommendation engine
 
-6. **Legend & how-to-load guide** (collapsible)
-   - Color → Item mapping
-   - Loading sequence: "Load Item A first (back wall, floor), then Item B on top, finish with Item C (fragile, top layer)"
-   - Numbered loading steps shown as a small storyboard
+### Container capacity reference (industry standard, usable CBM after dunnage ~85% of geometric)
 
-7. **Multi-angle PDF export** (per earlier approval)
-   - Captures Iso, Front, Side as PNG snapshots
-   - Adds the load report table + loading sequence to the PDF
-   - SVG fallback retained for SSR / print-only environments
+| Container | Geometric CBM | Usable CBM (recommended max) | Payload |
+|---|---|---|---|
+| 20 ft GP | 33.2 | **28** | 28,000 kg |
+| 40 ft GP | 67.7 | **58** | 26,500 kg |
+| 40 ft HC | 76.4 | **68** | 26,500 kg |
+| 45 ft HC | 86.0 | **76** | 27,500 kg |
 
-## Technical changes
+### Recommendation algorithm (`src/lib/freight/container-recommender.ts` — new)
 
 ```text
-ADD  src/components/freight/container-3d-view.tsx        — react-three-fiber scene, OrbitControls, camera presets, snapshot API
-ADD  src/components/freight/load-report-panel.tsx        — per-item status, CBM/weight bars, COG indicator, warnings
-ADD  src/components/freight/loading-sequence.tsx         — numbered storyboard of how to load
-ADD  src/lib/freight/packing-advanced.ts                 — smarter packer: stackable/fragile/max-stack-weight/orientation
-EDIT src/lib/freight/calculators.ts                      — extend CbmItem with: packageType, stackable, fragile, maxStackWeightKg
-EDIT src/components/freight/cbm-calculator.tsx           — add package-type select + stackable/fragile toggles + max-stack-weight field per item; mount new 3D view
-EDIT src/components/freight/container-load-view.tsx      — keep as SSR fallback; lazy-load 3D view on client
-EDIT src/lib/freight/pdf.ts                              — accept 3 PNG snapshots + load report rows; render multi-angle layout
-ADD  npm: three, @react-three/fiber, @react-three/drei   — ~150KB gzip total
+function recommendContainers(totalCbm, totalWeightKg):
+  // Single-container recommendation
+  if totalCbm ≤ 28 and weight ≤ 28000  → suggest "1 × 20 ft GP"
+  if totalCbm ≤ 58 and weight ≤ 26500  → suggest "1 × 40 ft GP"
+  if totalCbm ≤ 68 and weight ≤ 26500  → suggest "1 × 40 ft HC"
+  if totalCbm ≤ 76 and weight ≤ 27500  → suggest "1 × 45 ft HC"
+
+  // Multi-container: greedy fill with largest, remainder gets best-fit
+  else:
+    n40hc = floor(totalCbm / 68)
+    remainder = totalCbm - n40hc * 68
+    add best-fit single container for remainder (20GP / 40GP / 40HC)
+    return e.g. "2 × 40 ft HC + 1 × 20 ft GP"
+
+  // Always show alternatives
+  alternatives = [
+    "Cost-optimal: <fewest containers>",
+    "Volume-optimal: <highest utilization %>",
+    "Split-friendly: <multiple smaller for partial deliveries>"
+  ]
 ```
 
-### Performance / safety
-- 3D view lazy-loaded (`React.lazy` + `Suspense`) so initial bundle stays light
-- SSR-safe: only mounts after `useEffect` (prevents hydration mismatch)
-- `prefers-reduced-motion` respected (auto-rotate off, snap transitions instead of tween)
-- Render cap: 500 boxes max in 3D (above that, group identical items into a single instanced mesh)
-- Falls back to existing SVG view if WebGL unavailable
+### Trigger threshold
+- At total CBM ≥ **25** (approaching 20ft limit), show a soft suggestion banner.
+- At total CBM ≥ **70**, show a prominent dialog: "Your shipment exceeds a single 40 ft HC. Add containers?"
+- Also trigger when weight exceeds current container's payload, even if CBM fits.
 
-### Out of scope (deferred)
-- Drag-and-drop manual placement
-- Weight-axle distribution numbers (only directional COG indicator for now)
-- Saving custom load plans server-side
+### UI changes
+
+**New component**: `src/components/freight/container-suggestion.tsx`
+- Inline banner above the result card showing recommended container(s) with utilization bar
+- "Apply this recommendation" button → auto-sets the container selector
+- For multi-container: shows a stacked breakdown ("Container 1: 40 HC, 95% full · Container 2: 20 GP, 60% full") and packs each separately so the 3D view + load report show **per-container** plans tabbed
+
+**Edit `cbm-calculator.tsx`**:
+- After totalCbm calc, call `recommendContainers()`
+- Render `<ContainerSuggestion />` banner when recommendation differs from current selection
+- When multi-container, run packer per-container (split items greedily by volume, biggest items first into biggest container) and pass an array of pack results to a new `<MultiContainerView />`
+
+**Edit `container-load-view.tsx`**:
+- Accept `packResults: AdvancedPackResult[]` (array). Render tabs "Container 1 / Container 2 / ..." each with its own 3D + 2D view.
+- Single-container case unchanged (renders directly without tabs).
+
+**Edit `load-report-panel.tsx`**:
+- Show per-container summary + a top-level "Total shipment" roll-up.
+
+---
+
+## Files touched
+
+```text
+ADD   src/lib/freight/container-recommender.ts   — capacity table + recommendation algorithm + multi-container split
+ADD   src/components/freight/container-suggestion.tsx — recommendation banner + apply button
+EDIT  src/components/freight/loading-video-button.tsx — dialog with <video> preview, speed controls, then download
+EDIT  src/components/freight/cbm-calculator.tsx  — call recommender, render suggestion, support multi-container
+EDIT  src/components/freight/container-load-view.tsx — accept array, render per-container tabs
+EDIT  src/components/freight/load-report-panel.tsx — per-container + roll-up totals
+EDIT  src/lib/freight/pdf.ts — multi-container PDF (one section per container)
+```
+
+No new dependencies. No API breaks for single-container case.
+
+## Out of scope
+- Real-time container pricing (no carrier API integrated)
+- Refrigerated / open-top / flat-rack container types
+- Per-port weight restrictions (some ports cap below 26.5 t)
 
