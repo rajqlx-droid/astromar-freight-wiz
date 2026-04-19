@@ -73,7 +73,23 @@ function RowProjection({
 
 
 export function LoadingRowsPanel({ pack }: Props) {
-  const rows = useMemo(() => buildRows(pack), [pack]);
+  // Configurable kg/pkg threshold for the "heavy" mixed-pallet warning.
+  // Hydrate from localStorage AFTER mount to avoid SSR/CSR mismatch.
+  const [heavyThreshold, setHeavyThreshold] = useState<number>(
+    DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
+  );
+  useEffect(() => {
+    setHeavyThreshold(readHeavyThreshold());
+  }, []);
+  const persistThreshold = (n: number) => {
+    const v = clampHeavy(n);
+    setHeavyThreshold(v);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(HEAVY_THRESHOLD_STORAGE_KEY, String(v));
+    }
+  };
+
+  const rows = useMemo(() => buildRows(pack, heavyThreshold), [pack, heavyThreshold]);
   // First row open by default; others collapsed.
   const [openRows, setOpenRows] = useState<Set<number>>(() => new Set([0]));
 
