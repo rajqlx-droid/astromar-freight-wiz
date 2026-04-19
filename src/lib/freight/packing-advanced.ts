@@ -1,9 +1,16 @@
 /**
- * Advanced container packing with stackable / fragile / max-stack-weight
- * constraints and multi-orientation try. Pure JS, deterministic, SSR-safe.
+ * Advanced container packing — support-aware skyline packer.
  *
- * Output shape is a superset of the simple packer: it adds per-item
- * placement stats so the UI can show "X of Y placed".
+ * Replaces the old shelf-fit cursor algorithm. Maintains a quantised
+ * height-map of the container floor and rests every new box on the actual
+ * top-Z of cells under its footprint, which eliminates floating boxes.
+ *
+ * Honours per-item flags:
+ *  - stackable / fragile / maxStackWeightKg
+ *  - allowSidewaysRotation (swap L↔W)
+ *  - allowAxisRotation     (tip onto side, swap H with L or W)
+ *
+ * Pure JS, deterministic, SSR-safe. No dependencies.
  */
 
 import type { CbmItem, PackageType } from "./calculators";
@@ -38,29 +45,55 @@ export interface AdvancedPackResult {
 }
 
 const RENDER_CAP = 500;
+const CELL_MM = 100; // 10cm grid — good resolution vs. perf
+const SUPPORT_MIN_RATIO = 0.9; // ≥ 90% footprint must rest on something solid
+const PLACE_STEP_MM = 100; // candidate XY scan stride
 
 interface ExpandedCarton {
-  l: number; // mm
-  w: number; // mm
-  h: number; // mm
-  weight: number; // kg
+  /** Original (un-rotated) dimensions in mm. */
+  origL: number;
+  origW: number;
+  origH: number;
+  weight: number;
   itemIdx: number;
   itemId: string;
   packageType: PackageType;
   stackable: boolean;
   fragile: boolean;
   maxStackWeightKg: number;
-  /** Orientation index used (0..2). */
-  orient: number;
+  allowSidewaysRotation: boolean;
+  allowAxisRotation: boolean;
 }
 
-/** Three useful orientations: as-is, swap L<->W, lay on side (W<->H). */
-function orientations(l: number, w: number, h: number) {
-  return [
-    { l, w, h, orient: 0 },
-    { l: w, w: l, h, orient: 1 },
-    { l, w: h, h: w, orient: 2 },
-  ];
+interface Orientation {
+  l: number;
+  w: number;
+  h: number;
+}
+
+function buildOrientations(c: ExpandedCarton): Orientation[] {
+  const { origL: l, origW: w, origH: h } = c;
+  const list: Orientation[] = [{ l, w, h }];
+  if (c.allowSidewaysRotation && (l !== w)) list.push({ l: w, w: l, h });
+  if (c.allowAxisRotation && !c.fragile) {
+    if (h !== w) list.push({ l, w: h, h: w });
+    if (h !== l) list.push({ l: h, w, h: l });
+    if (c.allowSidewaysRotation) {
+      if (h !== l) list.push({ l: w, w: h, h: l });
+      if (h !== w) list.push({ l: h, w: l, h: w });
+    }
+  }
+  return list;
+}
+
+interface PlacedInternal extends PlacedBox {
+  weight: number;
+  fragile: boolean;
+  maxStackWeightKg: number;
+  /** Cumulative weight currently sitting on top of this box. */
+  loadKg: number;
+  /** True if a fragile box is on top — nothing more may be stacked on this column. */
+  sealed: boolean;
 }
 
 export function packContainerAdvanced(
@@ -69,7 +102,6 @@ export function packContainerAdvanced(
 ): AdvancedPackResult {
   const C = container.inner;
 
-  // Build expanded carton list, defaulting missing flags.
   const expanded: ExpandedCarton[] = [];
   let cargoCbm = 0;
   let totalWeight = 0;
@@ -87,24 +119,16 @@ export function packContainerAdvanced(
     cargoCbm += ((it.length * it.width * it.height) / 1_000_000) * it.qty;
     totalWeight += it.weight * it.qty;
 
-    // Pick best orientation that fits the container; prefer flat (smallest h).
-    const orientsList = orientations(lmm, wmm, hmm).filter(
-      (o) => o.l <= C.l && o.w <= C.w && o.h <= C.h,
-    );
-    if (orientsList.length === 0) {
-      perItemReason[idx] = "Carton larger than container — won't fit any orientation";
-      return;
-    }
-    orientsList.sort((a, b) => a.h - b.h); // shortest first → lower COG
-    const best = orientsList[0];
-
     const stackable = it.stackable !== false;
     const fragile = it.fragile === true;
+    const allowSideways = it.allowSidewaysRotation !== false; // default true
+    const allowAxis = it.allowAxisRotation === true;
+
     for (let i = 0; i < it.qty; i++) {
       expanded.push({
-        l: best.l,
-        w: best.w,
-        h: best.h,
+        origL: lmm,
+        origW: wmm,
+        origH: hmm,
         weight: it.weight,
         itemIdx: idx,
         itemId: it.id,
@@ -112,111 +136,234 @@ export function packContainerAdvanced(
         stackable,
         fragile,
         maxStackWeightKg: it.maxStackWeightKg ?? 0,
-        orient: best.orient,
+        allowSidewaysRotation: allowSideways,
+        allowAxisRotation: allowAxis,
       });
     }
   });
 
-  // Sort: non-stackable first (need floor), then heaviest, then largest volume.
-  // Fragile last so they end up on top.
+  // Sort: non-stackable first (need floor), heaviest, largest. Fragile last (top).
   expanded.sort((a, b) => {
     if (a.fragile !== b.fragile) return a.fragile ? 1 : -1;
     if (a.stackable !== b.stackable) return a.stackable ? 1 : -1;
     if (b.weight !== a.weight) return b.weight - a.weight;
-    return b.l * b.w * b.h - a.l * a.w * a.h;
+    return b.origL * b.origW * b.origH - a.origL * a.origW * a.origH;
   });
 
-  const placed: PlacedBox[] = [];
+  // Skyline grid (top-Z per cell, in mm).
+  const cellsX = Math.ceil(C.l / CELL_MM);
+  const cellsY = Math.ceil(C.w / CELL_MM);
+  const heightMap = new Float32Array(cellsX * cellsY);
+  // Index of placed box currently topping each cell (-1 = floor).
+  const topBoxIdx = new Int32Array(cellsX * cellsY).fill(-1);
+  // Cells under a fragile or fragile-supported column are sealed.
+  const sealed = new Uint8Array(cellsX * cellsY);
+
+  const placedInternal: PlacedInternal[] = [];
   let placedCount = 0;
   let truncated = false;
 
-  // Shelf-pack with layer logic + non-stackable column reservation.
-  let cursorX = 0;
-  let cursorY = 0;
-  let cursorZ = 0;
-  let rowDepth = 0;
-  let layerHeight = 0;
-  
-  // Sum of weight currently sitting at each (x,y) column — only used for
-  // max-stack-weight checks against the lowest box of that column.
-  // Key = "x,y" of base box.
-  const columnBaseInfo = new Map<string, { maxStackWeightKg: number; loadKg: number }>();
+  const cellIdx = (cx: number, cy: number) => cy * cellsX + cx;
+
+  /** Inspect cells under footprint at (x,y) with size (l,w). Returns null if invalid. */
+  function evaluatePlacement(
+    x: number,
+    y: number,
+    l: number,
+    w: number,
+    c: ExpandedCarton,
+  ): {
+    z: number;
+    supportRatio: number;
+    supporters: Set<number>;
+    anySealed: boolean;
+  } | null {
+    if (x < 0 || y < 0 || x + l > C.l || y + w > C.w) return null;
+
+    const cx0 = Math.floor(x / CELL_MM);
+    const cy0 = Math.floor(y / CELL_MM);
+    const cx1 = Math.ceil((x + l) / CELL_MM);
+    const cy1 = Math.ceil((y + w) / CELL_MM);
+
+    let topZ = 0;
+    // First pass: find resting Z (max top under footprint).
+    for (let cy = cy0; cy < cy1; cy++) {
+      for (let cx = cx0; cx < cx1; cx++) {
+        const h = heightMap[cellIdx(cx, cy)];
+        if (h > topZ) topZ = h;
+      }
+    }
+
+    if (topZ + c.origH > C.h) {
+      // Use orientation height (caller passed via l/w but h via c.origH? — we recompute)
+    }
+
+    // Support: count cells whose top equals topZ (within 1mm tolerance).
+    let supported = 0;
+    let total = 0;
+    let anySealed = false;
+    const supporters = new Set<number>();
+    for (let cy = cy0; cy < cy1; cy++) {
+      for (let cx = cx0; cx < cx1; cx++) {
+        total++;
+        const idx = cellIdx(cx, cy);
+        if (sealed[idx]) anySealed = true;
+        const h = heightMap[idx];
+        if (Math.abs(h - topZ) < 1) {
+          supported++;
+          const bIdx = topBoxIdx[idx];
+          if (bIdx >= 0) supporters.add(bIdx);
+        }
+      }
+    }
+    return {
+      z: topZ,
+      supportRatio: total > 0 ? supported / total : 0,
+      supporters,
+      anySealed,
+    };
+  }
 
   for (const c of expanded) {
-    if (c.l > C.l || c.w > C.w || c.h > C.h) {
-      perItemReason[c.itemIdx] ||= "Larger than container";
+    const orients = buildOrientations(c).filter(
+      (o) => o.l <= C.l && o.w <= C.w && o.h <= C.h,
+    );
+    if (orients.length === 0) {
+      perItemReason[c.itemIdx] ||= "Carton larger than container — won't fit any orientation";
       continue;
     }
 
-    // Wrap to next row.
-    if (cursorX + c.l > C.l) {
-      cursorX = 0;
-      cursorY += rowDepth;
-      rowDepth = 0;
-    }
-    // Wrap to next layer.
-    if (cursorY + c.w > C.w) {
-      cursorY = 0;
-      cursorX = 0;
-      cursorZ += layerHeight;
-      rowDepth = 0;
-      layerHeight = 0;
-    }
-    // No height left.
-    if (cursorZ + c.h > C.h) {
-      perItemReason[c.itemIdx] ||= "Container full — exceeds height after stacking";
-      continue;
-    }
+    let bestScore = Infinity;
+    let bestPick: {
+      x: number;
+      y: number;
+      z: number;
+      orient: Orientation;
+      supporters: Set<number>;
+    } | null = null;
+    let lastReason: string | undefined;
 
-    // Non-stackable items must sit on the floor (cursorZ === 0).
-    if (!c.stackable && cursorZ > 0) {
-      perItemReason[c.itemIdx] ||= "Non-stackable — no floor space remaining";
-      continue;
-    }
+    for (const o of orients) {
+      // Candidate XY positions on a coarse grid.
+      const stepX = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(o.l / 4)));
+      const stepY = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(o.w / 4)));
+      for (let y = 0; y + o.w <= C.w; y += stepY) {
+        for (let x = 0; x + o.l <= C.l; x += stepX) {
+          const ev = evaluatePlacement(x, y, o.l, o.w, {
+            ...c,
+            origL: o.l,
+            origW: o.w,
+            origH: o.h,
+          });
+          if (!ev) continue;
 
-    // Max-stack-weight check: if we're stacking on top of another column, ensure
-    // the bottom box can support cumulative load.
-    if (cursorZ > 0) {
-      const key = `${cursorX},${cursorY}`;
-      const base = columnBaseInfo.get(key);
-      if (base && base.maxStackWeightKg > 0 && base.loadKg + c.weight > base.maxStackWeightKg) {
-        perItemReason[c.itemIdx] ||= "Exceeds max stack weight of item below";
-        continue;
+          // Height fit?
+          if (ev.z + o.h > C.h) {
+            lastReason ||= "Container full — exceeds height after stacking";
+            continue;
+          }
+          // Non-stackable must rest on the floor.
+          if (!c.stackable && ev.z > 0) {
+            lastReason ||= "Non-stackable — no floor space remaining";
+            continue;
+          }
+          // Sealed (fragile) cells block further stacking.
+          if (ev.anySealed) {
+            lastReason ||= "Cannot stack on fragile item below";
+            continue;
+          }
+          // Support ratio.
+          if (ev.z > 0 && ev.supportRatio < SUPPORT_MIN_RATIO) {
+            lastReason ||= "Insufficient support below";
+            continue;
+          }
+          // Stack-weight: every supporter must be able to take +c.weight on top of its existing load.
+          let weightOk = true;
+          for (const sIdx of ev.supporters) {
+            const s = placedInternal[sIdx];
+            if (!s) continue;
+            if (s.maxStackWeightKg > 0 && s.loadKg + c.weight > s.maxStackWeightKg) {
+              weightOk = false;
+              lastReason ||= "Exceeds max stack weight of item below";
+              break;
+            }
+          }
+          if (!weightOk) continue;
+
+          // Score: lowest Z, then tightest to back-left (low x+y), then tightest fit.
+          const score =
+            ev.z * 1000 + (x + y) + (1 - ev.supportRatio) * 200;
+          if (score < bestScore) {
+            bestScore = score;
+            bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters };
+          }
+        }
       }
-      if (base) base.loadKg += c.weight;
-    } else {
-      const key = `${cursorX},${cursorY}`;
-      if (!columnBaseInfo.has(key)) {
-        columnBaseInfo.set(key, {
-          maxStackWeightKg: c.maxStackWeightKg,
-          loadKg: 0,
-        });
-      }
     }
 
-    if (placed.length < RENDER_CAP) {
-      placed.push({
-        x: cursorX,
-        y: cursorY,
-        z: cursorZ,
-        l: c.l,
-        w: c.w,
-        h: c.h,
-        color: ITEM_COLORS[c.itemIdx % ITEM_COLORS.length],
-        itemIdx: c.itemIdx,
-      });
-    } else {
-      truncated = true;
+    if (!bestPick) {
+      perItemReason[c.itemIdx] ||= lastReason || "Container full";
+      continue;
+    }
+
+    const { x, y, z, orient, supporters } = bestPick;
+    const internalIdx = placedInternal.length;
+    const box: PlacedInternal = {
+      x,
+      y,
+      z,
+      l: orient.l,
+      w: orient.w,
+      h: orient.h,
+      color: ITEM_COLORS[c.itemIdx % ITEM_COLORS.length],
+      itemIdx: c.itemIdx,
+      weight: c.weight,
+      fragile: c.fragile,
+      maxStackWeightKg: c.maxStackWeightKg,
+      loadKg: 0,
+      sealed: false,
+    };
+    placedInternal.push(box);
+
+    // Update supporter loads.
+    for (const sIdx of supporters) {
+      const s = placedInternal[sIdx];
+      if (s) s.loadKg += c.weight;
+    }
+
+    // Update height-map and topBoxIdx for footprint.
+    const cx0 = Math.floor(x / CELL_MM);
+    const cy0 = Math.floor(y / CELL_MM);
+    const cx1 = Math.ceil((x + orient.l) / CELL_MM);
+    const cy1 = Math.ceil((y + orient.w) / CELL_MM);
+    const newTop = z + orient.h;
+    for (let cy = cy0; cy < cy1; cy++) {
+      for (let cx = cx0; cx < cx1; cx++) {
+        const idx = cellIdx(cx, cy);
+        heightMap[idx] = newTop;
+        topBoxIdx[idx] = internalIdx;
+        if (c.fragile) sealed[idx] = 1;
+      }
     }
 
     placedCount++;
     perItemPlaced[c.itemIdx]++;
-    cursorX += c.l;
-    if (c.w > rowDepth) rowDepth = c.w;
-    if (c.h > layerHeight) layerHeight = c.h;
   }
 
-  // Compute COG along container length (X axis).
+  // Render-cap truncation (rare with skyline since we score; just in case).
+  let placed: PlacedBox[];
+  if (placedInternal.length > RENDER_CAP) {
+    truncated = true;
+    placed = placedInternal.slice(0, RENDER_CAP).map((p) => ({
+      x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h, color: p.color, itemIdx: p.itemIdx,
+    }));
+  } else {
+    placed = placedInternal.map((p) => ({
+      x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h, color: p.color, itemIdx: p.itemIdx,
+    }));
+  }
+
+  // COG along container length (X axis).
   let totWeight = 0;
   let weightedX = 0;
   for (const p of placed) {
@@ -226,7 +373,7 @@ export function packContainerAdvanced(
     totWeight += w;
   }
   const cog = totWeight > 0 ? weightedX / totWeight : C.l / 2;
-  const cogOffsetPct = (cog - C.l / 2) / (C.l / 2); // -1..1
+  const cogOffsetPct = (cog - C.l / 2) / (C.l / 2);
 
   const perItem: ItemPlacementStat[] = items.map((it, idx) => {
     const planned = perItemPlanned[idx];
