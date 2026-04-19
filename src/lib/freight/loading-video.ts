@@ -19,6 +19,7 @@
 import * as THREE from "three";
 import type { AdvancedPackResult } from "./packing-advanced";
 import type { PlacedBox } from "./packing";
+import { buildRows } from "./loading-rows";
 
 const MM_PER_M = 1000;
 
