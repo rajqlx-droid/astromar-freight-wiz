@@ -528,11 +528,22 @@ export function LoadingRowsPanel({
       <ol className="divide-y">
         {rows.map((row) => {
           const isOpen = openRows.has(row.rowIdx);
+          const isActive = activeRowIdx === row.rowIdx;
           const counts = itemCounts(row, pack);
           const xStartM = row.xStart / 1000;
           const xEndM = row.xEnd / 1000;
           return (
-            <li key={row.rowIdx}>
+            <li
+              key={row.rowIdx}
+              ref={(el) => {
+                if (el) rowRefs.current.set(row.rowIdx, el);
+                else rowRefs.current.delete(row.rowIdx);
+              }}
+              className={cn(
+                "transition-colors",
+                isActive && "bg-amber-50 ring-2 ring-inset ring-amber-400 dark:bg-amber-950/30",
+              )}
+            >
               <button
                 type="button"
                 onClick={() => toggle(row.rowIdx)}
