@@ -16,7 +16,13 @@ export interface RowGroup {
   hasNonStack: boolean;
   rotatedCount: number;
   layers: number;
+  /** True when fragile units share a multi-layer row with heavier non-fragile units — recommend a separator board between layers. */
+  needsSeparator: boolean;
 }
+
+/** Average kg per package for a row (uses pack-level weight × box-share). */
+const HEAVY_KG_PER_PKG_THRESHOLD = 25;
+
 
 /**
  * Group placed boxes into rows along the container length (x-axis).
@@ -46,7 +52,9 @@ export function buildRows(pack: AdvancedPackResult): RowGroup[] {
     let hasFragile = false;
     let hasNonStack = false;
     let rotatedCount = 0;
+    let hasHeavyNonFragile = false;
     const zLevels = new Set<number>();
+    const avgKgPerPkg = pack.placedCartons > 0 ? pack.weightKg / pack.placedCartons : 0;
     for (const b of r.boxes) {
       const stat = pack.perItem[b.itemIdx];
       totalCbm += (b.l * b.w * b.h) / 1_000_000_000;
@@ -58,9 +66,19 @@ export function buildRows(pack: AdvancedPackResult): RowGroup[] {
       }
       if (stat?.fragile) hasFragile = true;
       if (stat && !stat.stackable) hasNonStack = true;
+      // Heuristic: a non-fragile box is "heavy" when row-average per-package
+      // weight crosses the threshold. We don't have per-pkg weight on PlacedBox,
+      // so use the pack-level average — good enough to flag mixed pallets.
+      if (stat && !stat.fragile && avgKgPerPkg >= HEAVY_KG_PER_PKG_THRESHOLD) {
+        hasHeavyNonFragile = true;
+      }
       if (b.rotated === "sideways" || b.rotated === "axis") rotatedCount++;
       zLevels.add(Math.round(b.z / 10) * 10);
     }
+    const layers = zLevels.size;
+    // Recommend a separator board when fragile + heavy non-fragile share a
+    // multi-layer row (anything could end up stacked on the fragile units).
+    const needsSeparator = hasFragile && hasHeavyNonFragile && layers > 1;
     return {
       rowIdx: i,
       xStart: r.xStart,
@@ -71,7 +89,8 @@ export function buildRows(pack: AdvancedPackResult): RowGroup[] {
       hasFragile,
       hasNonStack,
       rotatedCount,
-      layers: zLevels.size,
+      layers,
+      needsSeparator,
     };
   });
 }
@@ -88,6 +107,8 @@ export function instructionFor(row: RowGroup): string {
   }
   if (row.hasFragile) parts.push("cap with fragile units last");
   if (row.hasNonStack) parts.push("leave no-stack items uncovered");
+  if (row.needsSeparator)
+    parts.push("insert a separator board (plywood/cardboard) between heavy and fragile layers");
   if (row.rotatedCount > 0)
     parts.push(`rotate ${row.rotatedCount} unit${row.rotatedCount > 1 ? "s" : ""} as marked in 3D view`);
   return parts.join(", ") + ".";

@@ -21,6 +21,7 @@ export interface PdfLoadingRow {
   hasFragile: boolean;
   hasNonStack: boolean;
   rotatedCount: number;
+  needsSeparator: boolean;
   items: { itemIdx: number; count: number; color: string; packageType: string }[];
   instruction: string;
   /** Optional pre-rasterised side-view PNG dataURL for this row. */
@@ -200,6 +201,7 @@ export function downloadResultPdf(
       const flags: string[] = [];
       if (r.hasFragile) flags.push("FRAGILE");
       if (r.hasNonStack) flags.push("NO-STACK");
+      if (r.needsSeparator) flags.push("MIXED PALLET");
       if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
       const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
       const wt =
@@ -214,7 +216,14 @@ export function downloadResultPdf(
         itemsTxt,
         cardW - svgW - cardPad * 3,
       ) as string[];
-      const textBlockH = 14 + 12 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
+      const warnLines = r.needsSeparator
+        ? (doc.splitTextToSize(
+            "Mixed pallet — insert a plywood/cardboard separator board between heavy and fragile units.",
+            cardW - svgW - cardPad * 3,
+          ) as string[])
+        : [];
+      const textBlockH =
+        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
       const cardH = Math.max(svgH + cardPad * 2, textBlockH + cardPad * 2);
 
       // Page-break check
@@ -281,6 +290,20 @@ export function downloadResultPdf(
         doc.setTextColor(...ORANGE);
         doc.text(flags.join("  ·  "), tx, ty);
         ty += 9;
+      }
+
+      if (warnLines.length) {
+        // Red warning band before items.
+        doc.setFillColor(254, 226, 226);
+        doc.setDrawColor(252, 165, 165);
+        doc.setLineWidth(0.5);
+        const wH = warnLines.length * 9 + 4;
+        doc.roundedRect(tx - 2, ty - 7, cardW - svgW - cardPad * 3, wH, 2, 2, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(185, 28, 28);
+        doc.text(warnLines, tx + 2, ty);
+        ty += wH - 3;
       }
 
       doc.setFont("helvetica", "normal");

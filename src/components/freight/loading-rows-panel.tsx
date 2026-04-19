@@ -70,6 +70,8 @@ export function LoadingRowsPanel({ pack }: Props) {
         const badges: string[] = [];
         if (row.hasFragile) badges.push('<span class="badge fragile">FRAGILE</span>');
         if (row.hasNonStack) badges.push('<span class="badge nostack">NO-STACK</span>');
+        if (row.needsSeparator)
+          badges.push('<span class="badge mixed">⚠ MIXED PALLET</span>');
         if (row.rotatedCount > 0)
           badges.push(`<span class="badge tilt">↻ ${row.rotatedCount} TILTED</span>`);
         const itemsHtml = counts
@@ -102,6 +104,7 @@ export function LoadingRowsPanel({ pack }: Props) {
                 </div>
                 <div class="row-body-text">
                   <div class="chips">${itemsHtml}</div>
+                  ${row.needsSeparator ? '<div class="warn">⚠ Mixed pallet — insert a plywood/cardboard separator board between heavy non-fragile units and fragile units before stacking.</div>' : ""}
                   <div class="instruction"><strong>Loader:</strong> ${instructionFor(row)}</div>
                 </div>
               </div>
@@ -132,6 +135,8 @@ export function LoadingRowsPanel({ pack }: Props) {
         .badge.fragile { background: #fef3c7; color: #92400e; }
         .badge.nostack { background: #ffe4e6; color: #9f1239; }
         .badge.tilt { background: #fef9c3; color: #854d0e; }
+        .badge.mixed { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+        .warn { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; padding: 5px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
         .check { width: 18px; height: 18px; border: 1.5px solid #1B3A6B; border-radius: 4px; flex-shrink: 0; }
         .row-body { margin-top: 8px; padding-left: 38px; }
         .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
@@ -219,6 +224,11 @@ export function LoadingRowsPanel({ pack }: Props) {
                         no-stack
                       </span>
                     )}
+                    {row.needsSeparator && (
+                      <span className="rounded border border-red-300 bg-red-100 px-1 text-[9px] font-medium uppercase text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                        ⚠ mixed pallet
+                      </span>
+                    )}
                     {row.rotatedCount > 0 && (
                       <span className="rounded bg-yellow-100 px-1 text-[9px] font-medium uppercase text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-200">
                         ↻ {row.rotatedCount} tilted
@@ -280,6 +290,16 @@ export function LoadingRowsPanel({ pack }: Props) {
                       </div>
                     ))}
                   </div>
+
+                  {row.needsSeparator && (
+                    <div className="flex items-start gap-1.5 rounded-md border border-red-300 bg-red-50 px-2 py-1.5 text-[11px] leading-relaxed text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+                      <span aria-hidden>⚠</span>
+                      <span>
+                        <strong className="font-semibold">Mixed pallet:</strong>{" "}
+                        Insert a plywood or cardboard separator board between the heavy non-fragile units and the fragile units before stacking.
+                      </span>
+                    </div>
+                  )}
 
                   {/* Instruction */}
                   <div className="rounded-md border-l-2 border-brand-orange bg-background px-2 py-1.5 text-[11px] leading-relaxed text-brand-navy">
