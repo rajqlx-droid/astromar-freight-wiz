@@ -201,6 +201,7 @@ export function downloadResultPdf(
       const flags: string[] = [];
       if (r.hasFragile) flags.push("FRAGILE");
       if (r.hasNonStack) flags.push("NO-STACK");
+      if (r.needsSeparator) flags.push("MIXED PALLET");
       if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
       const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
       const wt =
@@ -215,7 +216,14 @@ export function downloadResultPdf(
         itemsTxt,
         cardW - svgW - cardPad * 3,
       ) as string[];
-      const textBlockH = 14 + 12 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
+      const warnLines = r.needsSeparator
+        ? (doc.splitTextToSize(
+            "Mixed pallet — insert a plywood/cardboard separator board between heavy and fragile units.",
+            cardW - svgW - cardPad * 3,
+          ) as string[])
+        : [];
+      const textBlockH =
+        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
       const cardH = Math.max(svgH + cardPad * 2, textBlockH + cardPad * 2);
 
       // Page-break check
