@@ -161,3 +161,13 @@
     color: var(--color-foreground);
   }
 }
+
+/* Hide scrollbar but allow scroll on tab strip */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white !important; }
+  .print-area { box-shadow: none !important; border: 1px solid #ccc !important; }
+}
