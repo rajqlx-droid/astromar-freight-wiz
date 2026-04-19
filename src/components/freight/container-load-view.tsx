@@ -26,7 +26,7 @@ import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
-import { ScenarioSnapshotButton } from "./scenario-snapshot-button";
+
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
 import { readHeavyThreshold } from "./loading-rows-panel";
@@ -156,7 +156,6 @@ export function ContainerLoadView({
         ))}
         <div className="ml-auto flex items-center gap-2">
           <div title={optimizationDisabledReason ?? undefined} className={cn("flex items-center gap-2", optimizationDisabledReason && "pointer-events-none opacity-50")}>
-            <ScenarioSnapshotButton pack={activePack} items={items} />
             <LoadingVideoButton
               pack={activePack}
               containerLabel={activePack.container.name}
