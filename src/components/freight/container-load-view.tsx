@@ -433,6 +433,9 @@ function RowStepperBar({
   atEmpty,
   atFirst: _atFirst,
   atLast,
+  showGapHeatmap,
+  onToggleGapHeatmap,
+  activeRowHasGap,
 }: {
   stepMode: boolean;
   onToggleStepMode: () => void;
@@ -445,6 +448,9 @@ function RowStepperBar({
   atEmpty: boolean;
   atFirst: boolean;
   atLast: boolean;
+  showGapHeatmap: boolean;
+  onToggleGapHeatmap: () => void;
+  activeRowHasGap: boolean;
 }) {
   const nextRowNum = Math.min(totalRows, stepIdx + 2); // 1-indexed for label
   const statusLabel = atEmpty
