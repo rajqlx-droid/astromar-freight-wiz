@@ -391,6 +391,128 @@ function buildSummary(it: CbmItem): string {
   return bits.join(" · ");
 }
 
+/* ---------------- Packing popover content (shared) ---------------- */
+
+function renderPackingPopoverContent({
+  it,
+  idx,
+  items,
+  updatePacking,
+  applyToAll,
+  closePopover,
+}: {
+  it: CbmItem;
+  idx: number;
+  items: CbmItem[];
+  updatePacking: (id: string, patch: Partial<CbmItem>) => void;
+  applyToAll: (sourceId: string) => void;
+  closePopover: () => void;
+}) {
+  return (
+    <>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h4 className="text-sm font-bold text-brand-navy">
+            Packing options · Item {idx + 1}
+          </h4>
+          <p className="text-[11px] text-muted-foreground">
+            Required for accurate container plan & 3D loading.
+          </p>
+        </div>
+        <Info className="size-4 shrink-0 text-brand-navy/60" />
+      </div>
+
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold text-brand-navy">Package type</Label>
+          <Select
+            value={it.packageType ?? "carton"}
+            onValueChange={(v) => updatePacking(it.id, { packageType: v as PackageType })}
+          >
+            <SelectTrigger className="h-9 border-brand-navy/30">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PACKAGE_TYPES.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <NumberField
+          compact
+          id={`msw-${it.id}`}
+          label="Max stack weight"
+          suffix="kg"
+          value={it.maxStackWeightKg ?? 0}
+          onChange={(n) =>
+            updatePacking(it.id, {
+              maxStackWeightKg: Number.isFinite(n) ? Math.max(0, n) : 0,
+            })
+          }
+          hint="Max weight allowed on top of one of these. 0 = unlimited."
+        />
+
+        <ToggleRow
+          title="Stackable"
+          desc="Allow other cartons on top."
+          checked={it.stackable !== false}
+          onChange={(v) => updatePacking(it.id, { stackable: v })}
+        />
+        <ToggleRow
+          title="Fragile"
+          desc="Loaded last, on top. Nothing stacks on it."
+          icon={<ShieldAlert className="size-3.5 text-amber-600" />}
+          checked={it.fragile === true}
+          onChange={(v) => updatePacking(it.id, { fragile: v })}
+        />
+        <ToggleRow
+          title="Can lay sideways"
+          desc="Packer may rotate 90° on the floor (swap L↔W)."
+          checked={it.allowSidewaysRotation !== false}
+          onChange={(v) => updatePacking(it.id, { allowSidewaysRotation: v })}
+        />
+        {!it.fragile && (
+          <ToggleRow
+            title="Can stand on side"
+            desc="Packer may tip it onto its side. Non-fragile only."
+            checked={it.allowAxisRotation === true}
+            onChange={(v) => updatePacking(it.id, { allowAxisRotation: v })}
+          />
+        )}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+        {items.length > 1 ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 border-brand-navy/40 text-[11px] text-brand-navy"
+            onClick={() => applyToAll(it.id)}
+          >
+            Apply to all items
+          </Button>
+        ) : (
+          <span />
+        )}
+        <Button
+          size="sm"
+          className="h-8 bg-brand-navy text-[11px] text-white hover:bg-brand-navy/90"
+          onClick={() => {
+            updatePacking(it.id, {});
+            closePopover();
+          }}
+        >
+          <CheckCircle2 className="size-3.5" /> Confirm
+        </Button>
+      </div>
+    </>
+  );
+}
+
 /* ---------------- ConfirmPackingModal ---------------- */
 
 function ConfirmPackingModal({
