@@ -274,6 +274,7 @@ export function downloadResultPdf(
       ry += bannerH + 10;
     }
 
+    const cardX = 40;
     const cardW = pageWidth - 80;
     const svgW = 130;
     const svgH = 44;
