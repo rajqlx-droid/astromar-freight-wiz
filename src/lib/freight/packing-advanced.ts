@@ -368,16 +368,16 @@ export function packContainerAdvanced(
   }
 
   // Render-cap truncation (rare with skyline since we score; just in case).
+  const toPlaced = (p: PlacedInternal): PlacedBox => ({
+    x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h,
+    color: p.color, itemIdx: p.itemIdx, rotated: p.rotated ?? null,
+  });
   let placed: PlacedBox[];
   if (placedInternal.length > RENDER_CAP) {
     truncated = true;
-    placed = placedInternal.slice(0, RENDER_CAP).map((p) => ({
-      x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h, color: p.color, itemIdx: p.itemIdx,
-    }));
+    placed = placedInternal.slice(0, RENDER_CAP).map(toPlaced);
   } else {
-    placed = placedInternal.map((p) => ({
-      x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h, color: p.color, itemIdx: p.itemIdx,
-    }));
+    placed = placedInternal.map(toPlaced);
   }
 
   // COG along container length (X axis).
