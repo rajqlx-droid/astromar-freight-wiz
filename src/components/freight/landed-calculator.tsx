@@ -84,11 +84,24 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
 
         {/* Line items */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-brand-navy">Cargo Line Items</h4>
-            <Button size="sm" onClick={addLine} className="text-white" style={{ background: "var(--brand-orange)" }}>
-              <Plus className="size-3.5" /> Add line
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {onDuplicateToExport && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onDuplicateToExport}
+                  className="border-brand-navy text-brand-navy"
+                  title="Copy these line items into the Export Price calculator with default 20% margin"
+                >
+                  <ArrowRightLeft className="size-3.5" /> Duplicate as Export quote
+                </Button>
+              )}
+              <Button size="sm" onClick={addLine} className="text-white" style={{ background: "var(--brand-orange)" }}>
+                <Plus className="size-3.5" /> Add line
+              </Button>
+            </div>
           </div>
           <div className="space-y-3">
             {state.lines.map((ln, idx) => (
