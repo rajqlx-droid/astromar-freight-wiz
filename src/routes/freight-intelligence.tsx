@@ -45,6 +45,8 @@ import {
   calcRisk,
   emptyAirItem,
   emptyCbmItem,
+  emptyExportLine,
+  emptyLandedLine,
   type AirItem,
   type CbmItem,
   type CompareInput,
@@ -84,23 +86,23 @@ function FreightIntelligencePage() {
   const [airItems, setAirItems] = useState<AirItem[]>(() => [emptyAirItem(0)]);
   const [airDivisor, setAirDivisor] = useState(6000);
   const [landed, setLanded] = useState<LandedInput>({
-    product: 0,
+    lines: [emptyLandedLine(0)],
     freight: 0,
     insurance: 0,
-    dutyRate: 10,
-    gstRate: 18,
     additional: 0,
-    qty: 0,
-    currency: "₹",
+    gstRate: 18,
+    currency: "INR",
+    fxRate: 0,
+    baseCurrency: "INR",
   });
   const [exp, setExp] = useState<ExportInput>({
-    cost: 0,
+    lines: [emptyExportLine(0)],
     freight: 0,
     insurance: 0,
-    margin: 20,
     additional: 0,
-    qty: 0,
-    currency: "₹",
+    currency: "INR",
+    fxRate: 0,
+    baseCurrency: "INR",
   });
   const [compare, setCompare] = useState<CompareInput>({
     seaFreight: 0,
