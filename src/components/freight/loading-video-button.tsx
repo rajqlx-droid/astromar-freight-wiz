@@ -201,7 +201,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
             <DialogTitle>Loading Sequence Video</DialogTitle>
             <DialogDescription>
               {containerLabel ? `${containerLabel} · ` : ""}
-              ~20 second 3D animation of cargo loading back-to-front, bottom-to-top.
+              ~12 second 3D animation of cargo loading back-to-front, bottom-to-top.
             </DialogDescription>
           </DialogHeader>
 
@@ -245,7 +245,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-1 rounded-md border border-brand-navy/30 bg-background p-0.5">
                   <span className="px-2 text-[11px] font-medium text-muted-foreground">Speed</span>
-                  {([0.5, 1, 2] as Speed[]).map((s) => (
+                  {([0.5, 1, 1.5, 2] as Speed[]).map((s) => (
                     <button
                       key={s}
                       type="button"
@@ -257,7 +257,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
                           : "text-brand-navy hover:bg-brand-navy/10",
                       )}
                     >
-                      {s}×{s === 0.5 ? " (slow-mo)" : ""}
+                      {s}×{s === 0.5 ? " (slow)" : ""}
                     </button>
                   ))}
                 </div>
