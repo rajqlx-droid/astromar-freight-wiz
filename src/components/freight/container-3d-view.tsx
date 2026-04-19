@@ -388,6 +388,8 @@ function SceneContents({
         infiniteGrid={false}
       />
 
+      <WarehouseAmbience Cm={Cm} />
+
       <ContainerShell Cm={Cm} doorOpen={doorOpen} />
 
       {/* Cargo */}
