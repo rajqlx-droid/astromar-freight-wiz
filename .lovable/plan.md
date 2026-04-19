@@ -1,49 +1,38 @@
 
 
-## The bug
+## What you're seeing
 
-`buildRows()` in `src/lib/freight/loading-rows.ts` groups boxes into a "row" purely by **x-span overlap** along the container length:
+In the screenshot, the blue pallets show **two parallel dark lines** running along their shared seams — most visible on the front face of the blue stack (around the "5.90 m" label) and where blue meets green. That's not pallet borders rendering twice on one box; it's **two adjacent boxes each drawing their own edge line on the shared seam**.
 
-```
-if (last && b.x < last.xEnd - 1) {
-  last.boxes.push(b);          // merge into current row
-  if (bxEnd > last.xEnd) last.xEnd = bxEnd;
-}
-```
+## Root cause
 
-The packer (`packing-advanced.ts`, score `x * 10_000 + z * 100 + y * 0.1`) fills the back wall first — so back-wall pallets often have *different lengths* (e.g. a 1170 mm deep pallet next to a 1200 mm deep one with 4 stacked cartons). Once one big pallet sets `xEnd = 1170`, every shorter pallet starting at `x < 1170` gets folded into the same row — even pallets sitting on the opposite side wall with completely different stack configurations.
+Each box in `CargoBox` (line 1189) renders an `<Edges color="rgba(0,0,0,0.35)" />` outline around its full geometry. When two pallets sit perfectly flush (share a face), both boxes draw the edge at that exact shared seam, so the line is drawn twice. Combined with:
 
-That's exactly what the screenshot shows: "Row 1" balloons to 5 stacks on one side + 7 stacks + cap cartons on the other side, because all of them happen to overlap somewhere along the x-axis with the deepest back-wall pallet.
+- z-fighting (two coplanar surfaces fighting for the same pixels at depth)
+- a slightly transparent edge color (0.35 alpha) that **darkens when overlapped** — two 35% lines stacked = ~58%
+
+…the seam appears as a noticeably darker double-stripe vs. the single edges around the outside of the stack. Same thing happens between the blue stack and the green carton wall — both draw their edge on the meeting plane.
+
+So it's not a bug in the row logic or geometry; it's a **render artefact from drawing edges per-box without dedup**. It does look like a visual error to a user, though, because real pallets in a container don't have a doubled black seam between them.
 
 ## The fix
 
-Change row grouping to be **back-wall-aligned**, not overlap-merged. A row should be defined by the bottom-floor pallets that share roughly the same `x` start position (the actual loader-visible "rank against the wall"), and only those pallets + everything stacked directly on top of them.
+Three small, additive changes in `src/components/freight/container-3d-view.tsx` around the `<Edges>` line (1189):
 
-### Algorithm
-1. Take all boxes on the floor (`z < 10`), sort by `x`.
-2. Cluster them into ranks by `x`-start: a new rank starts when the next floor box's `x` is more than `TOL` (e.g. 200 mm) past the **minimum `x`** of the current rank. This keeps slightly staggered same-wall pallets together without absorbing the next rank back.
-3. For each rank, claim every non-floor box whose footprint sits **directly above** one of that rank's floor boxes (overlap test on x and y).
-4. `xStart` = min floor-box `x` in the rank, `xEnd` = max `x + l` of any box claimed by the rank.
+1. **Use a fully opaque edge colour with very low contrast** instead of 35% alpha black. `#1f2937` at full opacity won't double-darken when two edges overlap, because pixel value is the same regardless of how many times it's drawn. (Alpha-blended overlaps are what cause the doubling.)
 
-This produces what the user expects:
-- Row 1 = the leftmost rank against the back wall = 2 pallets stacked (one on top of the other) on one side, plus the 7-stack column with 4 cartons capped on top, **only if they share the same `x` start**. If they don't (different depth), they become separate rows.
-- The next rank forward = Row 2, etc.
+2. **Add `renderOrder` + a tiny `polygonOffset`** on the edge material so coplanar edges from neighbouring boxes resolve to the same depth deterministically rather than z-fighting. Drei's `<Edges>` accepts a material prop — set `polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1}`.
 
-### Safety nets
-- Keep `TOL = 200 mm` configurable; tune so visually-aligned pallets don't accidentally split.
-- Stacked boxes whose footprints don't overlap any single rank's floor pallet (rare — a box bridging two ranks) get assigned to the rank under their **majority footprint**.
-- Existing fields (`hasFragile`, `wallUtilizationPct`, `layers`, etc.) recompute the same way — no API change.
-- Pallet-sequence (`buildPalletSequence`) consumes `RowGroup[]` so it auto-corrects.
-- 3D viewer's `visiblePlacedSet` is built from `palletSequence[].placedIdx`, so step-mode reveal stays in sync automatically.
+3. **Inset the edge geometry by ~1 mm** (`scale={0.999}` on `<Edges>`) so each box's outline sits just inside its own face. Adjacent boxes' edges then no longer coincide on the shared seam at all — the seam reads as a clean single thin line where the two faces meet, and only the **outer perimeter** of the stack shows an outline. This is what the user expects: "proper line of their border" = one crisp border per visible silhouette.
+
+Optional polish: when two neighbouring boxes share the **same colour and same item id** (true for stacked identical pallets), suppress the `<Edges>` altogether and let the stack read as one tall block. Out of scope unless you want it.
 
 ## Files to change
 
-- **`src/lib/freight/loading-rows.ts`** — replace the body of `buildRows()` with the back-wall-aligned algorithm above. Keep the same return type and field semantics. ~50 lines changed.
-
-That's it. No UI changes, no 3D-viewer changes, no panel-component changes. The bug is one function deep.
+- `src/components/freight/container-3d-view.tsx` — line 1189 only. ~4 lines changed.
 
 ## Out of scope
 
-- Changing the packer itself (it places correctly; only the post-hoc row-labelling is wrong).
-- Re-rendering the Remotion video.
+- Row-grouping / packer logic (already fixed last turn).
+- WoodenPallet styling or stack-merging behaviour.
 
