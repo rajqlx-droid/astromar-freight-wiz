@@ -14,8 +14,9 @@ interface Props {
 export function LoadingSequence({ pack }: Props) {
   const [open, setOpen] = useState(false);
 
-  // Recommended sequence mirrors packing logic: non-stackable first (back wall, floor),
-  // then heaviest, then largest volume, fragile last (top layer).
+  // Recommended sequence mirrors packing logic: fill the back wall completely
+  // (full width × full height) before advancing toward the door. Non-stackable
+  // first (need floor), heaviest next, fragile last (top layer).
   const sequence = [...pack.perItem]
     .filter((p) => p.planned > 0 && p.placed > 0)
     .sort((a, b) => {
@@ -48,7 +49,7 @@ export function LoadingSequence({ pack }: Props) {
       {open && (
         <ol className="space-y-2 border-t px-3 py-3">
           {sequence.map((p, idx) => {
-            const where = idx === 0 ? "back wall, floor" : p.fragile ? "top layer" : "next layer";
+            const where = idx === 0 ? "back wall — fill floor side-to-side, then layer up" : p.fragile ? "top layer near door" : "next column toward door";
             const note = !p.stackable
               ? "do not stack anything on top"
               : p.fragile
