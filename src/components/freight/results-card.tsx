@@ -1,31 +1,16 @@
 /**
  * Results card with action toolbar (PDF, Copy, Save, Print, Share, Email).
  */
-import { useState } from "react";
 import {
-  Copy,
   Download,
   Printer,
-  Save,
-  Share2,
   Mail,
   MessageCircle,
-  Link as LinkIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { downloadResultPdf, type PdfExtras } from "@/lib/freight/pdf";
-import { historyStore, savedStore } from "@/lib/freight/storage";
 import type { CalcResult } from "@/lib/freight/types";
 
 interface Props {
