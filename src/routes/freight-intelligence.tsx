@@ -336,7 +336,11 @@ function FreightIntelligencePage() {
                 <Calculator className="size-4" /> Tools
               </Button>
               <ThemeToggle />
-              <Sheet>
+              <CompareDialog
+                active={active}
+                onConfirm={(left, right) => setCompareMode({ left, right })}
+              />
+              <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="sm" className="border-brand-navy text-brand-navy">
                     <HistoryIcon className="size-4" />
