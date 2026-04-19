@@ -195,7 +195,9 @@ export function downloadResultPdf(
     const cardX = 40;
     const cardW = pageWidth - 80;
     const svgW = 130;
-    const svgH = 52;
+    const svgH = 48;
+    const svgGap = 6;
+    const imageColH = svgH * 2 + svgGap + 14; // two stacked views + labels
     const cardPad = 8;
 
     for (const r of extras.loadingRows) {
