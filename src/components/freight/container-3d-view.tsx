@@ -465,6 +465,12 @@ function SceneContents({
             />
           );
         })}
+        {/* Gap heatmap overlay — translucent red rectangles on the floor and
+            back wall of the active row's slice. Hidden during recording so
+            video frames stay clean. */}
+        {!recording && gapHeatmapRow && (
+          <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
+        )}
       </group>
 
       {/* Forklift — only visible while recording and a box is being carried */}
