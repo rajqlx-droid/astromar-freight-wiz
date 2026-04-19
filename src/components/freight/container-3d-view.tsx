@@ -1186,7 +1186,14 @@ function CargoBox({
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
-        <Edges color={hovered ? tiltColor : "rgba(0,0,0,0.35)"} />
+        <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
+          <lineBasicMaterial
+            color={hovered ? tiltColor : "#1f2937"}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </Edges>
       </mesh>
       {/* Non-stackable warning stripe on top */}
       {nonStack && (
