@@ -379,13 +379,12 @@ function SceneContents({
         infiniteGrid={false}
       />
 
-      <ContainerShell Cm={Cm} />
+      <ContainerShell Cm={Cm} doorOpen={doorOpen} />
 
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {pack.placed.map((b, i) => {
           const t = transforms?.[i];
-          // When recording: skip boxes that aren't visible yet, apply offsets.
           if (recording && t && !t.visible) return null;
           return (
             <CargoBox
@@ -398,6 +397,15 @@ function SceneContents({
           );
         })}
       </group>
+
+      {/* Forklift — only visible while recording and a box is being carried */}
+      {recording && staging?.forkliftActive && (
+        <Forklift
+          x={staging.forkliftX}
+          z={staging.forkliftZ}
+          forkY={staging.forkliftY}
+        />
+      )}
 
       {/* Dimension labels — hidden during recording for clean video frames */}
       {!recording && (
