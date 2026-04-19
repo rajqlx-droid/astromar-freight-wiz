@@ -71,6 +71,7 @@ export function ContainerLoadView({
   const [is3D, setIs3D] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("0");
+  const [viewerCollapsed, setViewerCollapsed] = useState(false);
   const view3DRef = useRef<Container3DHandle | null>(null);
 
   useEffect(() => {
