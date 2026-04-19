@@ -12,6 +12,8 @@ import {
   MapPin,
   ArrowRight,
 } from "lucide-react";
+import { toast } from "sonner";
+import { nextId } from "@/lib/freight/ids";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -75,6 +77,35 @@ export const Route = createFileRoute("/freight-intelligence")({
 });
 
 const BANNER_KEY = "astromar.freight.banner";
+const CURRENCY_KEY = "astromar.freight.currency";
+
+interface CurrencyPrefs {
+  currency: string;
+  baseCurrency: string;
+  fxRate: number;
+}
+
+const DEFAULT_CURRENCY_PREFS: CurrencyPrefs = {
+  currency: "INR",
+  baseCurrency: "INR",
+  fxRate: 0,
+};
+
+function readCurrencyPrefs(): CurrencyPrefs {
+  if (typeof window === "undefined") return DEFAULT_CURRENCY_PREFS;
+  try {
+    const raw = localStorage.getItem(CURRENCY_KEY);
+    if (!raw) return DEFAULT_CURRENCY_PREFS;
+    const parsed = JSON.parse(raw) as Partial<CurrencyPrefs>;
+    return {
+      currency: parsed.currency ?? DEFAULT_CURRENCY_PREFS.currency,
+      baseCurrency: parsed.baseCurrency ?? DEFAULT_CURRENCY_PREFS.baseCurrency,
+      fxRate: typeof parsed.fxRate === "number" ? parsed.fxRate : DEFAULT_CURRENCY_PREFS.fxRate,
+    };
+  } catch {
+    return DEFAULT_CURRENCY_PREFS;
+  }
+}
 
 function FreightIntelligencePage() {
   const [active, setActive] = useState<CalcKey>("cbm");
@@ -85,24 +116,30 @@ function FreightIntelligencePage() {
   const [cbmItems, setCbmItems] = useState<CbmItem[]>(() => [emptyCbmItem(0)]);
   const [airItems, setAirItems] = useState<AirItem[]>(() => [emptyAirItem(0)]);
   const [airDivisor, setAirDivisor] = useState(6000);
-  const [landed, setLanded] = useState<LandedInput>({
-    lines: [emptyLandedLine(0)],
-    freight: 0,
-    insurance: 0,
-    additional: 0,
-    gstRate: 18,
-    currency: "INR",
-    fxRate: 0,
-    baseCurrency: "INR",
+  const [landed, setLanded] = useState<LandedInput>(() => {
+    const p = readCurrencyPrefs();
+    return {
+      lines: [emptyLandedLine(0)],
+      freight: 0,
+      insurance: 0,
+      additional: 0,
+      gstRate: 18,
+      currency: p.currency,
+      fxRate: p.fxRate,
+      baseCurrency: p.baseCurrency,
+    };
   });
-  const [exp, setExp] = useState<ExportInput>({
-    lines: [emptyExportLine(0)],
-    freight: 0,
-    insurance: 0,
-    additional: 0,
-    currency: "INR",
-    fxRate: 0,
-    baseCurrency: "INR",
+  const [exp, setExp] = useState<ExportInput>(() => {
+    const p = readCurrencyPrefs();
+    return {
+      lines: [emptyExportLine(0)],
+      freight: 0,
+      insurance: 0,
+      additional: 0,
+      currency: p.currency,
+      fxRate: p.fxRate,
+      baseCurrency: p.baseCurrency,
+    };
   });
   const [compare, setCompare] = useState<CompareInput>({
     seaFreight: 0,
@@ -123,6 +160,61 @@ function FreightIntelligencePage() {
     cargoType: "General",
     freeDays: 5,
   });
+
+  // Persist currency prefs whenever Landed or Export changes them.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const prefs: CurrencyPrefs = {
+      currency: landed.currency,
+      baseCurrency: landed.baseCurrency ?? "INR",
+      fxRate: landed.fxRate ?? 0,
+    };
+    try {
+      localStorage.setItem(CURRENCY_KEY, JSON.stringify(prefs));
+    } catch {
+      /* quota — ignore */
+    }
+  }, [landed.currency, landed.baseCurrency, landed.fxRate]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const prefs: CurrencyPrefs = {
+      currency: exp.currency,
+      baseCurrency: exp.baseCurrency ?? "INR",
+      fxRate: exp.fxRate ?? 0,
+    };
+    try {
+      localStorage.setItem(CURRENCY_KEY, JSON.stringify(prefs));
+    } catch {
+      /* quota — ignore */
+    }
+  }, [exp.currency, exp.baseCurrency, exp.fxRate]);
+
+  // Cross-calc: copy Landed line items → Export with default margin.
+  const duplicateLandedToExport = () => {
+    const DEFAULT_MARGIN = 20;
+    setExp((prev) => ({
+      ...prev,
+      currency: landed.currency,
+      baseCurrency: landed.baseCurrency,
+      fxRate: landed.fxRate,
+      freight: landed.freight,
+      insurance: landed.insurance,
+      additional: landed.additional,
+      lines: landed.lines.map((l) => ({
+        id: nextId("el"),
+        description: l.description,
+        hsCode: l.hsCode,
+        qty: l.qty,
+        unitValue: l.unitValue,
+        margin: DEFAULT_MARGIN,
+      })),
+    }));
+    setActive("export");
+    toast.success("Copied to Export Price", {
+      description: `${landed.lines.length} line item(s) duplicated with ${DEFAULT_MARGIN}% default margin.`,
+    });
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem(BANNER_KEY);
@@ -405,7 +497,7 @@ function FreightIntelligencePage() {
               {active === "air" && (
                 <AirCalculator items={airItems} setItems={setAirItems} divisor={airDivisor} setDivisor={setAirDivisor} />
               )}
-              {active === "landed" && <LandedCalculator state={landed} setState={setLanded} />}
+              {active === "landed" && <LandedCalculator state={landed} setState={setLanded} onDuplicateToExport={duplicateLandedToExport} />}
               {active === "export" && <ExportCalculator state={exp} setState={setExp} />}
               {active === "compare" && <CompareCalculator state={compare} setState={setCompare} />}
               {active === "risk" && <RiskCalculator state={risk} setState={setRisk} />}
