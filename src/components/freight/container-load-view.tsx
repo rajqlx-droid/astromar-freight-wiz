@@ -280,6 +280,7 @@ function SinglePlanBody({
   mounted,
   view3DRef,
   isActive,
+  viewerCollapsed = false,
   rollup,
 }: {
   pack: AdvancedPackResult;
@@ -290,6 +291,7 @@ function SinglePlanBody({
   mounted: boolean;
   view3DRef: React.MutableRefObject<Container3DHandle | null>;
   isActive: boolean;
+  viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
 }) {
   // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
@@ -302,25 +304,27 @@ function SinglePlanBody({
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
-        <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
-          {is3D && mounted ? (
-            <Suspense
-              fallback={
-                <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
-                  Loading 3D viewer…
-                </div>
-              }
-            >
-              <Container3DView
-                ref={isActive ? view3DRef : undefined}
-                pack={pack}
-                shufflePreview={shufflePreview}
-              />
-            </Suspense>
-          ) : (
-            <IsoContainer pack={pack} />
-          )}
-        </div>
+        {!viewerCollapsed && (
+          <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
+            {is3D && mounted ? (
+              <Suspense
+                fallback={
+                  <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
+                    Loading 3D viewer…
+                  </div>
+                }
+              >
+                <Container3DView
+                  ref={isActive ? view3DRef : undefined}
+                  pack={pack}
+                  shufflePreview={shufflePreview}
+                />
+              </Suspense>
+            ) : (
+              <IsoContainer pack={pack} />
+            )}
+          </div>
+        )}
         <Legend items={items} />
         <LoadingSequence pack={pack} />
         <LoadingRowsPanel
