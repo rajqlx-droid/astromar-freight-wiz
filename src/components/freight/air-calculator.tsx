@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Plus, Trash2, Copy, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -6,9 +6,13 @@ import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
 import {
   UnitSelector,
-  type LengthUnit,
+  WeightUnitSelector,
   cmTo,
   toCm,
+  kgTo,
+  toKg,
+  usePersistentLengthUnit,
+  usePersistentWeightUnit,
 } from "@/components/freight/unit-selector";
 import { calcAir, emptyAirItem, type AirItem } from "@/lib/freight/calculators";
 import { nextId } from "@/lib/freight/ids";
@@ -21,7 +25,8 @@ interface Props {
 }
 
 export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
-  const [unit, setUnit] = useState<LengthUnit>("cm");
+  const [lenUnit, setLenUnit] = usePersistentLengthUnit();
+  const [wtUnit, setWtUnit] = usePersistentWeightUnit();
   const result = useMemo(() => calcAir(items, divisor), [items, divisor]);
 
   const update = (id: string, patch: Partial<AirItem>) =>
@@ -32,13 +37,20 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
     if (src) setItems([...items, { ...src, id: nextId("air") }]);
   };
 
-  const showVal = (cm: number) => {
-    const v = cmTo(cm, unit);
+  const showLen = (cm: number) => {
+    const v = cmTo(cm, lenUnit);
     return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
   };
   const setLen =
     (id: string, key: "length" | "width" | "height") => (n: number) =>
-      update(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<AirItem>);
+      update(id, { [key]: Number.isFinite(n) ? toCm(n, lenUnit) : 0 } as Partial<AirItem>);
+
+  const showWt = (kg: number) => {
+    const v = kgTo(kg, wtUnit);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const setWt = (id: string) => (n: number) =>
+    update(id, { weight: Number.isFinite(n) ? toKg(n, wtUnit) : 0 });
 
   const warn = result.items.find((i) => i.label === "Cost Impact" && i.value.startsWith("+"));
 
@@ -53,8 +65,9 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
         <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <NumberField id="divisor" label="Volumetric Divisor" required step={1} value={divisor} onChange={(n) => setDivisor(n || 6000)} hint="IATA standard is 6000 for air freight. Some couriers use 5000." />
-            <div className="flex items-end">
-              <UnitSelector id="air-unit" value={unit} onChange={setUnit} />
+            <div className="flex flex-wrap items-end gap-4">
+              <UnitSelector id="air-len-unit" value={lenUnit} onChange={setLenUnit} />
+              <WeightUnitSelector id="air-wt-unit" value={wtUnit} onChange={setWtUnit} />
             </div>
           </div>
         </Card>
@@ -75,11 +88,11 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <NumberField id={`al-${it.id}`} label="Length" suffix={unit} required value={showVal(it.length)} onChange={setLen(it.id, "length")} />
-              <NumberField id={`aw-${it.id}`} label="Width" suffix={unit} required value={showVal(it.width)} onChange={setLen(it.id, "width")} />
-              <NumberField id={`ah-${it.id}`} label="Height" suffix={unit} required value={showVal(it.height)} onChange={setLen(it.id, "height")} />
+              <NumberField id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
+              <NumberField id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
+              <NumberField id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
               <NumberField id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
-              <NumberField id={`awt-${it.id}`} label="Actual Wt" suffix="kg" required value={it.weight} onChange={(n) => update(it.id, { weight: n })} />
+              <NumberField id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
             </div>
           </Card>
         ))}

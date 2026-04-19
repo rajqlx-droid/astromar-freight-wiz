@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Plus, Trash2, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -7,9 +7,13 @@ import { ResultsCard } from "@/components/freight/results-card";
 import { ContainerLoadView } from "@/components/freight/container-load-view";
 import {
   UnitSelector,
-  type LengthUnit,
+  WeightUnitSelector,
   cmTo,
   toCm,
+  kgTo,
+  toKg,
+  usePersistentLengthUnit,
+  usePersistentWeightUnit,
 } from "@/components/freight/unit-selector";
 import { calcCbm, emptyCbmItem, type CbmItem } from "@/lib/freight/calculators";
 import { nextId } from "@/lib/freight/ids";
@@ -20,7 +24,8 @@ interface Props {
 }
 
 export function CbmCalculator({ items, setItems }: Props) {
-  const [unit, setUnit] = useState<LengthUnit>("cm");
+  const [lenUnit, setLenUnit] = usePersistentLengthUnit();
+  const [wtUnit, setWtUnit] = usePersistentWeightUnit();
   const result = useMemo(() => calcCbm(items), [items]);
 
   const update = (id: string, patch: Partial<CbmItem>) => {
@@ -35,14 +40,20 @@ export function CbmCalculator({ items, setItems }: Props) {
   const add = () => setItems([...items, emptyCbmItem()]);
   const clear = () => setItems([emptyCbmItem(0)]);
 
-  // Convert stored cm value to current display unit and back on edit
-  const showVal = (cm: number) => {
-    const v = cmTo(cm, unit);
+  const showLen = (cm: number) => {
+    const v = cmTo(cm, lenUnit);
     return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
   };
   const setLen =
     (id: string, key: "length" | "width" | "height") => (n: number) =>
-      update(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<CbmItem>);
+      update(id, { [key]: Number.isFinite(n) ? toCm(n, lenUnit) : 0 } as Partial<CbmItem>);
+
+  const showWt = (kg: number) => {
+    const v = kgTo(kg, wtUnit);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const setWt = (id: string) => (n: number) =>
+    update(id, { weight: Number.isFinite(n) ? toKg(n, wtUnit) : 0 });
 
   const inputsTable = items.flatMap((it, idx) => [
     { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
@@ -56,7 +67,10 @@ export function CbmCalculator({ items, setItems }: Props) {
           className="border-2 p-3"
           style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
         >
-          <UnitSelector id="cbm-unit" value={unit} onChange={setUnit} />
+          <div className="flex flex-wrap gap-4">
+            <UnitSelector id="cbm-len-unit" value={lenUnit} onChange={setLenUnit} />
+            <WeightUnitSelector id="cbm-wt-unit" value={wtUnit} onChange={setWtUnit} />
+          </div>
         </Card>
 
         {items.map((it, idx) => (
@@ -75,11 +89,11 @@ export function CbmCalculator({ items, setItems }: Props) {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <NumberField id={`l-${it.id}`} label="Length" suffix={unit} required value={showVal(it.length)} onChange={setLen(it.id, "length")} hint={`Outer length of one carton in ${unit}.`} />
-              <NumberField id={`w-${it.id}`} label="Width" suffix={unit} required value={showVal(it.width)} onChange={setLen(it.id, "width")} hint={`Outer width in ${unit}.`} />
-              <NumberField id={`h-${it.id}`} label="Height" suffix={unit} required value={showVal(it.height)} onChange={setLen(it.id, "height")} hint={`Outer height in ${unit}.`} />
+              <NumberField id={`l-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} hint={`Outer length of one carton in ${lenUnit}.`} />
+              <NumberField id={`w-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} hint={`Outer width in ${lenUnit}.`} />
+              <NumberField id={`h-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} hint={`Outer height in ${lenUnit}.`} />
               <NumberField id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
-              <NumberField id={`wt-${it.id}`} label="Weight" suffix="kg" required value={it.weight} onChange={(n) => update(it.id, { weight: n })} hint="Actual weight of ONE carton (gross)." />
+              <NumberField id={`wt-${it.id}`} label="Weight" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} hint={`Actual weight of ONE carton (gross) in ${wtUnit}.`} />
             </div>
           </Card>
         ))}
