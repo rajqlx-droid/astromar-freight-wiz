@@ -189,6 +189,24 @@ export function ContainerLoadView({
               <BoxIcon className="size-3" /> 3D
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setViewerCollapsed((v) => !v)}
+            aria-label={viewerCollapsed ? "Expand viewer" : "Collapse viewer"}
+            aria-expanded={!viewerCollapsed}
+            className="flex h-7 items-center gap-1 rounded-full border border-brand-navy/30 px-2.5 text-[11px] font-semibold text-brand-navy hover:bg-brand-navy/10"
+            title={viewerCollapsed ? "Show 3D viewer" : "Hide viewer (focus on row instructions)"}
+          >
+            {viewerCollapsed ? (
+              <>
+                <ChevronDown className="size-3" /> Show viewer
+              </>
+            ) : (
+              <>
+                <ChevronUp className="size-3" /> Hide viewer
+              </>
+            )}
+          </button>
         </div>
       </div>
 
