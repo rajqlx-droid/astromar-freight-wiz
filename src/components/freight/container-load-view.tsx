@@ -204,6 +204,13 @@ export function ContainerLoadView({
                 mounted={mounted}
                 view3DRef={view3DRef}
                 isActive={activeTab === String(i)}
+                rollup={{
+                  totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
+                  totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
+                  totalContainers: multiPacks.length,
+                  totalPlaced: multiPacks.reduce((s, x) => s + x.placedCartons, 0),
+                  totalPlanned: multiPacks.reduce((s, x) => s + x.totalCartons, 0),
+                }}
               />
             </TabsContent>
           ))}
