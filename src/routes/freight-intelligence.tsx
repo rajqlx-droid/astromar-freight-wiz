@@ -119,7 +119,7 @@ function FreightIntelligencePage() {
     dailyRate: 2500,
     goodsValue: 0,
     insurance: 0,
-    port: "Chennai",
+    port: "",
     cargoType: "General",
     freeDays: 5,
   });
