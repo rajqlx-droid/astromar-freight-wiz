@@ -1,10 +1,19 @@
 import { useMemo } from "react";
+import { Plus, Trash2, Copy as CopyIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { NumberField } from "@/components/freight/number-field";
 import { ResultsCard } from "@/components/freight/results-card";
-import { calcLanded, type LandedInput } from "@/lib/freight/calculators";
+import {
+  calcLanded,
+  emptyLandedLine,
+  fmt,
+  type LandedInput,
+} from "@/lib/freight/calculators";
+import type { CargoLine } from "@/lib/freight/types";
+import { nextId } from "@/lib/freight/ids";
 
 interface Props {
   state: LandedInput;
@@ -15,72 +24,135 @@ export function LandedCalculator({ state, setState }: Props) {
   const result = useMemo(() => calcLanded(state), [state]);
   const set = (patch: Partial<LandedInput>) => setState({ ...state, ...patch });
 
-  const subtotal = state.product + state.freight + state.insurance + state.additional;
-  const duty = subtotal * (state.dutyRate / 100);
-  const gst = (subtotal + duty) * (state.gstRate / 100);
-  const total = subtotal + duty + gst || 1;
-  const bars = [
-    { label: "Product + Freight", val: state.product + state.freight, color: "var(--brand-navy)" },
-    { label: "Insurance + Add'l", val: state.insurance + state.additional, color: "var(--brand-navy-strong)" },
-    { label: "Duty", val: duty, color: "var(--brand-orange)" },
-    { label: "GST", val: gst, color: "var(--brand-orange-strong)" },
-  ];
+  const updateLine = (id: string, patch: Partial<CargoLine>) =>
+    set({ lines: state.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) });
+
+  const addLine = () => set({ lines: [...state.lines, emptyLandedLine()] });
+  const removeLine = (id: string) =>
+    set({ lines: state.lines.length > 1 ? state.lines.filter((l) => l.id !== id) : state.lines });
+  const dupLine = (id: string) => {
+    const src = state.lines.find((l) => l.id === id);
+    if (!src) return;
+    set({ lines: [...state.lines, { ...src, id: nextId("ll") }] });
+  };
 
   const inputsTable = [
-    { label: "Product Cost", value: `${state.currency}${state.product}` },
+    { label: "Currency", value: `${state.currency}${state.fxRate && state.fxRate > 0 ? ` (1 ${state.currency} ≈ ${state.baseCurrency || "INR"} ${fmt(state.fxRate, 4)})` : ""}` },
+    { label: "Line Items", value: String(state.lines.length) },
     { label: "Freight", value: `${state.currency}${state.freight}` },
     { label: "Insurance", value: `${state.currency}${state.insurance}` },
-    { label: "Additional", value: `${state.currency}${state.additional}` },
-    { label: "Duty Rate", value: `${state.dutyRate}%` },
-    { label: "GST Rate", value: `${state.gstRate}%` },
-    { label: "Quantity", value: String(state.qty || "—") },
+    { label: "Other Charges", value: `${state.currency}${state.additional}` },
+    { label: "GST / VAT Rate", value: `${state.gstRate}%` },
   ];
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
+        {/* Currency + FX */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="mb-2 flex items-center gap-2">
-            <Label className="text-xs font-semibold text-brand-navy">Currency</Label>
-            <Select value={state.currency} onValueChange={(v) => set({ currency: v })}>
-              <SelectTrigger className="h-8 w-auto min-w-[120px] border-2 border-brand-navy/30 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="₹">₹ Indian Rupee</SelectItem>
-                <SelectItem value="$">$ US Dollar</SelectItem>
-                <SelectItem value="€">€ Euro</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
-            <NumberField compact id="lp" label="Product Cost" required value={state.product} onChange={(n) => set({ product: n })} hint="Invoice value of goods." />
-            <NumberField compact id="lf" label="Freight" required value={state.freight} onChange={(n) => set({ freight: n })} hint="Total inward freight charges." />
-            <NumberField compact id="li" label="Insurance" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Marine / cargo insurance premium." />
-            <NumberField compact id="ld" label="Duty Rate" suffix="%" value={state.dutyRate} onChange={(n) => set({ dutyRate: n })} hint="BCD rate from your HSN code (default 10%)." />
-            <NumberField compact id="lg" label="GST Rate" suffix="%" value={state.gstRate} onChange={(n) => set({ gstRate: n })} hint="IGST rate, typically 5/12/18/28%." />
-            <NumberField compact id="la" label="Additional" value={state.additional} onChange={(n) => set({ additional: n })} hint="Port handling, documentation, CFS etc." />
-            <NumberField compact id="lq" label="Quantity" step={1} value={state.qty} onChange={(n) => set({ qty: Math.max(0, Math.round(n)) })} hint="Optional — gives per-unit cost." />
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-brand-navy">Currency Code</Label>
+              <Input
+                value={state.currency}
+                onChange={(e) => set({ currency: e.target.value.toUpperCase().slice(0, 5) })}
+                placeholder="USD, EUR, INR…"
+                className="h-9 border-2 border-brand-navy/30 text-sm uppercase"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-brand-navy">Base Currency</Label>
+              <Input
+                value={state.baseCurrency ?? "INR"}
+                onChange={(e) => set({ baseCurrency: e.target.value.toUpperCase().slice(0, 5) })}
+                placeholder="INR"
+                className="h-9 border-2 border-brand-navy/30 text-sm uppercase"
+              />
+            </div>
+            <NumberField
+              compact
+              id="lfx"
+              label={`FX Rate (1 ${state.currency || "—"} → ${state.baseCurrency || "INR"})`}
+              value={state.fxRate ?? 0}
+              onChange={(n) => set({ fxRate: n })}
+              hint="Manual exchange rate. Leave 0 to skip the conversion hint."
+            />
           </div>
         </Card>
 
+        {/* Line items */}
         <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <h4 className="mb-2 text-sm font-semibold text-brand-navy">Cost Breakdown</h4>
-          <div className="space-y-2">
-            {bars.map((b) => {
-              const pct = total > 0 ? (b.val / total) * 100 : 0;
-              return (
-                <div key={b.label}>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">{b.label}</span>
-                    <span className="font-semibold text-brand-navy">{pct.toFixed(1)}%</span>
-                  </div>
-                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: b.color }} />
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-brand-navy">Cargo Line Items</h4>
+            <Button size="sm" onClick={addLine} className="text-white" style={{ background: "var(--brand-orange)" }}>
+              <Plus className="size-3.5" /> Add line
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {state.lines.map((ln, idx) => (
+              <div
+                key={ln.id}
+                className="rounded-lg border p-2"
+                style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 15%, transparent)" }}
+              >
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-brand-navy">Line {idx + 1}</span>
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" className="size-7" onClick={() => dupLine(ln.id)} title="Duplicate">
+                      <CopyIcon className="size-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-7 text-destructive"
+                      onClick={() => removeLine(ln.id)}
+                      disabled={state.lines.length === 1}
+                      title="Remove"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
                 </div>
-              );
-            })}
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+                  <div className="col-span-2 space-y-1 md:col-span-2">
+                    <Label className="text-[11px] text-muted-foreground">Description</Label>
+                    <Input
+                      value={ln.description}
+                      onChange={(e) => updateLine(ln.id, { description: e.target.value })}
+                      placeholder="e.g. Cotton T-shirts"
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">HS Code</Label>
+                    <Input
+                      value={ln.hsCode}
+                      onChange={(e) => updateLine(ln.id, { hsCode: e.target.value })}
+                      placeholder="6109.10"
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <NumberField compact id={`lq-${ln.id}`} label="Qty" step={1} value={ln.qty} onChange={(n) => updateLine(ln.id, { qty: Math.max(0, Math.round(n)) })} />
+                  <NumberField compact id={`luv-${ln.id}`} label={`Unit Value (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
+                  <NumberField compact id={`ldr-${ln.id}`} label="Duty %" suffix="%" value={ln.dutyRate ?? 0} onChange={(n) => updateLine(ln.id, { dutyRate: n })} />
+                </div>
+                <div className="mt-1 text-right text-[11px] text-muted-foreground">
+                  Subtotal: <span className="font-semibold text-brand-navy">{state.currency}{fmt(ln.qty * ln.unitValue)}</span>
+                  {" • "}Duty: <span className="font-semibold text-brand-orange">{state.currency}{fmt(ln.qty * ln.unitValue * ((ln.dutyRate ?? 0) / 100))}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Shared charges */}
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <h4 className="mb-2 text-sm font-semibold text-brand-navy">Shared Charges</h4>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+            <NumberField compact id="lf" label={`Freight (${state.currency})`} required value={state.freight} onChange={(n) => set({ freight: n })} hint="Total inward freight." />
+            <NumberField compact id="li" label={`Insurance (${state.currency})`} value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Marine / cargo insurance premium." />
+            <NumberField compact id="la" label={`Other (${state.currency})`} value={state.additional} onChange={(n) => set({ additional: n })} hint="Port handling, documentation, CFS etc." />
+            <NumberField compact id="lg" label="GST / VAT %" suffix="%" value={state.gstRate} onChange={(n) => set({ gstRate: n })} hint="Destination tax on (CIF + Duty)." />
           </div>
         </Card>
       </div>

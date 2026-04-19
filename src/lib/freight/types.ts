@@ -38,14 +38,14 @@ export const CALCULATORS: CalcMeta[] = [
     label: "Landed Cost",
     sub: "Duty + GST",
     emoji: "💰",
-    tip: "Pro tip: GST is charged on (CIF + Duty), not just on product cost. Update Duty% to your HSN's BCD rate.",
+    tip: "Pro tip: Add a row for each material/HS code. Duty is applied per line; GST/VAT is applied on (CIF + total duty).",
   },
   {
     key: "export",
     label: "Export Price",
     sub: "FOB / CIF / Margin",
     emoji: "📈",
-    tip: "Pro tip: FOB excludes insurance. CIF = FOB + Insurance. Selling Price applies your margin on top of CIF.",
+    tip: "Pro tip: Add a row per product. Freight & insurance are split across lines by value share. Margin is set per line.",
   },
   {
     key: "compare",
@@ -59,7 +59,7 @@ export const CALCULATORS: CalcMeta[] = [
     label: "Demurrage",
     sub: "Risk & Delays",
     emoji: "⚠️",
-    tip: "Pro tip: Most Indian ports give 5 free days. Beyond that, daily demurrage stacks fast — and may double after 14 days.",
+    tip: "Pro tip: Most ports give 5 free days. Beyond that, daily demurrage stacks fast — and may double after 14 days.",
   },
 ];
 
@@ -76,6 +76,8 @@ export interface CalcResult {
   items: ResultItem[];
   /** Plain-text summary for share / email / clipboard. */
   text: string;
+  /** Optional per-line breakdown (rendered into PDF, not the on-screen results card). */
+  lines?: { headers: string[]; rows: string[][] };
 }
 
 export interface SavedCalculation {
@@ -86,4 +88,21 @@ export interface SavedCalculation {
   /** Snapshot of the input form. */
   inputs: unknown;
   result: CalcResult;
+}
+
+/**
+ * One cargo line item (used by Landed Cost & Export Price calculators).
+ * Fields are optional per use-case — Landed uses dutyRate; Export uses margin.
+ */
+export interface CargoLine {
+  id: string;
+  description: string;
+  hsCode: string;
+  qty: number;
+  unitValue: number;
+  weightKg?: number;
+  /** Used by Landed Cost only. */
+  dutyRate?: number;
+  /** Used by Export Price only. */
+  margin?: number;
 }
