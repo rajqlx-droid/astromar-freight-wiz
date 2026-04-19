@@ -33,8 +33,8 @@ function itemCounts(row: RowGroup, pack: AdvancedPackResult) {
  * vertical, the floor sits at the bottom. Only this row's boxes are drawn.
  */
 function RowSideView({ row, pack }: { row: RowGroup; pack: AdvancedPackResult }) {
-  const containerW = pack.container.width; // mm
-  const containerH = pack.container.height; // mm
+  const containerW = pack.container.inner.w; // mm
+  const containerH = pack.container.inner.h; // mm
   const VIEW_W = 220;
   const VIEW_H = 90;
   const PAD = 4;
