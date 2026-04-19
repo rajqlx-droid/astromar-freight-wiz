@@ -210,14 +210,20 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
             <div className="flex flex-col items-center justify-center gap-3 py-10">
               <Loader2 className="size-8 animate-spin text-brand-navy" />
               <div className="text-sm font-medium text-brand-navy">
-                Encoding frame {progress.frame} / {progress.total || "…"}
+                Encoding frame {progress.frame} / {progress.total || "…"}{" "}
+                {progress.total
+                  ? `· ${Math.round((progress.frame / progress.total) * 100)}%`
+                  : ""}
               </div>
               <Progress
                 value={progress.total ? (progress.frame / progress.total) * 100 : 0}
                 className="w-full max-w-md"
               />
               <p className="text-[11px] text-muted-foreground">
-                Encoding as fast as possible — usually 3-5× faster than playback.
+                Encoding as fast as possible — usually 3-5× faster than playback. Saves directly inside the browser when ready (no popout).
+              </p>
+              <p className="max-w-md rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-center text-[11px] font-medium text-destructive">
+                ⚠ Keep this tab in the foreground until encoding finishes — browsers throttle background tabs, which can pause encoding. Once finished you can switch tabs freely.
               </p>
             </div>
           ) : url && video ? (

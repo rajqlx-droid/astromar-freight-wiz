@@ -894,10 +894,16 @@ export async function generateLoadingVideo(
     timelineMeta.push(frameInfo(timeline, f));
   }
 
+  // NOTE: We deliberately avoid requestAnimationFrame here — browsers throttle
+  // rAF to ~1Hz when the tab is backgrounded, which would freeze encoding the
+  // moment the user switches tabs. setTimeout(0) keeps the loop running in the
+  // background (still throttled to ~1s in some browsers, but never paused).
+  // The WebCodecs path (Chrome/Edge/Safari 16.4+) is fully background-safe;
+  // only the MediaRecorder fallback path is subject to captureStream throttling.
   const driveFrame = async (frame: number) => {
     opts.controls.applyFrame(frameInfo(timeline, frame));
     opts.controls.render();
-    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+    await new Promise<void>((r) => setTimeout(r, 0));
   };
 
   const canvas = opts.controls.getCanvas();
