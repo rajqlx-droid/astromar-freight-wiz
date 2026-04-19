@@ -46,7 +46,7 @@ interface Props {
   containerLabel?: string;
 }
 
-type Speed = 0.5 | 1 | 1.5 | 2;
+type Speed = 0.25 | 0.5 | 1 | 1.5 | 2;
 type Resolution = 720 | 1080;
 
 export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLabel }: Props) {
@@ -55,7 +55,8 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
   const [progress, setProgress] = useState({ frame: 0, total: 0 });
   const [video, setVideo] = useState<GeneratedVideo | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-  const [speed, setSpeed] = useState<Speed>(1.5);
+  // Default in-browser playback at 0.5× — slow enough for loaders to follow.
+  const [speed, setSpeed] = useState<Speed>(0.5);
   const [resolution, setResolution] = useState<Resolution>(720);
   const [currentInfo, setCurrentInfo] = useState<VideoFrameInfo | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
