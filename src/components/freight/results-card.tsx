@@ -34,9 +34,11 @@ interface Props {
   onLoadSaved?: () => void;
   /** Optional async resolver for extras (e.g. 3D snapshots). Called at PDF time. */
   resolveExtras?: () => Promise<PdfExtras | undefined> | PdfExtras | undefined;
+  /** When set, disables PDF export and shows the reason on hover. CBM calc uses this when packing options aren't confirmed. */
+  pdfDisabledReason?: string | null;
 }
 
-export function ResultsCard({ result, inputsTable, resolveExtras }: Props) {
+export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledReason }: Props) {
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState("");
 
@@ -120,7 +122,9 @@ export function ResultsCard({ result, inputsTable, resolveExtras }: Props) {
             <Button
               size="sm"
               onClick={handlePdf}
-              className="text-white shadow-sm hover:opacity-90"
+              disabled={!!pdfDisabledReason}
+              title={pdfDisabledReason ?? undefined}
+              className="text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               style={{ background: "var(--brand-orange)" }}
             >
               <Download className="size-3.5" /> PDF
