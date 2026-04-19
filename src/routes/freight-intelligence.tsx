@@ -235,6 +235,19 @@ function FreightIntelligencePage() {
     btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [active]);
 
+  // Hero auto-collapse: watch a sentinel element placed just below the hero.
+  // When it scrolls out of view → collapse; when it returns → expand.
+  useEffect(() => {
+    const el = heroSentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([entry]) => setHeroCollapsed(!entry.isIntersecting),
+      { rootMargin: "-1px 0px 0px 0px", threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   const dismissBanner = () => {
     setBannerOpen(false);
     localStorage.setItem(BANNER_KEY, "0");
