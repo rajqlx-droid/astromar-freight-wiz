@@ -1064,13 +1064,15 @@ function CargoBox({
             <boxGeometry args={[Math.min(lm, wm) * 0.95, 0.012, 0.06]} />
             <meshStandardMaterial color={tiltColor} />
           </mesh>
-          <Html position={[0, hm / 2 + 0.12, 0]} center distanceFactor={6}>
+          {/* Compact corner glyph — fixed pixel size, doesn't grow with zoom.
+              Hover the box in the 3D view to see full TIPPED/TURNED label. */}
+          <Html position={[0, hm / 2 + 0.04, 0]} center zIndexRange={[5, 0]}>
             <span
-              className="whitespace-nowrap rounded-full border-2 border-white px-2 py-0.5 text-[10px] font-extrabold shadow-lg"
+              className="pointer-events-none flex size-3.5 items-center justify-center rounded-full border border-white text-[8px] font-black leading-none shadow"
               style={{ background: tiltColor, color: "#1a1a1a" }}
               title={box.rotated === "axis" ? "Tipped on side" : "Rotated sideways"}
             >
-              {box.rotated === "axis" ? "⤾ TIPPED" : "↻ TURNED"}
+              {box.rotated === "axis" ? "⤾" : "↻"}
             </span>
           </Html>
         </>

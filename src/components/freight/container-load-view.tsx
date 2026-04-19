@@ -303,19 +303,21 @@ function SinglePlanBody({
   );
 
   // Manual row-stepper. When `stepMode` is on, only rows 0..stepIdx are shown
-  // in the 3D viewer. The user clicks "Next row" to reveal rows back→door.
+  // in the 3D viewer. stepIdx === -1 means the container is EMPTY (start state)
+  // so the user can inspect the floor and back wall before loading row 1.
   const [stepMode, setStepMode] = useState(false);
-  const [stepIdx, setStepIdx] = useState(0);
+  const [stepIdx, setStepIdx] = useState(-1);
 
   // Row groups (back wall → door). Re-derived only when the pack changes.
   const rows = useMemo(() => buildRows(pack, readHeavyThreshold()), [pack]);
 
   // Clamp stepIdx if rows shrink (e.g. user changed cargo).
   useEffect(() => {
-    if (stepIdx > rows.length - 1) setStepIdx(Math.max(0, rows.length - 1));
+    if (stepIdx > rows.length - 1) setStepIdx(rows.length - 1);
   }, [rows.length, stepIdx]);
 
   // Build the visible-placedIdx set for rows 0..stepIdx.
+  // stepIdx === -1 → empty set (container is empty, nothing rendered).
   const visiblePlacedSet = useMemo<Set<number> | null>(() => {
     if (!stepMode) return null;
     const s = new Set<number>();
@@ -336,6 +338,7 @@ function SinglePlanBody({
   }, [is3D]);
 
   const canStep = stepMode && is3D && rows.length > 0;
+  const atEmpty = stepIdx < 0;
   const atFirst = stepIdx <= 0;
   const atLast = stepIdx >= rows.length - 1;
 
