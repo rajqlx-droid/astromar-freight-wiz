@@ -271,6 +271,12 @@ function SinglePlanBody({
   isActive: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
 }) {
+  // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
+  // along scene-z (container width axis). Cleared when row toggles off.
+  const [shufflePreview, setShufflePreview] = useState<Map<number, number> | null>(
+    null,
+  );
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
@@ -284,7 +290,11 @@ function SinglePlanBody({
                 </div>
               }
             >
-              <Container3DView ref={isActive ? view3DRef : undefined} pack={pack} />
+              <Container3DView
+                ref={isActive ? view3DRef : undefined}
+                pack={pack}
+                shufflePreview={shufflePreview}
+              />
             </Suspense>
           ) : (
             <IsoContainer pack={pack} />
@@ -292,7 +302,12 @@ function SinglePlanBody({
         </div>
         <Legend items={items} />
         <LoadingSequence pack={pack} />
-        <LoadingRowsPanel pack={pack} />
+        <LoadingRowsPanel
+          pack={pack}
+          onApplyShuffle={(map) => setShufflePreview(map)}
+          shufflePreviewActive={shufflePreview !== null}
+          previewRequires3D={!is3D}
+        />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
         </p>
