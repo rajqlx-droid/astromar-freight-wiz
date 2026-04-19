@@ -39,8 +39,11 @@ interface Props {
   forcedChoice?: "20gp" | "40gp" | "40hc" | null;
   /** Notify parent when user picks a container pill. */
   onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | null) => void;
-  /** Expose snapshot capture so parent (PDF flow) can grab 3 angles. */
-  onReady?: (handle: { capture: () => Promise<{ iso: string; front: string; side: string } | null> }) => void;
+  /** Expose snapshot capture + active pack so parent (PDF flow) can use them. */
+  onReady?: (handle: {
+    capture: () => Promise<{ iso: string; front: string; side: string } | null>;
+    getActivePack: () => AdvancedPackResult | null;
+  }) => void;
   /** When set, disables the 3D toggle and Loading Video button (CBM gate). */
   optimizationDisabledReason?: string | null;
 }
