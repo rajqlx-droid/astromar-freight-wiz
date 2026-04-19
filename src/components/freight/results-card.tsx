@@ -3,7 +3,7 @@
  */
 import { Download } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+
 import { Card } from "@/components/ui/card";
 import { downloadResultPdf, type PdfExtras } from "@/lib/freight/pdf";
 import type { CalcResult } from "@/lib/freight/types";
