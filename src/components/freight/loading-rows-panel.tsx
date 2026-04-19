@@ -57,6 +57,8 @@ interface Props {
   shufflePreviewActive?: boolean;
   /** True when the parent is showing the 2D iso view — preview needs 3D enabled to be visible. */
   previewRequires3D?: boolean;
+  /** Index of the row currently being inspected by the 3D step-load mode (null when stepper off). */
+  activeRowIdx?: number | null;
 }
 
 /** Per-item count breakdown for a row (returns array of {itemIdx, count, color}). */
@@ -89,6 +91,7 @@ export function LoadingRowsPanel({
   onApplyShuffle,
   shufflePreviewActive = false,
   previewRequires3D = false,
+  activeRowIdx = null,
 }: Props) {
   // Configurable kg/pkg threshold for the "heavy" mixed-pallet warning.
   // Hydrate from localStorage AFTER mount to avoid SSR/CSR mismatch.
