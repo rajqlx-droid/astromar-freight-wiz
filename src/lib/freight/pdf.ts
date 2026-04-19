@@ -242,7 +242,38 @@ export function downloadResultPdf(
     );
     ry += 16;
 
-    const cardX = 40;
+    // Wall-efficiency banner repeated on the guide page so the loader sees
+    // the overall target before diving into individual row checklists.
+    if (extras.wallEfficiency && extras.wallEfficiency.rowCount > 0) {
+      const we = extras.wallEfficiency;
+      const pillColor: [number, number, number] =
+        we.status === "green" ? [5, 150, 105] : we.status === "amber" ? [217, 119, 6] : [225, 29, 72];
+      const pillBg: [number, number, number] =
+        we.status === "green" ? [209, 250, 229] : we.status === "amber" ? [254, 243, 199] : [255, 228, 230];
+      const bannerH = 22;
+      doc.setFillColor(...pillBg);
+      doc.setDrawColor(...pillColor);
+      doc.setLineWidth(0.6);
+      doc.roundedRect(40, ry, pageWidth - 80, bannerH, 3, 3, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(...pillColor);
+      doc.text(`${Math.round(we.scorePct)}%`, 50, ry + 15);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(...NAVY);
+      doc.text("Container wall efficiency target", 80, ry + 10);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...pillColor);
+      const subTxt =
+        we.gapRowCount > 0
+          ? `${we.gapRowCount} of ${we.rowCount} row${we.rowCount > 1 ? "s" : ""} flagged — re-shuffle to close gaps before sealing.`
+          : `All ${we.rowCount} row${we.rowCount > 1 ? "s" : ""} tight to back wall — no re-shuffle needed.`;
+      doc.text(subTxt, 80, ry + 18);
+      ry += bannerH + 10;
+    }
+
     const cardW = pageWidth - 80;
     const svgW = 130;
     const svgH = 44;
