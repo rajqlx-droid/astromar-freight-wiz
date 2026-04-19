@@ -762,7 +762,7 @@ function TrafficCone({ position }: { position: [number, number, number] }) {
 
 /* --------------- Forklift --------------- */
 
-function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
+function Forklift({ x, z, forkY, headYaw = 0 }: { x: number; z: number; forkY: number; headYaw?: number }) {
   // Recognizable forklift: yellow chassis, mast in front (-x), two forks.
   // Origin = base center on ground. Forks point in -x (toward container door).
   const BODY = "#fbbf24";
@@ -805,7 +805,7 @@ function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
       </mesh>
 
       {/* Driver figure — sits in the seat, faces forward (-x toward forks) */}
-      <ForkliftDriver />
+      <ForkliftDriver headYaw={headYaw} />
 
       {/* Wheels */}
       {([
@@ -859,7 +859,7 @@ function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
 
 /* --------------- Forklift driver figure --------------- */
 
-function ForkliftDriver() {
+function ForkliftDriver({ headYaw = 0 }: { headYaw?: number }) {
   // Tiny stylised driver: hi-vis vest, hard hat, head, arms on the wheel.
   // Origin = forklift local space; seat sits at x=0.25, y=0.6, facing -x.
   const VEST = "#facc15"; // hi-vis yellow
