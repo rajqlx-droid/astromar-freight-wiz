@@ -126,18 +126,6 @@ export function CbmCalculator({ items, setItems }: Props) {
     );
   };
 
-  /** Scroll to and focus the first cargo row missing packing confirmation. */
-  const reviewFirstUnconfirmed = () => {
-    const first = unconfirmed[0];
-    if (!first) return;
-    const el = rowRefs.current[first.id];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("ring-2", "ring-amber-500");
-      window.setTimeout(() => el.classList.remove("ring-2", "ring-amber-500"), 1800);
-    }
-    setOpenPopoverId(first.id);
-  };
 
   const showLen = (cm: number) => {
     const v = cmTo(cm, lenUnit);
@@ -499,4 +487,155 @@ function buildSummary(it: CbmItem): string {
   if (it.allowAxisRotation) bits.push("tip OK");
   if ((it.maxStackWeightKg ?? 0) > 0) bits.push(`max ${it.maxStackWeightKg}kg`);
   return bits.join(" · ");
+}
+
+/* ---------------- ConfirmPackingModal ---------------- */
+
+function ConfirmPackingModal({
+  open,
+  onOpenChange,
+  items,
+  onUpdate,
+  onApplyToAll,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  items: CbmItem[];
+  onUpdate: (id: string, patch: Partial<CbmItem>) => void;
+  onApplyToAll: (sourceId: string) => void;
+  onConfirm: () => void;
+}) {
+  const dimensioned = items.filter(
+    (it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0,
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-brand-navy">Confirm packing options</DialogTitle>
+          <DialogDescription>
+            Set packing rules for each item so we can recommend the right container and render an
+            accurate 3D loading plan.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {dimensioned.map((it, idx) => {
+            const color = ITEM_COLORS[items.findIndex((i) => i.id === it.id) % ITEM_COLORS.length];
+            return (
+              <div
+                key={it.id}
+                className="rounded-lg border-2 border-brand-navy/15 bg-card p-3"
+              >
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="size-3 rounded-sm border border-black/10"
+                      style={{ background: color }}
+                      aria-hidden
+                    />
+                    <h4 className="text-sm font-semibold text-brand-navy">
+                      Item {items.findIndex((i) => i.id === it.id) + 1}
+                    </h4>
+                    <span className="text-[11px] text-muted-foreground">
+                      {it.length}×{it.width}×{it.height} cm · {it.qty} pcs
+                    </span>
+                  </div>
+                  {dimensioned.length > 1 && idx === 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 border-brand-navy/40 text-[11px] text-brand-navy"
+                      onClick={() => onApplyToAll(it.id)}
+                    >
+                      Apply to all items
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] font-semibold text-brand-navy">
+                        Package type
+                      </Label>
+                      <Select
+                        value={it.packageType ?? "carton"}
+                        onValueChange={(v) => onUpdate(it.id, { packageType: v as PackageType })}
+                      >
+                        <SelectTrigger className="h-8 border-brand-navy/30 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PACKAGE_TYPES.map((p) => (
+                            <SelectItem key={p.value} value={p.value}>
+                              {p.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <NumberField
+                      compact
+                      id={`m-msw-${it.id}`}
+                      label="Max stack weight"
+                      suffix="kg"
+                      value={it.maxStackWeightKg ?? 0}
+                      onChange={(n) =>
+                        onUpdate(it.id, { maxStackWeightKg: Number.isFinite(n) ? Math.max(0, n) : 0 })
+                      }
+                      hint="Max weight allowed on top of one of these. 0 = unlimited."
+                    />
+                  </div>
+
+                  <ToggleRow
+                    title="Stackable"
+                    desc="Allow other cartons on top."
+                    checked={it.stackable !== false}
+                    onChange={(v) => onUpdate(it.id, { stackable: v })}
+                  />
+                  <ToggleRow
+                    title="Fragile"
+                    desc="Loaded last, on top. Nothing stacks on it."
+                    icon={<ShieldAlert className="size-3.5 text-amber-600" />}
+                    checked={it.fragile === true}
+                    onChange={(v) => onUpdate(it.id, { fragile: v })}
+                  />
+                  <ToggleRow
+                    title="Can lay sideways"
+                    desc="Packer may rotate 90° on the floor (swap L↔W)."
+                    checked={it.allowSidewaysRotation !== false}
+                    onChange={(v) => onUpdate(it.id, { allowSidewaysRotation: v })}
+                  />
+                  {!it.fragile && (
+                    <ToggleRow
+                      title="Can stand on side"
+                      desc="Packer may tip it onto its side. Non-fragile only."
+                      checked={it.allowAxisRotation === true}
+                      onChange={(v) => onUpdate(it.id, { allowAxisRotation: v })}
+                    />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={onConfirm}
+            className="text-white"
+            style={{ background: "var(--brand-navy)" }}
+          >
+            <CheckCircle2 className="size-3.5" /> Confirm & optimize
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
