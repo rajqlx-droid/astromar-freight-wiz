@@ -302,6 +302,43 @@ function SinglePlanBody({
     null,
   );
 
+  // Manual row-stepper. When `stepMode` is on, only rows 0..stepIdx are shown
+  // in the 3D viewer. The user clicks "Next row" to reveal rows back→door.
+  const [stepMode, setStepMode] = useState(false);
+  const [stepIdx, setStepIdx] = useState(0);
+
+  // Row groups (back wall → door). Re-derived only when the pack changes.
+  const rows = useMemo(() => buildRows(pack, readHeavyThreshold()), [pack]);
+
+  // Clamp stepIdx if rows shrink (e.g. user changed cargo).
+  useEffect(() => {
+    if (stepIdx > rows.length - 1) setStepIdx(Math.max(0, rows.length - 1));
+  }, [rows.length, stepIdx]);
+
+  // Build the visible-placedIdx set for rows 0..stepIdx.
+  const visiblePlacedSet = useMemo<Set<number> | null>(() => {
+    if (!stepMode) return null;
+    const s = new Set<number>();
+    for (let r = 0; r <= stepIdx; r++) {
+      const row = rows[r];
+      if (!row) continue;
+      for (const b of row.boxes) {
+        const idx = pack.placed.indexOf(b);
+        if (idx >= 0) s.add(idx);
+      }
+    }
+    return s;
+  }, [stepMode, stepIdx, rows, pack.placed]);
+
+  // Reset the stepper when leaving 3D or step mode.
+  useEffect(() => {
+    if (!is3D) setStepMode(false);
+  }, [is3D]);
+
+  const canStep = stepMode && is3D && rows.length > 0;
+  const atFirst = stepIdx <= 0;
+  const atLast = stepIdx >= rows.length - 1;
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
@@ -320,10 +357,29 @@ function SinglePlanBody({
                   ref={isActive ? view3DRef : undefined}
                   pack={pack}
                   shufflePreview={shufflePreview}
+                  visiblePlacedSet={visiblePlacedSet}
+                  hideDoors={stepMode}
                 />
               </Suspense>
             ) : (
               <IsoContainer pack={pack} />
+            )}
+            {is3D && rows.length > 0 && (
+              <RowStepperBar
+                stepMode={stepMode}
+                onToggleStepMode={() => {
+                  setStepMode((v) => !v);
+                  setStepIdx(0);
+                }}
+                stepIdx={stepIdx}
+                totalRows={rows.length}
+                onPrev={() => setStepIdx((i) => Math.max(0, i - 1))}
+                onNext={() => setStepIdx((i) => Math.min(rows.length - 1, i + 1))}
+                onReset={() => setStepIdx(0)}
+                canStep={canStep}
+                atFirst={atFirst}
+                atLast={atLast}
+              />
             )}
           </div>
         )}
@@ -340,6 +396,89 @@ function SinglePlanBody({
         </p>
       </div>
       <LoadReportPanel pack={pack} rollup={rollup} />
+    </div>
+  );
+}
+
+/* ---------------- Row stepper bar (under the 3D viewer) ---------------- */
+
+function RowStepperBar({
+  stepMode,
+  onToggleStepMode,
+  stepIdx,
+  totalRows,
+  onPrev,
+  onNext,
+  onReset,
+  canStep,
+  atFirst,
+  atLast,
+}: {
+  stepMode: boolean;
+  onToggleStepMode: () => void;
+  stepIdx: number;
+  totalRows: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onReset: () => void;
+  canStep: boolean;
+  atFirst: boolean;
+  atLast: boolean;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-2">
+      <Button
+        type="button"
+        size="sm"
+        variant={stepMode ? "default" : "outline"}
+        onClick={onToggleStepMode}
+        className={cn(
+          "h-7 rounded-full px-3 text-[11px]",
+          stepMode
+            ? "bg-brand-navy text-white hover:bg-brand-navy/90"
+            : "border-brand-navy/30 text-brand-navy hover:bg-brand-navy/10",
+        )}
+      >
+        <Layers className="size-3" />
+        {stepMode ? "Stepping rows" : "Step rows manually"}
+      </Button>
+
+      {stepMode && (
+        <>
+          <span className="text-[11px] font-medium text-muted-foreground">
+            Row {stepIdx + 1} of {totalRows}{" "}
+            <span className="hidden sm:inline">· back wall → door</span>
+          </span>
+
+          <div className="ml-auto flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onPrev}
+              disabled={!canStep || atFirst}
+              className="h-7 px-2 text-[11px]"
+              aria-label="Previous row"
+            >
+              <ChevronLeft className="size-3" /> Prev
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={atLast ? onReset : onNext}
+              disabled={!canStep}
+              className="h-7 bg-brand-navy px-2 text-[11px] text-white hover:bg-brand-navy/90"
+              aria-label={atLast ? "Reset stepper" : "Next row"}
+            >
+              {atLast ? "Reset" : (
+                <>
+                  Next <ChevronRight className="size-3" />
+                </>
+              )}
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
