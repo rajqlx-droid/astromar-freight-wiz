@@ -230,6 +230,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             visiblePlacedSet={visiblePlacedSet}
             hideDoors={hideDoors}
             gapHeatmapRow={gapHeatmapRow}
+            flyInPlacedSet={flyInPlacedSet}
+            flyInKey={flyInKey}
           />
         </Suspense>
       </Canvas>
