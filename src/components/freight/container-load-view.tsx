@@ -22,6 +22,7 @@ import {
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
+import { LoadingVideoButton } from "./loading-video-button";
 import type { Container3DHandle } from "./container-3d-view";
 
 // Lazy 3D view — keeps initial bundle light and avoids SSR.
@@ -139,27 +140,37 @@ export function ContainerLoadView({
             {c.name}
           </PillButton>
         ))}
-        <div className="ml-auto flex rounded-full border border-brand-navy/30 p-0.5">
-          <button
-            type="button"
-            onClick={() => setIs3D(false)}
-            className={cn(
-              "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
-              !is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-            )}
-          >
-            2D
-          </button>
-          <button
-            type="button"
-            onClick={() => setIs3D(true)}
-            className={cn(
-              "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
-              is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-            )}
-          >
-            <BoxIcon className="size-3" /> 3D
-          </button>
+        <div className="ml-auto flex items-center gap-2">
+          <LoadingVideoButton
+            pack={activePack}
+            containerLabel={activePack.container.name}
+            getHandle={() => view3DRef.current}
+            ensure3DReady={async () => {
+              if (!is3D) setIs3D(true);
+            }}
+          />
+          <div className="flex rounded-full border border-brand-navy/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => setIs3D(false)}
+              className={cn(
+                "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                !is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
+              )}
+            >
+              2D
+            </button>
+            <button
+              type="button"
+              onClick={() => setIs3D(true)}
+              className={cn(
+                "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
+              )}
+            >
+              <BoxIcon className="size-3" /> 3D
+            </button>
+          </div>
         </div>
       </div>
 
@@ -193,6 +204,13 @@ export function ContainerLoadView({
                 mounted={mounted}
                 view3DRef={view3DRef}
                 isActive={activeTab === String(i)}
+                rollup={{
+                  totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
+                  totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
+                  totalContainers: multiPacks.length,
+                  totalPlaced: multiPacks.reduce((s, x) => s + x.placedCartons, 0),
+                  totalPlanned: multiPacks.reduce((s, x) => s + x.totalCartons, 0),
+                }}
               />
             </TabsContent>
           ))}
@@ -224,6 +242,7 @@ function SinglePlanBody({
   mounted,
   view3DRef,
   isActive,
+  rollup,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -233,6 +252,7 @@ function SinglePlanBody({
   mounted: boolean;
   view3DRef: React.MutableRefObject<Container3DHandle | null>;
   isActive: boolean;
+  rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
@@ -259,7 +279,7 @@ function SinglePlanBody({
           Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
         </p>
       </div>
-      <LoadReportPanel pack={pack} />
+      <LoadReportPanel pack={pack} rollup={rollup} />
     </div>
   );
 }

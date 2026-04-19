@@ -8,9 +8,17 @@ import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
 interface Props {
   pack: AdvancedPackResult;
+  /** Optional roll-up across all containers in a multi-container plan. */
+  rollup?: {
+    totalCbm: number;
+    totalWeightKg: number;
+    totalContainers: number;
+    totalPlaced: number;
+    totalPlanned: number;
+  };
 }
 
-export function LoadReportPanel({ pack }: Props) {
+export function LoadReportPanel({ pack, rollup }: Props) {
   const volPct = Math.min(100, pack.utilizationPct);
   const wtPct = Math.min(100, pack.weightUtilizationPct);
   const volColor = volPct < 80 ? "bg-emerald-500" : volPct < 95 ? "bg-amber-500" : "bg-rose-500";
@@ -44,7 +52,31 @@ export function LoadReportPanel({ pack }: Props) {
         </span>
       </div>
 
-      {/* Volume bar */}
+      {rollup && (
+        <div className="rounded-md border border-brand-navy/30 bg-brand-navy/5 p-2">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-brand-navy">
+            Total shipment ({rollup.totalContainers} containers)
+          </div>
+          <div className="mt-1 grid grid-cols-3 gap-1.5 text-[11px]">
+            <div>
+              <div className="text-muted-foreground">CBM</div>
+              <div className="font-semibold text-brand-navy">{rollup.totalCbm.toFixed(2)} m³</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Weight</div>
+              <div className="font-semibold text-brand-navy">
+                {rollup.totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg
+              </div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Cartons</div>
+              <div className="font-semibold text-brand-navy">
+                {rollup.totalPlaced} / {rollup.totalPlanned}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <Bar
         label="Volume used"
         value={`${pack.cargoCbm.toFixed(2)} / ${pack.container.capCbm} m³`}
