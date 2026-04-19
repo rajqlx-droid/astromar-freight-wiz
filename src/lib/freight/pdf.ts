@@ -292,6 +292,20 @@ export function downloadResultPdf(
         ty += 9;
       }
 
+      if (warnLines.length) {
+        // Red warning band before items.
+        doc.setFillColor(254, 226, 226);
+        doc.setDrawColor(252, 165, 165);
+        doc.setLineWidth(0.5);
+        const wH = warnLines.length * 9 + 4;
+        doc.roundedRect(tx - 2, ty - 7, cardW - svgW - cardPad * 3, wH, 2, 2, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(185, 28, 28);
+        doc.text(warnLines, tx + 2, ty);
+        ty += wH - 3;
+      }
+
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(40, 40, 40);
