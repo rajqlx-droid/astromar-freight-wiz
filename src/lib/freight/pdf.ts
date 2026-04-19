@@ -43,6 +43,13 @@ export interface PdfExtras {
   loadReport?: { label: string; value: string }[];
   /** Optional row-by-row loading guide (back wall to door). */
   loadingRows?: PdfLoadingRow[];
+  /** Optional container-level wall efficiency score for the cover + row guide header. */
+  wallEfficiency?: {
+    scorePct: number;
+    status: "green" | "amber" | "red";
+    rowCount: number;
+    gapRowCount: number;
+  };
 }
 
 
