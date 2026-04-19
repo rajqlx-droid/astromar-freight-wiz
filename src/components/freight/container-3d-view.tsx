@@ -331,6 +331,8 @@ function SceneContents({
   recording,
   frame,
   shufflePreview,
+  visiblePlacedSet,
+  hideDoors,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -338,6 +340,8 @@ function SceneContents({
   recording: Timeline | null;
   frame: number;
   shufflePreview: Map<number, number> | null;
+  visiblePlacedSet: Set<number> | null;
+  hideDoors: boolean;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
