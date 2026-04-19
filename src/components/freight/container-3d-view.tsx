@@ -298,12 +298,14 @@ function SceneContents({
   preset,
   recording,
   frame,
+  shufflePreview,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
   recording: Timeline | null;
   frame: number;
+  shufflePreview: Map<number, number> | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
