@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Layers } from "lucide-react";
+import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Layers, Play, Pause } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -537,6 +537,8 @@ function RowStepperBar({
   showGapHeatmap,
   onToggleGapHeatmap,
   activeRowHasGap,
+  isPlaying,
+  onTogglePlay,
 }: {
   stepMode: boolean;
   onToggleStepMode: () => void;
@@ -552,6 +554,8 @@ function RowStepperBar({
   showGapHeatmap: boolean;
   onToggleGapHeatmap: () => void;
   activeRowHasGap: boolean;
+  isPlaying: boolean;
+  onTogglePlay: () => void;
 }) {
   const nextRowNum = Math.min(totalRows, stepIdx + 2); // 1-indexed for label
   const statusLabel = atEmpty
