@@ -7,7 +7,7 @@
  * to the next row toward the door.
  */
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Layers, Printer, Settings2 } from "lucide-react";
+import { ChevronDown, Layers, Lightbulb, Printer, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,9 +20,11 @@ import {
   buildRowSideViewSvg,
   buildRowTopViewSvg,
   buildRows,
+  computeWallEfficiency,
   DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
   instructionFor,
   itemCountsForRow,
+  suggestReshuffle,
   type RowGroup,
 } from "@/lib/freight/loading-rows";
 
