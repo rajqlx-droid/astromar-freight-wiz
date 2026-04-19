@@ -681,6 +681,7 @@ export function LoadingRowsPanel({
                       </div>
                       {shuffleOpen.has(row.rowIdx) && (() => {
                         const sug = suggestReshuffle(row, pack);
+                        const isPreviewing = previewedRow === row.rowIdx;
                         return (
                           <div className="rounded border border-orange-200 bg-background/80 p-2 text-[11px] leading-relaxed text-brand-navy dark:border-orange-900/60">
                             <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
@@ -697,7 +698,39 @@ export function LoadingRowsPanel({
                                 {" "}(currently {Math.round(row.wallUtilizationPct)}%).
                               </p>
                             )}
+                            {sug.direction !== "none" && onApplyShuffle && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isPreviewing) clearPreview();
+                                    else applyPreview(row);
+                                  }}
+                                  className={cn(
+                                    "h-6 gap-1 px-2 text-[10px]",
+                                    isPreviewing
+                                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      : "bg-brand-navy hover:bg-brand-navy/90 text-white",
+                                  )}
+                                >
+                                  {isPreviewing ? "Clear preview" : "Apply suggested re-shuffle"}
+                                </Button>
+                                {isPreviewing && previewRequires3D && (
+                                  <span className="text-[10px] text-orange-700 dark:text-orange-300">
+                                    Switch to 3D view to see the slid pallets.
+                                  </span>
+                                )}
+                                {isPreviewing && !previewRequires3D && (
+                                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                                    ● Preview active in 3D view (green ring under slid pallets).
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
+
                         );
                       })()}
                     </div>
