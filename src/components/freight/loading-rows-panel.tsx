@@ -7,7 +7,7 @@
  * to the next row toward the door.
  */
 import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Layers, Printer, Settings2 } from "lucide-react";
+import { ChevronDown, Layers, Lightbulb, Printer, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,9 +20,11 @@ import {
   buildRowSideViewSvg,
   buildRowTopViewSvg,
   buildRows,
+  computeWallEfficiency,
   DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
   instructionFor,
   itemCountsForRow,
+  suggestReshuffle,
   type RowGroup,
 } from "@/lib/freight/loading-rows";
 
@@ -91,8 +93,19 @@ export function LoadingRowsPanel({ pack }: Props) {
   };
 
   const rows = useMemo(() => buildRows(pack, heavyThreshold), [pack, heavyThreshold]);
+  const efficiency = useMemo(() => computeWallEfficiency(rows), [rows]);
   // First row open by default; others collapsed.
   const [openRows, setOpenRows] = useState<Set<number>>(() => new Set([0]));
+  // Per-row "Suggest re-shuffle" toggle state.
+  const [shuffleOpen, setShuffleOpen] = useState<Set<number>>(() => new Set());
+  const toggleShuffle = (idx: number) => {
+    setShuffleOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
 
   if (rows.length === 0) return null;
 
@@ -330,6 +343,72 @@ export function LoadingRowsPanel({ pack }: Props) {
         </Button>
       </div>
 
+      {/* Container-level wall efficiency — traffic light. */}
+      <div
+        className={cn(
+          "flex items-center gap-3 border-b px-3 py-2.5",
+          efficiency.status === "green" && "bg-emerald-50 dark:bg-emerald-950/20",
+          efficiency.status === "amber" && "bg-amber-50 dark:bg-amber-950/20",
+          efficiency.status === "red" && "bg-rose-50 dark:bg-rose-950/20",
+        )}
+      >
+        <span
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums text-white shadow",
+            efficiency.status === "green" && "bg-emerald-600",
+            efficiency.status === "amber" && "bg-amber-500",
+            efficiency.status === "red" && "bg-rose-600",
+          )}
+          aria-label={`Container wall efficiency ${Math.round(efficiency.scorePct)} percent — ${efficiency.status}`}
+        >
+          {Math.round(efficiency.scorePct)}%
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xs font-semibold text-brand-navy">
+              Container wall efficiency
+            </span>
+            <span
+              className={cn(
+                "text-[9px] font-bold uppercase tracking-wide",
+                efficiency.status === "green" && "text-emerald-700 dark:text-emerald-300",
+                efficiency.status === "amber" && "text-amber-700 dark:text-amber-300",
+                efficiency.status === "red" && "text-rose-700 dark:text-rose-300",
+              )}
+            >
+              {efficiency.status === "green"
+                ? "● optimal"
+                : efficiency.status === "amber"
+                  ? "● close gaps"
+                  : "● re-shuffle needed"}
+            </span>
+          </div>
+          <div className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+            Depth-weighted average across {efficiency.rowCount} row
+            {efficiency.rowCount > 1 ? "s" : ""}
+            {efficiency.gapRowCount > 0 && (
+              <>
+                {" · "}
+                <strong className="font-semibold text-orange-700 dark:text-orange-300">
+                  {efficiency.gapRowCount} row{efficiency.gapRowCount > 1 ? "s" : ""} need re-shuffle
+                </strong>
+              </>
+            )}
+          </div>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all",
+                efficiency.status === "green" && "bg-emerald-500",
+                efficiency.status === "amber" && "bg-amber-500",
+                efficiency.status === "red" && "bg-rose-500",
+              )}
+              style={{ width: `${Math.max(2, Math.round(efficiency.scorePct))}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
       <ol className="divide-y">
         {rows.map((row) => {
           const isOpen = openRows.has(row.rowIdx);
@@ -485,12 +564,49 @@ export function LoadingRowsPanel({ pack }: Props) {
                   </div>
 
                   {row.gapWarning && (
-                    <div className="flex items-start gap-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 py-1.5 text-[11px] leading-relaxed text-orange-800 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-200">
-                      <span aria-hidden>⚠</span>
-                      <span>
-                        <strong className="font-semibold">Gap warning:</strong>{" "}
-                        Back wall only {Math.round(row.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side to close gaps before sealing the container.
-                      </span>
+                    <div className="space-y-1.5 rounded-md border border-orange-300 bg-orange-50 px-2 py-1.5 dark:border-orange-900 dark:bg-orange-950/30">
+                      <div className="flex items-start gap-1.5 text-[11px] leading-relaxed text-orange-800 dark:text-orange-200">
+                        <span aria-hidden>⚠</span>
+                        <span className="flex-1">
+                          <strong className="font-semibold">Gap warning:</strong>{" "}
+                          Back wall only {Math.round(row.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side to close gaps before sealing the container.
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleShuffle(row.rowIdx);
+                          }}
+                          className="h-6 gap-1 px-1.5 text-[10px]"
+                          aria-expanded={shuffleOpen.has(row.rowIdx)}
+                        >
+                          <Lightbulb className="size-3" />
+                          {shuffleOpen.has(row.rowIdx) ? "Hide" : "Suggest re-shuffle"}
+                        </Button>
+                      </div>
+                      {shuffleOpen.has(row.rowIdx) && (() => {
+                        const sug = suggestReshuffle(row, pack);
+                        return (
+                          <div className="rounded border border-orange-200 bg-background/80 p-2 text-[11px] leading-relaxed text-brand-navy dark:border-orange-900/60">
+                            <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                              <Lightbulb className="size-3" />
+                              Suggested re-shuffle
+                            </div>
+                            <p>{sug.text}</p>
+                            {sug.direction !== "none" && (
+                              <p className="mt-1 text-[10.5px] text-muted-foreground">
+                                Projected back-wall utilisation after shuffle:{" "}
+                                <strong className="font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums">
+                                  {Math.round(sug.projectedUtilizationPct)}%
+                                </strong>
+                                {" "}(currently {Math.round(row.wallUtilizationPct)}%).
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
