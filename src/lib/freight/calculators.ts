@@ -41,6 +41,10 @@ export interface CbmItem {
   fragile?: boolean;
   /** Max weight (kg) of cargo that may sit on top of one of these. 0 = unlimited. */
   maxStackWeightKg?: number;
+  /** Packer may swap L↔W (yaw 90° on floor). */
+  allowSidewaysRotation?: boolean;
+  /** Packer may tip box onto its side (swap H with L or W). */
+  allowAxisRotation?: boolean;
 }
 
 export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
@@ -54,6 +58,8 @@ export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
   stackable: true,
   fragile: false,
   maxStackWeightKg: 0,
+  allowSidewaysRotation: true,
+  allowAxisRotation: false,
 });
 
 export function calcCbm(items: CbmItem[]): CalcResult {
