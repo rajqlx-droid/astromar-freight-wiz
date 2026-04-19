@@ -510,19 +510,31 @@ function ContainerShell({
         <meshStandardMaterial map={plywoodTex} roughness={0.85} />
       </mesh>
 
-      {/* Back wall (-x) */}
+      {/* Back wall (-x) — translucent so loaders can see boxes behind it from any angle */}
       <mesh receiveShadow castShadow position={[-Cm.l / 2, Cm.h / 2, 0]}>
         <boxGeometry args={[0.05, Cm.h, Cm.w]} />
-        <meshStandardMaterial map={wallTexZ} roughness={0.7} metalness={0.2} />
+        <meshStandardMaterial
+          map={wallTexZ}
+          roughness={0.7}
+          metalness={0.2}
+          transparent
+          opacity={0.25}
+        />
       </mesh>
 
-      {/* Left side wall (-z) */}
+      {/* Left side wall (-z) — translucent */}
       <mesh receiveShadow position={[0, Cm.h / 2, -Cm.w / 2]}>
         <boxGeometry args={[Cm.l, Cm.h, 0.05]} />
-        <meshStandardMaterial map={wallTexX} roughness={0.7} metalness={0.2} />
+        <meshStandardMaterial
+          map={wallTexX}
+          roughness={0.7}
+          metalness={0.2}
+          transparent
+          opacity={0.25}
+        />
       </mesh>
 
-      {/* Right side wall (+z) — translucent so the camera can see inside */}
+      {/* Right side wall (+z) — most transparent (typical viewing side) */}
       <mesh position={[0, Cm.h / 2, Cm.w / 2]}>
         <boxGeometry args={[Cm.l, Cm.h, 0.04]} />
         <meshStandardMaterial
@@ -530,14 +542,14 @@ function ContainerShell({
           roughness={0.7}
           metalness={0.2}
           transparent
-          opacity={0.18}
+          opacity={0.1}
         />
       </mesh>
 
       {/* Roof — translucent */}
       <mesh position={[0, Cm.h, 0]}>
         <boxGeometry args={[Cm.l, 0.04, Cm.w]} />
-        <meshStandardMaterial color={wallColor} transparent opacity={0.12} />
+        <meshStandardMaterial color={wallColor} transparent opacity={0.08} />
       </mesh>
 
       {/* Steel corner posts */}
