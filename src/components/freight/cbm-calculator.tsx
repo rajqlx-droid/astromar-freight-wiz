@@ -334,7 +334,8 @@ export function CbmCalculator({ items, setItems }: Props) {
           if (pack && pack.placed.length > 0) {
             const { buildRows, instructionFor, itemCountsForRow, buildRowSideViewSvg, buildRowFrontViewSvg } =
               await import("@/lib/freight/loading-rows");
-            const rows = buildRows(pack);
+            const { readHeavyThreshold } = await import("@/components/freight/loading-rows-panel");
+            const rows = buildRows(pack, readHeavyThreshold());
             // Rasterise each side-view SVG to a PNG dataURL for jsPDF.
             const svgToPng = (svg: string): Promise<string | undefined> =>
               new Promise((resolve) => {

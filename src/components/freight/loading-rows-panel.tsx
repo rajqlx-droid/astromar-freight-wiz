@@ -6,19 +6,42 @@
  * the container) should build that row from the floor up before advancing
  * to the next row toward the door.
  */
-import { useMemo, useState } from "react";
-import { ChevronDown, Layers, Printer } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Layers, Printer, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
   buildRowFrontViewSvg,
   buildRowSideViewSvg,
   buildRows,
+  DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
   instructionFor,
   itemCountsForRow,
   type RowGroup,
 } from "@/lib/freight/loading-rows";
+
+const HEAVY_THRESHOLD_STORAGE_KEY = "freight:heavyKgPerPkg";
+const HEAVY_MIN = 5;
+const HEAVY_MAX = 100;
+
+function clampHeavy(n: number): number {
+  if (!Number.isFinite(n)) return DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+  return Math.min(HEAVY_MAX, Math.max(HEAVY_MIN, Math.round(n)));
+}
+
+/** Read the persisted user threshold (browser only — safe during SSR, returns default). */
+export function readHeavyThreshold(): number {
+  if (typeof window === "undefined") return DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+  const raw = window.localStorage.getItem(HEAVY_THRESHOLD_STORAGE_KEY);
+  if (!raw) return DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+  const n = Number(raw);
+  return Number.isFinite(n) ? clampHeavy(n) : DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD;
+}
 
 interface Props {
   pack: AdvancedPackResult;
@@ -50,7 +73,23 @@ function RowProjection({
 
 
 export function LoadingRowsPanel({ pack }: Props) {
-  const rows = useMemo(() => buildRows(pack), [pack]);
+  // Configurable kg/pkg threshold for the "heavy" mixed-pallet warning.
+  // Hydrate from localStorage AFTER mount to avoid SSR/CSR mismatch.
+  const [heavyThreshold, setHeavyThreshold] = useState<number>(
+    DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
+  );
+  useEffect(() => {
+    setHeavyThreshold(readHeavyThreshold());
+  }, []);
+  const persistThreshold = (n: number) => {
+    const v = clampHeavy(n);
+    setHeavyThreshold(v);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(HEAVY_THRESHOLD_STORAGE_KEY, String(v));
+    }
+  };
+
+  const rows = useMemo(() => buildRows(pack, heavyThreshold), [pack, heavyThreshold]);
   // First row open by default; others collapsed.
   const [openRows, setOpenRows] = useState<Set<number>>(() => new Set([0]));
 
@@ -190,12 +229,74 @@ export function LoadingRowsPanel({ pack }: Props) {
         <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
           {rows.length} row{rows.length > 1 ? "s" : ""} · back to door
         </span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-2 h-7 gap-1.5 px-2 text-[11px]"
+              aria-label="Mixed-pallet warning settings"
+            >
+              <Settings2 className="size-3.5" />
+              Settings
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 space-y-3">
+            <div>
+              <Label htmlFor="heavy-threshold-input" className="text-xs font-semibold text-brand-navy">
+                Heavy package cutoff
+              </Label>
+              <p className="mt-0.5 text-[10.5px] leading-snug text-muted-foreground">
+                Non-fragile units at or above this weight (per package) trigger a
+                <strong className="font-semibold"> mixed-pallet</strong> warning when
+                stacked with fragile items.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="heavy-threshold-input"
+                type="number"
+                inputMode="numeric"
+                min={HEAVY_MIN}
+                max={HEAVY_MAX}
+                step={1}
+                value={heavyThreshold}
+                onChange={(e) => persistThreshold(Number(e.target.value))}
+                className="h-8 w-20 text-sm"
+              />
+              <span className="text-xs text-muted-foreground">kg / pkg</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-7 px-2 text-[10px]"
+                onClick={() => persistThreshold(DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD)}
+              >
+                Reset
+              </Button>
+            </div>
+            <Slider
+              min={HEAVY_MIN}
+              max={HEAVY_MAX}
+              step={1}
+              value={[heavyThreshold]}
+              onValueChange={(v) => persistThreshold(v[0] ?? DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD)}
+              aria-label="Heavy package threshold slider"
+            />
+            <div className="flex justify-between text-[9.5px] uppercase tracking-wide text-muted-foreground">
+              <span>{HEAVY_MIN} kg</span>
+              <span>default {DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD} kg</span>
+              <span>{HEAVY_MAX} kg</span>
+            </div>
+          </PopoverContent>
+        </Popover>
         <Button
           type="button"
           variant="outline"
           size="sm"
           onClick={handlePrint}
-          className="ml-2 h-7 gap-1.5 px-2 text-[11px]"
+          className="h-7 gap-1.5 px-2 text-[11px]"
         >
           <Printer className="size-3.5" />
           Print checklist

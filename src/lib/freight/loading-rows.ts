@@ -20,16 +20,22 @@ export interface RowGroup {
   needsSeparator: boolean;
 }
 
-/** Average kg per package for a row (uses pack-level weight × box-share). */
-const HEAVY_KG_PER_PKG_THRESHOLD = 25;
+/** Default kg-per-package cutoff above which a non-fragile unit is treated as "heavy". */
+export const DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD = 25;
 
 
 /**
  * Group placed boxes into rows along the container length (x-axis).
  * Two boxes belong to the same row when their x-spans overlap. Rows are
  * ordered back-to-front (lowest x first).
+ *
+ * `heavyThresholdKg` controls the kg/pkg cutoff used to flag mixed pallets
+ * (fragile + heavy non-fragile sharing a multi-layer row). Defaults to 25 kg.
  */
-export function buildRows(pack: AdvancedPackResult): RowGroup[] {
+export function buildRows(
+  pack: AdvancedPackResult,
+  heavyThresholdKg: number = DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
+): RowGroup[] {
   if (pack.placed.length === 0) return [];
 
   const sorted = [...pack.placed].sort((a, b) => a.x - b.x);
@@ -73,7 +79,7 @@ export function buildRows(pack: AdvancedPackResult): RowGroup[] {
       // A non-fragile box is "heavy" when its own per-package weight crosses
       // the threshold. (Previously used a row-wide average which masked a
       // single heavy item mixed with many light ones.)
-      if (stat && !stat.fragile && (stat.weightKgPerPkg ?? 0) >= HEAVY_KG_PER_PKG_THRESHOLD) {
+      if (stat && !stat.fragile && (stat.weightKgPerPkg ?? 0) >= heavyThresholdKg) {
         hasHeavyNonFragile = true;
       }
       if (b.rotated === "sideways" || b.rotated === "axis") rotatedCount++;
