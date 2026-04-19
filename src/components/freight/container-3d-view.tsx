@@ -426,13 +426,15 @@ function SceneContents({
 
       <WarehouseAmbience Cm={Cm} />
 
-      <ContainerShell Cm={Cm} doorOpen={doorOpen} />
+      <ContainerShell Cm={Cm} doorOpen={doorOpen} hideDoors={hideDoors} />
 
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {pack.placed.map((b, i) => {
           const t = transforms?.[i];
           if (recording && t && !t.visible) return null;
+          // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
+          if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
           // Combine per-frame transform offset (recording) with the shuffle
           // preview offset (applied to scene-z, the container width axis).
           const shuffleZ = shufflePreview?.get(i) ?? 0;
