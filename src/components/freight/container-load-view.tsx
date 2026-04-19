@@ -334,9 +334,17 @@ function SinglePlanBody({
     return s;
   }, [stepMode, stepIdx, rows, pack.placed]);
 
-  // Reset the stepper when leaving 3D or step mode.
+  // Reset the stepper when leaving 3D. When entering 3D, auto-enable step mode
+  // starting from EMPTY so the user sees an empty container and reveals each
+  // row by clicking the row card (Row 1 → row 1 only, Row 2 → rows 1+2, etc.).
   useEffect(() => {
-    if (!is3D) setStepMode(false);
+    if (!is3D) {
+      setStepMode(false);
+      setStepIdx(-1);
+    } else {
+      setStepMode(true);
+      setStepIdx(-1);
+    }
   }, [is3D]);
 
   const canStep = stepMode && is3D && rows.length > 0;
@@ -411,6 +419,14 @@ function SinglePlanBody({
           shufflePreviewActive={shufflePreview !== null}
           previewRequires3D={!is3D}
           activeRowIdx={activeRowIdx}
+          onRowSelect={(idx) => {
+            // Clicking a row card in 3D reveals rows 0..idx cumulatively.
+            // In 2D, just leave it to the accordion toggle.
+            if (is3D) {
+              if (!stepMode) setStepMode(true);
+              setStepIdx(idx);
+            }
+          }}
         />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
