@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Film, Loader2, RotateCw } from "lucide-react";
+import { Download, Film, Loader2, Maximize2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
