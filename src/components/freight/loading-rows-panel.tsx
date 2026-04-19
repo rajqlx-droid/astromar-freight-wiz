@@ -84,7 +84,12 @@ function RowProjection({
 
 
 
-export function LoadingRowsPanel({ pack }: Props) {
+export function LoadingRowsPanel({
+  pack,
+  onApplyShuffle,
+  shufflePreviewActive = false,
+  previewRequires3D = false,
+}: Props) {
   // Configurable kg/pkg threshold for the "heavy" mixed-pallet warning.
   // Hydrate from localStorage AFTER mount to avoid SSR/CSR mismatch.
   const [heavyThreshold, setHeavyThreshold] = useState<number>(
@@ -107,6 +112,17 @@ export function LoadingRowsPanel({ pack }: Props) {
   const [openRows, setOpenRows] = useState<Set<number>>(() => new Set([0]));
   // Per-row "Suggest re-shuffle" toggle state.
   const [shuffleOpen, setShuffleOpen] = useState<Set<number>>(() => new Set());
+  // Which row's preview is currently applied to the 3D view (null = none).
+  const [previewedRow, setPreviewedRow] = useState<number | null>(null);
+
+  // Clear preview if the pack changes (re-pack invalidates placedIdx mapping).
+  useEffect(() => {
+    setPreviewedRow(null);
+    onApplyShuffle?.(null);
+    // Intentionally only on pack identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pack]);
+
   const toggleShuffle = (idx: number) => {
     setShuffleOpen((prev) => {
       const next = new Set(prev);
@@ -115,6 +131,56 @@ export function LoadingRowsPanel({ pack }: Props) {
       return next;
     });
   };
+
+  /**
+   * Build a placedIdx → metres-along-scene-z offset map for one row using its
+   * reshuffle suggestion. Bottom-layer boxes are slid toward the chosen side
+   * so they meet the rest of the wall pack and close the gap.
+   */
+  const buildPreviewOffsets = (row: RowGroup): Map<number, number> => {
+    const sug = suggestReshuffle(row, pack);
+    const offsets = new Map<number, number>();
+    if (sug.direction === "none") return offsets;
+    const containerWmm = pack.container.inner.w;
+    // Compute per-box slide amounts. We work in mm then convert to metres.
+    const bottoms = row.boxes.filter((b) => b.z < 10);
+    if (bottoms.length === 0) return offsets;
+    const minY = Math.min(...bottoms.map((b) => b.y));
+    const maxY = Math.max(...bottoms.map((b) => b.y + b.w));
+    // Slack on each side of the cluster.
+    const leftSlackMm = minY;
+    const rightSlackMm = containerWmm - maxY;
+    for (const b of bottoms) {
+      const placedIdx = pack.placed.indexOf(b);
+      if (placedIdx < 0) continue;
+      let slideMm = 0;
+      if (sug.direction === "left") {
+        // Slide the left-side cluster RIGHT to meet the right wall pack.
+        slideMm = leftSlackMm;
+      } else if (sug.direction === "right") {
+        // Slide the right-side cluster LEFT to meet the left wall pack.
+        slideMm = -rightSlackMm;
+      } else if (sug.direction === "split") {
+        // Move both halves toward the centre.
+        const mid = containerWmm / 2;
+        const boxCentre = b.y + b.w / 2;
+        slideMm = boxCentre < mid ? leftSlackMm / 2 : -rightSlackMm / 2;
+      }
+      offsets.set(placedIdx, slideMm / 1000);
+    }
+    return offsets;
+  };
+
+  const applyPreview = (row: RowGroup) => {
+    const offsets = buildPreviewOffsets(row);
+    setPreviewedRow(row.rowIdx);
+    onApplyShuffle?.(offsets);
+  };
+  const clearPreview = () => {
+    setPreviewedRow(null);
+    onApplyShuffle?.(null);
+  };
+
 
   if (rows.length === 0) return null;
 
