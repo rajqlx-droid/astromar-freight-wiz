@@ -3,7 +3,7 @@
  */
 import { Download } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+
 import { Card } from "@/components/ui/card";
 import { downloadResultPdf, type PdfExtras } from "@/lib/freight/pdf";
 import type { CalcResult } from "@/lib/freight/types";
@@ -48,16 +48,17 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
     >
       <div className="flex items-center justify-between gap-3 border-b px-5 py-2.5">
         <h3 className="text-base font-bold text-brand-navy">Results</h3>
-        <Button
-          size="sm"
+        <button
+          type="button"
           onClick={handlePdf}
           disabled={!!pdfDisabledReason}
           title={pdfDisabledReason ?? "Download PDF report"}
-          className="no-print h-8 text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Download PDF report"
+          className="no-print inline-flex h-8 w-8 items-center justify-center rounded-md text-white shadow-sm transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           style={{ background: "var(--brand-orange)" }}
         >
-          <Download className="size-3.5" /> Download PDF
-        </Button>
+          <Download className="size-4" />
+        </button>
       </div>
 
       <div className="divide-y">
