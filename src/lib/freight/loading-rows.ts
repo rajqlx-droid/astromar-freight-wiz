@@ -16,7 +16,13 @@ export interface RowGroup {
   hasNonStack: boolean;
   rotatedCount: number;
   layers: number;
+  /** True when fragile units share a multi-layer row with heavier non-fragile units — recommend a separator board between layers. */
+  needsSeparator: boolean;
 }
+
+/** Average kg per package for a row (uses pack-level weight × box-share). */
+const HEAVY_KG_PER_PKG_THRESHOLD = 25;
+
 
 /**
  * Group placed boxes into rows along the container length (x-axis).
