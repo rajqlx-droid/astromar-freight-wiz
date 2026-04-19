@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
+import type { RowGroup } from "@/lib/freight/loading-rows";
 import {
   buildTimeline,
   cameraInfoForFrame,
@@ -66,6 +67,12 @@ interface Props {
    * an open door at 135° still occludes the camera from many iso angles.
    */
   hideDoors?: boolean;
+  /**
+   * When set, paint translucent red void rectangles on the floor and back
+   * wall of this row's slice so loaders can see exactly where dunnage or a
+   * re-shuffle is needed. Cleared when null.
+   */
+  gapHeatmapRow?: RowGroup | null;
 }
 
 /**
