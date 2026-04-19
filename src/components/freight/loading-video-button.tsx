@@ -111,7 +111,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
       // Bitrate scales with resolution for crisper output.
       const bitrate = resolution === 1080 ? 12_000_000 : 8_000_000;
 
-      handle.beginRecording(30, 24);
+      handle.beginRecording(30, 12);
 
       try {
         const result = await generateLoadingVideo({
@@ -128,7 +128,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
           width: targetW,
           height: targetH,
           fps: 30,
-          durationSec: 24,
+          durationSec: 12,
           videoBitsPerSecond: bitrate,
           onProgress: (frame, total) => setProgress({ frame, total }),
         });
@@ -201,7 +201,7 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
             <DialogTitle>Loading Sequence Video</DialogTitle>
             <DialogDescription>
               {containerLabel ? `${containerLabel} · ` : ""}
-              ~24 second 3D animation of cargo loading back-to-front, bottom-to-top.
+              ~12 second silent 3D animation — same loading order as the 2D rows panel.
             </DialogDescription>
           </DialogHeader>
 
