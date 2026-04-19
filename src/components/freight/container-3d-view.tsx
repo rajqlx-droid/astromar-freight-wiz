@@ -471,6 +471,7 @@ function SceneContents({
             (t?.offset[2] ?? 0) + shuffleZ,
           ];
           const isPreviewed = !recording && shuffleZ !== 0;
+          const flyIn = !recording && !!flyInPlacedSet?.has(i);
           return (
             <CargoBox
               key={i}
@@ -479,6 +480,10 @@ function SceneContents({
               offset={offset}
               scale={t?.scale}
               previewHighlight={isPreviewed}
+              flyIn={flyIn}
+              flyInKey={flyInKey}
+              containerL={Cm.l}
+              containerH={Cm.h}
             />
           );
         })}
