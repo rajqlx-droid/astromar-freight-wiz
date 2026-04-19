@@ -244,10 +244,12 @@ function FreightIntelligencePage() {
                   <SheetTitle>Quick contact</SheetTitle>
                   <div className="mt-6 space-y-3 text-sm">
                     <a href="tel:+919940211014" className="flex items-center gap-2 text-brand-navy">
-                      <Phone className="size-4 text-brand-orange" /> +91 99402 11014
+                      <Phone className="size-4 text-brand-orange" />
+                      <span>+91 99402 11014</span>
                     </a>
                     <a href="mailto:sales@astromarfreezone.com" className="flex items-center gap-2 text-brand-navy">
-                      <Mail className="size-4 text-brand-orange" /> sales@astromarfreezone.com
+                      <Mail className="size-4 text-brand-orange" />
+                      <span>sales@astromarfreezone.com</span>
                     </a>
                     <p className="flex items-start gap-2 text-muted-foreground">
                       <MapPin className="mt-0.5 size-4 text-brand-orange" />
@@ -437,8 +439,14 @@ function FreightIntelligencePage() {
                   Our Chennai-based team handles freight, customs and FTWZ end-to-end.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-4 text-xs text-white/80">
-                  <span className="flex items-center gap-1.5"><Phone className="size-3.5" /> +91 99402 11014</span>
-                  <span className="flex items-center gap-1.5"><Mail className="size-3.5" /> sales@astromarfreezone.com</span>
+                  <span className="flex items-center gap-1.5">
+                    <Phone className="size-3.5" />
+                    <span>+91 99402 11014</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Mail className="size-3.5" />
+                    <span>sales@astromarfreezone.com</span>
+                  </span>
                   <span>Mon–Sat · 9:00–18:30 IST</span>
                 </div>
               </div>
