@@ -158,7 +158,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
 
   return (
     <div
-      className="relative overflow-hidden rounded-lg border bg-gradient-to-b from-[oklch(0.97_0.005_240)] to-[oklch(0.92_0.01_240)] dark:from-[oklch(0.18_0.01_240)] dark:to-[oklch(0.12_0.01_240)]"
+      className="relative overflow-hidden rounded-lg border"
       style={{ height }}
     >
       <Canvas
@@ -170,6 +170,9 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
           glRef.current = gl;
           sceneRef.current = scene;
           cameraRef.current = camera as THREE.PerspectiveCamera;
+          // Realistic warehouse sky gradient + atmospheric fog.
+          scene.background = makeSkyTexture();
+          scene.fog = new THREE.Fog(0xb8c2cc, Cm.l * 4, Cm.l * 14);
         }}
       >
         <Suspense fallback={<Html center>Loading 3D…</Html>}>
@@ -210,6 +213,74 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     </div>
   );
 });
+
+/* --------------- Procedural textures (real container look) --------------- */
+
+function makeSkyTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 8;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, "#7ea9c9");
+  g.addColorStop(0.55, "#cfd8dc");
+  g.addColorStop(0.6, "#8a8378");
+  g.addColorStop(1, "#5a534a");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 8, 256);
+  return new THREE.CanvasTexture(c);
+}
+
+function makeCorrugatedTexture(color: string): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 64;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, 256, 64);
+  for (let x = 0; x < 256; x += 16) {
+    const grad = ctx.createLinearGradient(x, 0, x + 16, 0);
+    grad.addColorStop(0, "rgba(0,0,0,0.38)");
+    grad.addColorStop(0.5, "rgba(255,255,255,0.2)");
+    grad.addColorStop(1, "rgba(0,0,0,0.38)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(x, 0, 16, 64);
+  }
+  ctx.globalAlpha = 0.08;
+  for (let i = 0; i < 80; i++) {
+    ctx.fillStyle = i % 2 ? "#5a2e1a" : "#1a1a1a";
+    ctx.fillRect(Math.random() * 256, Math.random() * 64, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function makePlywoodTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#a07a4e";
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 60; i++) {
+    ctx.strokeStyle = `rgba(${50 + Math.random() * 40}, ${30 + Math.random() * 20}, 10, ${0.18 + Math.random() * 0.2})`;
+    ctx.lineWidth = 0.5 + Math.random() * 1.2;
+    ctx.beginPath();
+    const y = Math.random() * 256;
+    ctx.moveTo(0, y);
+    for (let x = 0; x < 256; x += 8) ctx.lineTo(x, y + Math.sin(x * 0.05 + i) * 3);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  for (let y = 0; y < 256; y += 64) ctx.fillRect(0, y, 256, 1);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
 
 /* --------------- Scene contents --------------- */
 
