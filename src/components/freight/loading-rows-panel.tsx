@@ -380,19 +380,25 @@ export function LoadingRowsPanel({ pack }: Props) {
 
               {isOpen && (
                 <div className="space-y-2 bg-muted/20 px-3 pb-3 pt-1">
-                  {/* Two projections of just this row */}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {/* Three projections of just this row */}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Door view (W × H, looking in from door)
+                        Door view (W × H)
                       </span>
                       <RowProjection svg={buildRowSideViewSvg(row, pack)} />
                     </div>
                     <div className="flex flex-col gap-1">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Side view (depth × H, looking from side wall)
+                        Side view (depth × H)
                       </span>
                       <RowProjection svg={buildRowFrontViewSvg(row, pack)} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Top view (W × depth)
+                      </span>
+                      <RowProjection svg={buildRowTopViewSvg(row, pack)} />
                     </div>
                   </div>
 
