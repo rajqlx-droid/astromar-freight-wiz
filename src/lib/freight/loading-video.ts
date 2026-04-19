@@ -143,14 +143,13 @@ function buildTimeline(
   const order = loadingOrder(pack);
   const totalFrames = Math.max(60, Math.round(durationSec * fps));
 
-  // Allocate time: 14% intro (door opening + reveal), 72% loading, 14% outro
-  // (last box settle + door closing). The longer bookends sell the door swing.
-  const introFrames = Math.round(totalFrames * 0.14);
-  const outroFrames = Math.round(totalFrames * 0.14);
-  const loadFrames = totalFrames - introFrames - outroFrames;
+  // No door-opening intro / closing outro — go straight into loading so the
+  // viewer doesn't waste seconds watching an empty container.
+  const introFrames = 0;
+  const outroFrames = 0;
+  const loadFrames = totalFrames;
 
   const n = order.length || 1;
-  // Each box gets a slice; boxes overlap slightly for smoother motion.
   const sliceLen = Math.max(3, Math.floor(loadFrames / n));
   const anims: BoxAnim[] = [];
 
