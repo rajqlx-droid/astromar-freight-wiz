@@ -28,12 +28,12 @@ export function ExportCalculator({ state, setState }: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-4">
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="mb-3">
+      <div className="space-y-3">
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <div className="mb-2 flex items-center gap-2">
             <Label className="text-xs font-semibold text-brand-navy">Currency</Label>
             <Select value={state.currency} onValueChange={(v) => set({ currency: v })}>
-              <SelectTrigger className="mt-1.5 h-10 border-2 border-brand-navy/30">
+              <SelectTrigger className="h-8 w-auto min-w-[120px] border-2 border-brand-navy/30 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -43,17 +43,17 @@ export function ExportCalculator({ state, setState }: Props) {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <NumberField id="ec" label="Cost Price" required value={state.cost} onChange={(n) => set({ cost: n })} hint="Your COGS for the export shipment." />
-            <NumberField id="ef" label="Freight" required value={state.freight} onChange={(n) => set({ freight: n })} hint="Outbound freight to destination." />
-            <NumberField id="ei" label="Insurance" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Premium added to FOB to derive CIF." />
-            <NumberField id="em" label="Margin" suffix="%" required value={state.margin} onChange={(n) => set({ margin: n })} hint="Markup over CIF you want to charge." />
-            <NumberField id="ea" label="Additional" value={state.additional} onChange={(n) => set({ additional: n })} hint="Packaging, handling, documentation." />
-            <NumberField id="eq" label="Quantity" step={1} value={state.qty} onChange={(n) => set({ qty: Math.max(0, Math.round(n)) })} hint="Optional — derives per-unit selling price." />
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-3">
+            <NumberField compact id="ec" label="Cost Price" required value={state.cost} onChange={(n) => set({ cost: n })} hint="Your COGS for the export shipment." />
+            <NumberField compact id="ef" label="Freight" required value={state.freight} onChange={(n) => set({ freight: n })} hint="Outbound freight to destination." />
+            <NumberField compact id="ei" label="Insurance" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Premium added to FOB to derive CIF." />
+            <NumberField compact id="em" label="Margin" suffix="%" required value={state.margin} onChange={(n) => set({ margin: n })} hint="Markup over CIF you want to charge." />
+            <NumberField compact id="ea" label="Additional" value={state.additional} onChange={(n) => set({ additional: n })} hint="Packaging, handling, documentation." />
+            <NumberField compact id="eq" label="Quantity" step={1} value={state.qty} onChange={(n) => set({ qty: Math.max(0, Math.round(n)) })} hint="Optional — derives per-unit selling price." />
           </div>
         </Card>
 
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-brand-navy">Margin</span>
             <span className="font-semibold text-brand-orange">{marginPct.toFixed(1)}%</span>

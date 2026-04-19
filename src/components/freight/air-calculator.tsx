@@ -61,20 +61,34 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-4">
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <NumberField id="divisor" label="Volumetric Divisor" required step={1} value={divisor} onChange={(n) => setDivisor(n || 6000)} hint="IATA standard is 6000 for air freight. Some couriers use 5000." />
-            <div className="flex flex-wrap items-end gap-4">
-              <UnitSelector id="air-len-unit" value={lenUnit} onChange={setLenUnit} />
-              <WeightUnitSelector id="air-wt-unit" value={wtUnit} onChange={setWtUnit} />
+      <div className="space-y-3">
+        <Card
+          className="border-2 p-3"
+          style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
+        >
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-[180px] flex-1">
+              <NumberField
+                compact
+                id="divisor"
+                label="Volumetric Divisor"
+                required
+                step={1}
+                value={divisor}
+                onChange={(n) => setDivisor(n || 6000)}
+                hint="IATA standard is 6000 for air freight. Some couriers use 5000."
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pb-1">
+              <UnitSelector id="air-len-unit" value={lenUnit} onChange={setLenUnit} compact />
+              <WeightUnitSelector id="air-wt-unit" value={wtUnit} onChange={setWtUnit} compact />
             </div>
           </div>
         </Card>
 
         {items.map((it, idx) => (
-          <Card key={it.id} className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-            <div className="mb-3 flex items-center justify-between">
+          <Card key={it.id} className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+            <div className="mb-2 flex items-center justify-between">
               <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
@@ -87,12 +101,12 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <NumberField id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
-              <NumberField id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
-              <NumberField id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
-              <NumberField id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
-              <NumberField id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+              <NumberField compact id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
+              <NumberField compact id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
+              <NumberField compact id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
+              <NumberField compact id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
+              <NumberField compact id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
             </div>
           </Card>
         ))}

@@ -62,21 +62,23 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-4">
-        <Card
-          className="border-2 p-3"
-          style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
-        >
-          <div className="flex flex-wrap gap-4">
-            <UnitSelector id="cbm-len-unit" value={lenUnit} onChange={setLenUnit} />
-            <WeightUnitSelector id="cbm-wt-unit" value={wtUnit} onChange={setWtUnit} />
-          </div>
-        </Card>
-
+      <div className="space-y-3">
         {items.map((it, idx) => (
-          <Card key={it.id} className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
+          <Card
+            key={it.id}
+            className="border-2 p-3"
+            style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
+          >
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
+                {idx === 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <UnitSelector id="cbm-len-unit" value={lenUnit} onChange={setLenUnit} compact />
+                    <WeightUnitSelector id="cbm-wt-unit" value={wtUnit} onChange={setWtUnit} compact />
+                  </div>
+                )}
+              </div>
               <div className="flex gap-1">
                 <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
                   <Copy className="size-3.5" />
@@ -88,12 +90,12 @@ export function CbmCalculator({ items, setItems }: Props) {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <NumberField id={`l-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} hint={`Outer length of one carton in ${lenUnit}.`} />
-              <NumberField id={`w-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} hint={`Outer width in ${lenUnit}.`} />
-              <NumberField id={`h-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} hint={`Outer height in ${lenUnit}.`} />
-              <NumberField id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
-              <NumberField id={`wt-${it.id}`} label="Weight" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} hint={`Actual weight of ONE carton (gross) in ${wtUnit}.`} />
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+              <NumberField compact id={`l-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} hint={`Outer length of one carton in ${lenUnit}.`} />
+              <NumberField compact id={`w-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} hint={`Outer width in ${lenUnit}.`} />
+              <NumberField compact id={`h-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} hint={`Outer height in ${lenUnit}.`} />
+              <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
+              <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} hint={`Actual weight of ONE carton (gross) in ${wtUnit}.`} />
             </div>
           </Card>
         ))}

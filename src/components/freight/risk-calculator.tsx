@@ -36,24 +36,24 @@ export function RiskCalculator({ state, setState }: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-4">
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="space-y-1.5">
+      <div className="space-y-3">
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="space-y-1">
               <Label className="text-xs font-semibold text-brand-navy">Container Type</Label>
               <Select value={state.containerType} onValueChange={(v) => set({ containerType: v })}>
                 <SelectTrigger className="h-10 border-2 border-brand-navy/30"><SelectValue /></SelectTrigger>
                 <SelectContent>{CONTAINERS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label className="text-xs font-semibold text-brand-navy">Port</Label>
               <Select value={state.port} onValueChange={(v) => set({ port: v })}>
                 <SelectTrigger className="h-10 border-2 border-brand-navy/30"><SelectValue /></SelectTrigger>
                 <SelectContent>{PORTS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1">
               <Label className="text-xs font-semibold text-brand-navy">Cargo Type</Label>
               <Select value={state.cargoType} onValueChange={(v) => set({ cargoType: v })}>
                 <SelectTrigger className="h-10 border-2 border-brand-navy/30"><SelectValue /></SelectTrigger>
@@ -63,13 +63,13 @@ export function RiskCalculator({ state, setState }: Props) {
           </div>
         </Card>
 
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <NumberField id="rd" label="Days at Port" required step={1} value={state.daysAtPort} onChange={(n) => set({ daysAtPort: Math.max(0, Math.round(n)) })} hint="Total days the container has been at the port." />
-            <NumberField id="rfd" label="Free Days" step={1} value={state.freeDays} onChange={(n) => set({ freeDays: Math.max(0, Math.round(n)) })} hint="Grace period offered by the shipping line / port (typical: 5)." />
-            <NumberField id="rrate" label="Daily Rate" suffix="₹/day" required value={state.dailyRate} onChange={(n) => set({ dailyRate: n })} hint="Demurrage rate per day per container." />
-            <NumberField id="rgv" label="Goods Value" suffix="₹" required value={state.goodsValue} onChange={(n) => set({ goodsValue: n })} hint="Invoice value of cargo." />
-            <NumberField id="rin" label="Insurance" suffix="₹" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Insured amount; gap is your exposure." />
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+            <NumberField compact id="rd" label="Days at Port" required step={1} value={state.daysAtPort} onChange={(n) => set({ daysAtPort: Math.max(0, Math.round(n)) })} hint="Total days the container has been at the port." />
+            <NumberField compact id="rfd" label="Free Days" step={1} value={state.freeDays} onChange={(n) => set({ freeDays: Math.max(0, Math.round(n)) })} hint="Grace period offered by the shipping line / port (typical: 5)." />
+            <NumberField compact id="rrate" label="Daily Rate" suffix="₹/day" required value={state.dailyRate} onChange={(n) => set({ dailyRate: n })} hint="Demurrage rate per day per container." />
+            <NumberField compact id="rgv" label="Goods Value" suffix="₹" required value={state.goodsValue} onChange={(n) => set({ goodsValue: n })} hint="Invoice value of cargo." />
+            <NumberField compact id="rin" label="Insurance" suffix="₹" value={state.insurance} onChange={(n) => set({ insurance: n })} hint="Insured amount; gap is your exposure." />
           </div>
         </Card>
 

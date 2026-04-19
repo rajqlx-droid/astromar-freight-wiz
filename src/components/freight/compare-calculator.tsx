@@ -30,50 +30,50 @@ export function CompareCalculator({ state, setState }: Props) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <Card className="border-2 p-4" style={{ borderColor: "var(--brand-navy)" }}>
-            <div className="mb-3 flex items-center gap-2">
+      <div className="space-y-3">
+        <div className="grid gap-3 md:grid-cols-2">
+          <Card className="border-2 p-3" style={{ borderColor: "var(--brand-navy)" }}>
+            <div className="mb-2 flex items-center gap-2">
               <Ship className="size-4 text-brand-orange" />
               <h4 className="text-sm font-semibold text-brand-navy">Sea Freight</h4>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField id="sf" label="Cost" suffix="₹" required value={state.seaFreight} onChange={(n) => set({ seaFreight: n })} />
-              <NumberField id="sd" label="Transit" suffix="days" required step={1} value={state.seaDays} onChange={(n) => set({ seaDays: Math.max(0, Math.round(n)) })} />
+            <div className="grid grid-cols-2 gap-2">
+              <NumberField compact id="sf" label="Cost" suffix="₹" required value={state.seaFreight} onChange={(n) => set({ seaFreight: n })} />
+              <NumberField compact id="sd" label="Transit" suffix="days" required step={1} value={state.seaDays} onChange={(n) => set({ seaDays: Math.max(0, Math.round(n)) })} />
             </div>
-            <div className="mt-3 rounded-md bg-muted/50 p-2 text-xs">
+            <div className="mt-2 rounded-md bg-muted/50 p-2 text-xs">
               <div className="flex justify-between"><span className="text-muted-foreground">Working capital cost</span><span className="font-semibold">₹{seaInterest.toFixed(0)}</span></div>
               <div className="mt-1 flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold text-brand-navy">₹{seaTotal.toFixed(0)}</span></div>
             </div>
           </Card>
 
-          <Card className="border-2 p-4" style={{ borderColor: "var(--brand-orange)" }}>
-            <div className="mb-3 flex items-center gap-2">
+          <Card className="border-2 p-3" style={{ borderColor: "var(--brand-orange)" }}>
+            <div className="mb-2 flex items-center gap-2">
               <Plane className="size-4 text-brand-orange" />
               <h4 className="text-sm font-semibold text-brand-navy">Air Freight</h4>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField id="af" label="Cost" suffix="₹" required value={state.airFreight} onChange={(n) => set({ airFreight: n })} />
-              <NumberField id="ad" label="Transit" suffix="days" required step={1} value={state.airDays} onChange={(n) => set({ airDays: Math.max(0, Math.round(n)) })} />
+            <div className="grid grid-cols-2 gap-2">
+              <NumberField compact id="af" label="Cost" suffix="₹" required value={state.airFreight} onChange={(n) => set({ airFreight: n })} />
+              <NumberField compact id="ad" label="Transit" suffix="days" required step={1} value={state.airDays} onChange={(n) => set({ airDays: Math.max(0, Math.round(n)) })} />
             </div>
-            <div className="mt-3 rounded-md bg-muted/50 p-2 text-xs">
+            <div className="mt-2 rounded-md bg-muted/50 p-2 text-xs">
               <div className="flex justify-between"><span className="text-muted-foreground">Working capital cost</span><span className="font-semibold">₹{airInterest.toFixed(0)}</span></div>
               <div className="mt-1 flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-bold text-brand-navy">₹{airTotal.toFixed(0)}</span></div>
             </div>
           </Card>
         </div>
 
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <h4 className="mb-3 text-sm font-semibold text-brand-navy">Financing & Cargo</h4>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <NumberField id="dr" label="Daily Interest" suffix="%" value={state.dailyRate} onChange={(n) => set({ dailyRate: n })} hint="Daily working-capital cost as % of product value (e.g. 0.05% = ~18% pa)." />
-            <NumberField id="pv" label="Product Value" suffix="₹" required value={state.productValue} onChange={(n) => set({ productValue: n })} hint="Invoice value of the cargo." />
-            <NumberField id="hd" label="Handling" suffix="₹" value={state.handling} onChange={(n) => set({ handling: n })} hint="Common port/CFS charges in both modes." />
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <h4 className="mb-2 text-sm font-semibold text-brand-navy">Financing & Cargo</h4>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+            <NumberField compact id="dr" label="Daily Interest" suffix="%" value={state.dailyRate} onChange={(n) => set({ dailyRate: n })} hint="Daily working-capital cost as % of product value (e.g. 0.05% = ~18% pa)." />
+            <NumberField compact id="pv" label="Product Value" suffix="₹" required value={state.productValue} onChange={(n) => set({ productValue: n })} hint="Invoice value of the cargo." />
+            <NumberField compact id="hd" label="Handling" suffix="₹" value={state.handling} onChange={(n) => set({ handling: n })} hint="Common port/CFS charges in both modes." />
           </div>
         </Card>
 
-        <Card className="border-2 p-4" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-          <h4 className="mb-3 text-sm font-semibold text-brand-navy">Visual comparison</h4>
+        <Card className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+          <h4 className="mb-2 text-sm font-semibold text-brand-navy">Visual comparison</h4>
           {[
             { label: "Sea total", v: seaTotal, color: "var(--brand-navy)" },
             { label: "Air total", v: airTotal, color: "var(--brand-orange)" },
