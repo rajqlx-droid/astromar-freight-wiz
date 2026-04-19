@@ -13,9 +13,11 @@
 import { Suspense, forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Edges, Grid, Html } from "@react-three/drei";
+import { Maximize2, Minimize2 } from "lucide-react";
 import * as THREE from "three";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
 import {
