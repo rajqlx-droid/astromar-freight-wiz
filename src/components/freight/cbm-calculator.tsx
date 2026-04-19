@@ -130,20 +130,34 @@ export function CbmCalculator({ items, setItems }: Props) {
   };
 
 
-  const showLen = (cm: number) => {
-    const v = cmTo(cm, lenUnit);
+  /** Resolve a row's effective length unit (per-row override → global default). */
+  const lenUnitFor = (it: CbmItem) => it.lenUnit ?? lenUnit;
+  const wtUnitFor = (it: CbmItem) => it.wtUnit ?? wtUnit;
+
+  const showLen = (cm: number, unit: typeof lenUnit) => {
+    const v = cmTo(cm, unit);
     return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
   };
   const setLen =
-    (id: string, key: "length" | "width" | "height") => (n: number) =>
-      update(id, { [key]: Number.isFinite(n) ? toCm(n, lenUnit) : 0 } as Partial<CbmItem>);
+    (id: string, key: "length" | "width" | "height", unit: typeof lenUnit) => (n: number) =>
+      update(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<CbmItem>);
 
-  const showWt = (kg: number) => {
-    const v = kgTo(kg, wtUnit);
+  const showWt = (kg: number, unit: typeof wtUnit) => {
+    const v = kgTo(kg, unit);
     return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
   };
-  const setWt = (id: string) => (n: number) =>
-    update(id, { weight: Number.isFinite(n) ? toKg(n, wtUnit) : 0 });
+  const setWt = (id: string, unit: typeof wtUnit) => (n: number) =>
+    update(id, { weight: Number.isFinite(n) ? toKg(n, unit) : 0 });
+
+  /** Update Item 1's per-row unit AND the global default (so new rows inherit). */
+  const setRowLenUnit = (it: CbmItem, idx: number) => (u: typeof lenUnit) => {
+    update(it.id, { lenUnit: u });
+    if (idx === 0) setLenUnit(u);
+  };
+  const setRowWtUnit = (it: CbmItem, idx: number) => (u: typeof wtUnit) => {
+    update(it.id, { wtUnit: u });
+    if (idx === 0) setWtUnit(u);
+  };
 
   const inputsTable = items.flatMap((it, idx) => {
     const rows = [
