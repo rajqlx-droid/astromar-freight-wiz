@@ -573,38 +573,81 @@ function reverseGapIntervalsSec(timeline: Timeline): Array<[number, number]> {
 }
 
 /**
- * Build an AudioBuffer of `durationSec` containing classic warehouse "beep …
- * beep … beep" reverse-warning tones during each reverse interval. ~1 kHz
- * square-ish tone, 250 ms on / 250 ms off, gentle envelope so it doesn't pop.
+ * Build an AudioBuffer of `durationSec` containing:
+ *   - Low engine drone (~80 Hz fundamental + 160 Hz overtone) during the
+ *     entire loading window. Slight pitch dip during reverse intervals.
+ *   - Classic warehouse "beep … beep … beep" reverse-warning tones during
+ *     each reverse interval. Soft envelope so it doesn't pop.
  */
 function buildBeepBuffer(
   ctx: AudioContext,
   durationSec: number,
-  intervals: Array<[number, number]>,
+  beepIntervals: Array<[number, number]>,
+  engineWindow: [number, number] | null,
 ): AudioBuffer {
   const sr = ctx.sampleRate;
   const totalSamples = Math.ceil(durationSec * sr);
   const buf = ctx.createBuffer(1, totalSamples, sr);
   const data = buf.getChannelData(0);
+
+  // ---- Engine hum layer ----
+  if (engineWindow) {
+    const [eStart, eEnd] = engineWindow;
+    const startSample = Math.floor(eStart * sr);
+    const endSample = Math.min(totalSamples, Math.floor(eEnd * sr));
+    const fadeT = 0.4; // seconds fade-in / fade-out
+    const fadeSamples = Math.floor(fadeT * sr);
+    const baseFreq = 78;     // Hz fundamental — diesel-ish chug
+    const idleAmp = 0.16;
+    // Reverse intervals → use lower-pitched "reverse gear" sound.
+    const isReversingAt = (sample: number): boolean => {
+      const sec = sample / sr;
+      return beepIntervals.some(([s, e]) => sec >= s && sec < e);
+    };
+    let phase = 0;
+    let phase2 = 0;
+    let phase3 = 0;
+    for (let i = startSample; i < endSample; i++) {
+      // Smooth fade in/out
+      let env = 1;
+      const fromStart = i - startSample;
+      const toEnd = endSample - i;
+      if (fromStart < fadeSamples) env *= fromStart / fadeSamples;
+      if (toEnd < fadeSamples) env *= toEnd / fadeSamples;
+      // Subtle wobble to avoid mechanical purity
+      const wobble = 1 + 0.015 * Math.sin((i / sr) * 2 * Math.PI * 1.7);
+      const reverse = isReversingAt(i);
+      const f = baseFreq * (reverse ? 0.78 : 1.0) * wobble;
+      phase += (2 * Math.PI * f) / sr;
+      phase2 += (2 * Math.PI * f * 2) / sr;
+      phase3 += (2 * Math.PI * f * 0.5) / sr;
+      // Triangle-ish blend: fundamental + 2nd harmonic + sub for diesel weight
+      const sample =
+        Math.sin(phase) * 0.7 +
+        Math.sin(phase2) * 0.22 +
+        Math.sin(phase3) * 0.18;
+      data[i] += sample * env * idleAmp;
+    }
+  }
+
+  // ---- Reverse beep layer ----
   const freq = 1050;
   const beepOn = 0.22;   // seconds on
   const beepOff = 0.28;  // seconds silent
   const period = beepOn + beepOff;
-  const attack = 0.008;  // seconds — soft envelope to avoid clicks
+  const attack = 0.008;
   const amp = 0.32;
 
-  for (const [start, end] of intervals) {
+  for (const [start, end] of beepIntervals) {
     const startSample = Math.floor(start * sr);
     const endSample = Math.min(totalSamples, Math.floor(end * sr));
     for (let i = startSample; i < endSample; i++) {
       const tInGap = (i - startSample) / sr;
       const phase = tInGap % period;
-      if (phase >= beepOn) continue; // silent half
-      // Soft attack/release envelope inside the on-phase
+      if (phase >= beepOn) continue;
       let env = 1;
       if (phase < attack) env = phase / attack;
       else if (phase > beepOn - attack) env = Math.max(0, (beepOn - phase) / attack);
-      // Square-ish tone (sine + slight 3rd harmonic for warehouse feel)
       const s =
         Math.sin(2 * Math.PI * freq * tInGap) * 0.85 +
         Math.sin(2 * Math.PI * freq * 3 * tInGap) * 0.12;
@@ -612,6 +655,14 @@ function buildBeepBuffer(
     }
   }
   return buf;
+}
+
+/** Compute the [startSec, endSec] window during which the engine should be running. */
+function engineWindowSec(timeline: Timeline): [number, number] {
+  const fps = timeline.fps;
+  const start = timeline.introFrames / fps;
+  const end = (timeline.introFrames + timeline.loadFrames) / fps;
+  return [start, end];
 }
 
 /* -------------------------------------------------------------------------- */
