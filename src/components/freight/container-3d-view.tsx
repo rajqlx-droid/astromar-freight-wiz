@@ -55,6 +55,17 @@ interface Props {
    * can visualise a "Suggested re-shuffle" before doing it physically.
    */
   shufflePreview?: Map<number, number> | null;
+  /**
+   * When provided, only boxes whose `placedIdx` is in this set are rendered.
+   * Used by the manual row-stepper to reveal rows one at a time, back wall
+   * → door. Pass `null` to show every box (default).
+   */
+  visiblePlacedSet?: Set<number> | null;
+  /**
+   * Hide the swing doors entirely. Useful while stepping rows or recording —
+   * an open door at 135° still occludes the camera from many iso angles.
+   */
+  hideDoors?: boolean;
 }
 
 /**
