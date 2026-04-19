@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
+  buildRowFrontViewSvg,
   buildRowSideViewSvg,
   buildRows,
   instructionFor,
@@ -29,14 +30,17 @@ function itemCounts(row: RowGroup, pack: AdvancedPackResult) {
 }
 
 /**
- * Mini side-view of a single row — wraps the shared SVG builder so the panel,
+ * Mini projection of a single row — wraps a shared SVG builder so the panel,
  * print HTML, and PDF all render the exact same artwork.
  */
-function RowSideView({ row, pack }: { row: RowGroup; pack: AdvancedPackResult }) {
-  const svg = buildRowSideViewSvg(row, pack);
+function RowProjection({
+  svg,
+}: {
+  svg: string;
+}) {
   return (
     <div
-      className="row-side-view h-[90px] w-full max-w-[260px] overflow-hidden rounded border bg-background [&_svg]:h-full [&_svg]:w-full"
+      className="h-[90px] w-full overflow-hidden rounded border bg-background [&_svg]:h-full [&_svg]:w-full"
       // SVG is built from sanitised numeric data + theme constants — safe to inject.
       dangerouslySetInnerHTML={{ __html: svg }}
     />
@@ -84,7 +88,8 @@ export function LoadingRowsPanel({ pack }: Props) {
           row.totalWeightKg > 0
             ? `· ~${row.totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
             : "";
-        const sideSvg = buildRowSideViewSvg(row, pack, { width: 240, height: 96 });
+        const doorSvg = buildRowSideViewSvg(row, pack, { width: 200, height: 90 });
+        const sideSvg = buildRowFrontViewSvg(row, pack, { width: 200, height: 90 });
         return `
           <li class="row">
             <div class="row-head">
@@ -98,9 +103,15 @@ export function LoadingRowsPanel({ pack }: Props) {
             </div>
             <div class="row-body">
               <div class="row-body-grid">
-                <div class="side-view">
-                  <div class="side-view-label">Side view (looking down container)</div>
-                  ${sideSvg}
+                <div class="views">
+                  <div class="view">
+                    <div class="view-label">Door view (W × H)</div>
+                    ${doorSvg}
+                  </div>
+                  <div class="view">
+                    <div class="view-label">Side view (depth × H)</div>
+                    ${sideSvg}
+                  </div>
                 </div>
                 <div class="row-body-text">
                   <div class="chips">${itemsHtml}</div>
@@ -143,10 +154,11 @@ export function LoadingRowsPanel({ pack }: Props) {
         .chip { display: inline-flex; align-items: center; gap: 5px; background: #f4f6fa; padding: 3px 7px; border-radius: 4px; font-size: 10px; }
         .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
         .instruction { border-left: 2px solid #F97316; padding: 4px 8px; background: #fafbfd; font-size: 11px; color: #1B3A6B; border-radius: 0 4px 4px 0; }
-        .row-body-grid { display: grid; grid-template-columns: 240px 1fr; gap: 12px; align-items: start; }
-        .side-view { display: flex; flex-direction: column; gap: 3px; }
-        .side-view svg { display: block; width: 100%; height: auto; border: 1px solid #d6dde8; border-radius: 4px; background: #fff; }
-        .side-view-label { font-size: 8px; font-weight: 600; color: #777; letter-spacing: 0.4px; text-transform: uppercase; }
+        .row-body-grid { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: start; }
+        .views { display: flex; flex-direction: column; gap: 6px; }
+        .view { display: flex; flex-direction: column; gap: 3px; }
+        .view svg { display: block; width: 100%; height: auto; border: 1px solid #d6dde8; border-radius: 4px; background: #fff; }
+        .view-label { font-size: 8px; font-weight: 600; color: #777; letter-spacing: 0.4px; text-transform: uppercase; }
         .row-body-text { display: flex; flex-direction: column; gap: 6px; }
         .footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #d6dde8; color: #777; font-size: 9px; }
       </style></head><body>
@@ -261,12 +273,20 @@ export function LoadingRowsPanel({ pack }: Props) {
 
               {isOpen && (
                 <div className="space-y-2 bg-muted/20 px-3 pb-3 pt-1">
-                  {/* Mini side-view of just this row */}
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Side view (looking down container length)
-                    </span>
-                    <RowSideView row={row} pack={pack} />
+                  {/* Two projections of just this row */}
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Door view (W × H, looking in from door)
+                      </span>
+                      <RowProjection svg={buildRowSideViewSvg(row, pack)} />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Side view (depth × H, looking from side wall)
+                      </span>
+                      <RowProjection svg={buildRowFrontViewSvg(row, pack)} />
+                    </div>
                   </div>
 
                   {/* Item color chips */}

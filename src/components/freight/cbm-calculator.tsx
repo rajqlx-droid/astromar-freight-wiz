@@ -332,7 +332,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           const extras: import("@/lib/freight/pdf").PdfExtras = {};
           if (snaps) extras.snapshots = snaps;
           if (pack && pack.placed.length > 0) {
-            const { buildRows, instructionFor, itemCountsForRow, buildRowSideViewSvg } =
+            const { buildRows, instructionFor, itemCountsForRow, buildRowSideViewSvg, buildRowFrontViewSvg } =
               await import("@/lib/freight/loading-rows");
             const rows = buildRows(pack);
             // Rasterise each side-view SVG to a PNG dataURL for jsPDF.
@@ -371,8 +371,12 @@ export function CbmCalculator({ items, setItems }: Props) {
 
             extras.loadingRows = await Promise.all(
               rows.map(async (r) => {
-                const svg = buildRowSideViewSvg(r, pack, { width: 260, height: 104 });
-                const sideViewPng = await svgToPng(svg);
+                const doorSvg = buildRowSideViewSvg(r, pack, { width: 260, height: 104 });
+                const sideSvg = buildRowFrontViewSvg(r, pack, { width: 260, height: 104 });
+                const [sideViewPng, frontViewPng] = await Promise.all([
+                  svgToPng(doorSvg),
+                  svgToPng(sideSvg),
+                ]);
                 return {
                   rowIdx: r.rowIdx,
                   xStartM: r.xStart / 1000,
@@ -388,6 +392,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                   items: itemCountsForRow(r, pack),
                   instruction: instructionFor(r),
                   sideViewPng,
+                  frontViewPng,
                 };
               }),
             );
