@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
+  buildRowSideViewSvg,
   buildRows,
   instructionFor,
   itemCountsForRow,
@@ -28,96 +29,20 @@ function itemCounts(row: RowGroup, pack: AdvancedPackResult) {
 }
 
 /**
- * Mini side-view of a single row — a loader's-eye projection looking down the
- * container length toward the door. Width axis is horizontal, height axis is
- * vertical, the floor sits at the bottom. Only this row's boxes are drawn.
+ * Mini side-view of a single row — wraps the shared SVG builder so the panel,
+ * print HTML, and PDF all render the exact same artwork.
  */
 function RowSideView({ row, pack }: { row: RowGroup; pack: AdvancedPackResult }) {
-  const containerW = pack.container.inner.w; // mm
-  const containerH = pack.container.inner.h; // mm
-  const VIEW_W = 220;
-  const VIEW_H = 90;
-  const PAD = 4;
-  const innerW = VIEW_W - PAD * 2;
-  const innerH = VIEW_H - PAD * 2;
-  const sx = innerW / containerW;
-  const sy = innerH / containerH;
-
+  const svg = buildRowSideViewSvg(row, pack);
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      className="h-[90px] w-full max-w-[260px] rounded border bg-background text-brand-navy"
-      role="img"
-      aria-label={`Side view of row ${row.rowIdx + 1}`}
-    >
-      <rect
-        x={PAD}
-        y={PAD}
-        width={innerW}
-        height={innerH}
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity={0.25}
-        strokeDasharray="3 3"
-      />
-      <line
-        x1={PAD}
-        y1={VIEW_H - PAD}
-        x2={VIEW_W - PAD}
-        y2={VIEW_H - PAD}
-        stroke="currentColor"
-        strokeOpacity={0.45}
-        strokeWidth={1}
-      />
-      {row.boxes.map((b, i) => {
-        const color = pack.perItem[b.itemIdx]?.color ?? "#888";
-        const x = PAD + b.y * sx;
-        const w = b.w * sx;
-        const h = b.h * sy;
-        const y = VIEW_H - PAD - (b.z + b.h) * sy;
-        const tilted = b.rotated === "sideways" || b.rotated === "axis";
-        return (
-          <g key={i}>
-            <rect
-              x={x}
-              y={y}
-              width={Math.max(w, 1)}
-              height={Math.max(h, 1)}
-              fill={color}
-              fillOpacity={0.85}
-              stroke="rgba(0,0,0,0.35)"
-              strokeWidth={0.5}
-            />
-            {tilted && w > 10 && h > 10 && (
-              <text
-                x={x + w / 2}
-                y={y + h / 2 + 3}
-                fontSize={8}
-                fontWeight={700}
-                textAnchor="middle"
-                fill="#854d0e"
-              >
-                ↻
-              </text>
-            )}
-          </g>
-        );
-      })}
-      <text x={PAD + 2} y={PAD + 8} fontSize={7} fill="currentColor" fillOpacity={0.5}>
-        ← width →
-      </text>
-      <text
-        x={PAD + 2}
-        y={VIEW_H - PAD - 2}
-        fontSize={7}
-        fill="currentColor"
-        fillOpacity={0.5}
-      >
-        floor
-      </text>
-    </svg>
+    <div
+      className="row-side-view h-[90px] w-full max-w-[260px] overflow-hidden rounded border bg-background [&_svg]:h-full [&_svg]:w-full"
+      // SVG is built from sanitised numeric data + theme constants — safe to inject.
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   );
 }
+
 
 
 export function LoadingRowsPanel({ pack }: Props) {
@@ -157,6 +82,7 @@ export function LoadingRowsPanel({ pack }: Props) {
           row.totalWeightKg > 0
             ? `· ~${row.totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
             : "";
+        const sideSvg = buildRowSideViewSvg(row, pack, { width: 240, height: 96 });
         return `
           <li class="row">
             <div class="row-head">
@@ -169,8 +95,16 @@ export function LoadingRowsPanel({ pack }: Props) {
               <span class="check"></span>
             </div>
             <div class="row-body">
-              <div class="chips">${itemsHtml}</div>
-              <div class="instruction"><strong>Loader:</strong> ${instructionFor(row)}</div>
+              <div class="row-body-grid">
+                <div class="side-view">
+                  <div class="side-view-label">Side view (looking down container)</div>
+                  ${sideSvg}
+                </div>
+                <div class="row-body-text">
+                  <div class="chips">${itemsHtml}</div>
+                  <div class="instruction"><strong>Loader:</strong> ${instructionFor(row)}</div>
+                </div>
+              </div>
             </div>
           </li>`;
       })
@@ -204,6 +138,11 @@ export function LoadingRowsPanel({ pack }: Props) {
         .chip { display: inline-flex; align-items: center; gap: 5px; background: #f4f6fa; padding: 3px 7px; border-radius: 4px; font-size: 10px; }
         .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
         .instruction { border-left: 2px solid #F97316; padding: 4px 8px; background: #fafbfd; font-size: 11px; color: #1B3A6B; border-radius: 0 4px 4px 0; }
+        .row-body-grid { display: grid; grid-template-columns: 240px 1fr; gap: 12px; align-items: start; }
+        .side-view { display: flex; flex-direction: column; gap: 3px; }
+        .side-view svg { display: block; width: 100%; height: auto; border: 1px solid #d6dde8; border-radius: 4px; background: #fff; }
+        .side-view-label { font-size: 8px; font-weight: 600; color: #777; letter-spacing: 0.4px; text-transform: uppercase; }
+        .row-body-text { display: flex; flex-direction: column; gap: 6px; }
         .footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #d6dde8; color: #777; font-size: 9px; }
       </style></head><body>
       <h1>Loading Checklist — Row by Row</h1>
