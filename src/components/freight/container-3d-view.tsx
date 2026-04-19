@@ -47,6 +47,12 @@ export interface Container3DHandle {
 interface Props {
   pack: AdvancedPackResult;
   height?: number;
+  /**
+   * Per-box width-axis preview offset (placedIdx → metres along scene-z, the
+   * container's width). Applied additively to every matched box so loaders
+   * can visualise a "Suggested re-shuffle" before doing it physically.
+   */
+  shufflePreview?: Map<number, number> | null;
 }
 
 /**
