@@ -69,7 +69,10 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [forcedChoice, setForcedChoice] = useState<"20gp" | "40gp" | "40hc" | null>(null);
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const captureRef = useRef<(() => Promise<{ iso: string; front: string; side: string } | null>) | null>(null);
+  const loadHandleRef = useRef<{
+    capture: () => Promise<{ iso: string; front: string; side: string } | null>;
+    getActivePack: () => import("@/lib/freight/packing-advanced").AdvancedPackResult | null;
+  } | null>(null);
   const [optimizationRequested, setOptimizationRequested] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const result = useMemo(() => calcCbm(items), [items]);
@@ -307,7 +310,7 @@ export function CbmCalculator({ items, setItems }: Props) {
               forcedChoice={forcedChoice}
               onChoiceChange={setForcedChoice}
               onReady={(h) => {
-                captureRef.current = h.capture;
+                loadHandleRef.current = h;
               }}
             />
           </>
@@ -322,8 +325,33 @@ export function CbmCalculator({ items, setItems }: Props) {
             : "Click 'Optimize loading' and confirm packing options to enable PDF export with the 3D loading plan."
         }
         resolveExtras={async () => {
-          const snaps = captureRef.current ? await captureRef.current() : null;
-          return snaps ? { snapshots: snaps } : undefined;
+          const h = loadHandleRef.current;
+          if (!h) return undefined;
+          const snaps = await h.capture();
+          const pack = h.getActivePack();
+          const extras: import("@/lib/freight/pdf").PdfExtras = {};
+          if (snaps) extras.snapshots = snaps;
+          if (pack && pack.placed.length > 0) {
+            const { buildRows, instructionFor, itemCountsForRow } = await import(
+              "@/lib/freight/loading-rows"
+            );
+            const rows = buildRows(pack);
+            extras.loadingRows = rows.map((r) => ({
+              rowIdx: r.rowIdx,
+              xStartM: r.xStart / 1000,
+              xEndM: r.xEnd / 1000,
+              pkgCount: r.boxes.length,
+              layers: r.layers,
+              cbm: r.totalCbm,
+              weightKg: r.totalWeightKg,
+              hasFragile: r.hasFragile,
+              hasNonStack: r.hasNonStack,
+              rotatedCount: r.rotatedCount,
+              items: itemCountsForRow(r, pack),
+              instruction: instructionFor(r),
+            }));
+          }
+          return Object.keys(extras).length ? extras : undefined;
         }}
       />
 
