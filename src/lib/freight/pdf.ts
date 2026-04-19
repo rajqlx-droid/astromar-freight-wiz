@@ -77,8 +77,63 @@ export function downloadResultPdf(
     styles: { fontSize: 11, cellPadding: 7 },
     margin: { left: 40, right: 40 },
   });
+  // @ts-expect-error autotable injects lastAutoTable
+  y = (doc.lastAutoTable?.finalY ?? y) + 20;
 
-  // Footer
+  // Optional: 3D snapshots (multi-angle) and load report.
+  if (extras?.snapshots && (extras.snapshots.iso || extras.snapshots.front || extras.snapshots.side)) {
+    if (y > 600) {
+      doc.addPage();
+      y = 60;
+    }
+    doc.setTextColor(...NAVY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text("Container Load — Multi-angle View", 40, y);
+    y += 12;
+
+    const snaps = extras.snapshots;
+    const snapList: { key: string; src: string; label: string }[] = [];
+    if (snaps.iso) snapList.push({ key: "iso", src: snaps.iso, label: "Isometric" });
+    if (snaps.front) snapList.push({ key: "front", src: snaps.front, label: "Front" });
+    if (snaps.side) snapList.push({ key: "side", src: snaps.side, label: "Side" });
+
+    const usable = pageWidth - 80;
+    const gap = 10;
+    const cellW = (usable - gap * (snapList.length - 1)) / snapList.length;
+    const cellH = cellW * 0.7;
+    snapList.forEach((s, i) => {
+      const x = 40 + i * (cellW + gap);
+      try {
+        doc.addImage(s.src, "PNG", x, y + 6, cellW, cellH, undefined, "FAST");
+      } catch {
+        /* ignore broken dataURL */
+      }
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(...NAVY);
+      doc.text(s.label, x, y);
+    });
+    y += cellH + 24;
+  }
+
+  if (extras?.loadReport && extras.loadReport.length) {
+    if (y > 700) {
+      doc.addPage();
+      y = 60;
+    }
+    autoTable(doc, {
+      startY: y,
+      head: [["Load Report", "Value"]],
+      body: extras.loadReport.map((i) => [i.label, i.value]),
+      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold" },
+      bodyStyles: { textColor: 40 },
+      alternateRowStyles: { fillColor: [240, 245, 251] },
+      styles: { fontSize: 10, cellPadding: 6 },
+      margin: { left: 40, right: 40 },
+    });
+  }
+
   const ph = doc.internal.pageSize.getHeight();
   doc.setDrawColor(...NAVY);
   doc.setLineWidth(1);
