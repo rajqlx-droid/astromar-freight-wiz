@@ -221,8 +221,18 @@ export function CbmCalculator({ items, setItems }: Props) {
             Clear all
           </Button>
         </div>
+        {sumCbm(items) > 0 && (
+          <ContainerSuggestion
+            recommendation={recommendation}
+            currentChoice={forcedChoice ?? "auto"}
+            onApply={(id) => setForcedChoice(id)}
+          />
+        )}
         <ContainerLoadView
           items={items}
+          recommendation={recommendation}
+          forcedChoice={forcedChoice}
+          onChoiceChange={setForcedChoice}
           onReady={(h) => {
             captureRef.current = h.capture;
           }}
