@@ -135,6 +135,8 @@ export function LoadingRowsPanel({ pack }: Props) {
         .badge.fragile { background: #fef3c7; color: #92400e; }
         .badge.nostack { background: #ffe4e6; color: #9f1239; }
         .badge.tilt { background: #fef9c3; color: #854d0e; }
+        .badge.mixed { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+        .warn { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; padding: 5px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
         .check { width: 18px; height: 18px; border: 1.5px solid #1B3A6B; border-radius: 4px; flex-shrink: 0; }
         .row-body { margin-top: 8px; padding-left: 38px; }
         .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
