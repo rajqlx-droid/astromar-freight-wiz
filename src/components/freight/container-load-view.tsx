@@ -40,6 +40,8 @@ interface Props {
   onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | null) => void;
   /** Expose snapshot capture so parent (PDF flow) can grab 3 angles. */
   onReady?: (handle: { capture: () => Promise<{ iso: string; front: string; side: string } | null> }) => void;
+  /** When set, disables the 3D toggle and Loading Video button (CBM gate). */
+  optimizationDisabledReason?: string | null;
 }
 
 type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
@@ -53,6 +55,7 @@ export function ContainerLoadView({
   forcedChoice,
   onChoiceChange,
   onReady,
+  optimizationDisabledReason,
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
@@ -141,15 +144,23 @@ export function ContainerLoadView({
           </PillButton>
         ))}
         <div className="ml-auto flex items-center gap-2">
-          <LoadingVideoButton
-            pack={activePack}
-            containerLabel={activePack.container.name}
-            getHandle={() => view3DRef.current}
-            ensure3DReady={async () => {
-              if (!is3D) setIs3D(true);
-            }}
-          />
-          <div className="flex rounded-full border border-brand-navy/30 p-0.5">
+          <div title={optimizationDisabledReason ?? undefined} className={cn(optimizationDisabledReason && "pointer-events-none opacity-50")}> 
+            <LoadingVideoButton
+              pack={activePack}
+              containerLabel={activePack.container.name}
+              getHandle={() => view3DRef.current}
+              ensure3DReady={async () => {
+                if (!is3D) setIs3D(true);
+              }}
+            />
+          </div>
+          <div
+            className={cn(
+              "flex rounded-full border border-brand-navy/30 p-0.5",
+              optimizationDisabledReason && "opacity-50",
+            )}
+            title={optimizationDisabledReason ?? undefined}
+          >
             <button
               type="button"
               onClick={() => setIs3D(false)}
@@ -162,9 +173,10 @@ export function ContainerLoadView({
             </button>
             <button
               type="button"
-              onClick={() => setIs3D(true)}
+              onClick={() => !optimizationDisabledReason && setIs3D(true)}
+              disabled={!!optimizationDisabledReason}
               className={cn(
-                "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+                "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed",
                 is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
               )}
             >

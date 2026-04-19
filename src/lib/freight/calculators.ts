@@ -45,6 +45,12 @@ export interface CbmItem {
   allowSidewaysRotation?: boolean;
   /** Packer may tip box onto its side (swap H with L or W). */
   allowAxisRotation?: boolean;
+  /**
+   * User has explicitly reviewed/confirmed the packing options for this item.
+   * Required (CBM calculator only) before container optimization, 3D loading
+   * view, loading video, and PDF export are available.
+   */
+  packingConfirmed?: boolean;
 }
 
 export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
@@ -60,6 +66,7 @@ export const emptyCbmItem = (seedIndex?: number): CbmItem => ({
   maxStackWeightKg: 0,
   allowSidewaysRotation: true,
   allowAxisRotation: false,
+  packingConfirmed: false,
 });
 
 export function calcCbm(items: CbmItem[]): CalcResult {
