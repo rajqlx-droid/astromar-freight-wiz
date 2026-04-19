@@ -6,7 +6,7 @@
  * the container) should build that row from the floor up before advancing
  * to the next row toward the door.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Layers, Lightbulb, Printer, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
