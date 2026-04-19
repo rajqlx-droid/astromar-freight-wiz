@@ -175,6 +175,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   });
 
   return (
+    <div className="space-y-6">
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
         {items.map((it, idx) => {
