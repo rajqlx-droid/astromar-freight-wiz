@@ -24,8 +24,10 @@ export interface PdfLoadingRow {
   needsSeparator: boolean;
   items: { itemIdx: number; count: number; color: string; packageType: string }[];
   instruction: string;
-  /** Optional pre-rasterised side-view PNG dataURL for this row. */
+  /** Optional pre-rasterised door-view PNG dataURL (W × H) for this row. */
   sideViewPng?: string;
+  /** Optional pre-rasterised side-view PNG dataURL (depth × H) for this row. */
+  frontViewPng?: string;
 }
 
 export interface PdfExtras {
