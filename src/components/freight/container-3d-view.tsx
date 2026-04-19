@@ -355,6 +355,8 @@ function SceneContents({
   visiblePlacedSet,
   hideDoors,
   gapHeatmapRow,
+  flyInPlacedSet,
+  flyInKey,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -365,6 +367,8 @@ function SceneContents({
   visiblePlacedSet: Set<number> | null;
   hideDoors: boolean;
   gapHeatmapRow: RowGroup | null;
+  flyInPlacedSet: Set<number> | null;
+  flyInKey: number;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
