@@ -315,6 +315,15 @@ export function packContainerAdvanced(
 
     const { x, y, z, orient, supporters } = bestPick;
     const internalIdx = placedInternal.length;
+
+    // Detect rotation vs original dimensions.
+    let rotated: "sideways" | "axis" | null = null;
+    if (orient.h !== c.origH) {
+      rotated = "axis"; // tipped — height swapped with L or W
+    } else if (orient.l !== c.origL || orient.w !== c.origW) {
+      rotated = "sideways"; // L↔W swap
+    }
+
     const box: PlacedInternal = {
       x,
       y,
@@ -324,6 +333,7 @@ export function packContainerAdvanced(
       h: orient.h,
       color: ITEM_COLORS[c.itemIdx % ITEM_COLORS.length],
       itemIdx: c.itemIdx,
+      rotated,
       weight: c.weight,
       fragile: c.fragile,
       maxStackWeightKg: c.maxStackWeightKg,
