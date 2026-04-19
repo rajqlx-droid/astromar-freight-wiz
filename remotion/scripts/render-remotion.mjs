@@ -28,7 +28,7 @@ const composition = await selectComposition({
 });
 console.log("[render] composition:", composition.id, composition.durationInFrames, "frames");
 
-const out = "/mnt/documents/loading-guide.mp4";
+const out = process.env.RENDER_OUT ?? "/mnt/documents/loading-guide-v2.mp4";
 console.log("[render] rendering →", out);
 await renderMedia({
   composition,

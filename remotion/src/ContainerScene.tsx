@@ -5,10 +5,12 @@
 
 import React from "react";
 import { boxFaces, project, type Camera } from "./projection";
-import { CONTAINER, type Box } from "./scenario";
+import type { Box, ContainerSpec } from "./scenario-demo";
 
 export interface SceneProps {
   cam: Camera;
+  /** Container dimensions to render. */
+  container: ContainerSpec;
   visibleBoxes: Box[];
   /** Box index → 0..1 entrance progress. Missing = fully present. */
   boxProgress?: Map<number, number>;
@@ -46,6 +48,7 @@ function pointsAttr(pts: { sx: number; sy: number }[]): string {
 
 export const ContainerScene: React.FC<SceneProps> = ({
   cam,
+  container,
   visibleBoxes,
   boxProgress,
   showShell = true,
@@ -54,7 +57,7 @@ export const ContainerScene: React.FC<SceneProps> = ({
   showRotateBands = true,
   doorClose = 0,
 }) => {
-  const { l, w, h } = CONTAINER.inner;
+  const { l, w, h } = container.inner;
 
   // --- Container shell wireframe ---
   const shellPaths: React.ReactNode[] = [];
