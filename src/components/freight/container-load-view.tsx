@@ -22,6 +22,7 @@ import {
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
+import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
 import type { Container3DHandle } from "./container-3d-view";
 
@@ -287,6 +288,7 @@ function SinglePlanBody({
         </div>
         <Legend items={items} />
         <LoadingSequence pack={pack} />
+        <LoadingRowsPanel pack={pack} />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
           Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
         </p>
