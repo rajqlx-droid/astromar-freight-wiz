@@ -265,20 +265,18 @@ export function CbmCalculator({ items, setItems }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(180px,220px)] md:items-start">
-                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-                        <NumberField compact id={`l-${it.id}`} label="Length" suffix={rowLen} required value={showLen(it.length, rowLen)} onChange={setLen(it.id, "length", rowLen)} hint={`Outer length of one carton in ${rowLen}.`} />
-                        <NumberField compact id={`w-${it.id}`} label="Width" suffix={rowLen} required value={showLen(it.width, rowLen)} onChange={setLen(it.id, "width", rowLen)} hint={`Outer width in ${rowLen}.`} />
-                        <NumberField compact id={`h-${it.id}`} label="Height" suffix={rowLen} required value={showLen(it.height, rowLen)} onChange={setLen(it.id, "height", rowLen)} hint={`Outer height in ${rowLen}.`} />
-                        <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
-                        <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
-                      </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      <NumberField compact id={`l-${it.id}`} label="Length" suffix={rowLen} required value={showLen(it.length, rowLen)} onChange={setLen(it.id, "length", rowLen)} hint={`Outer length of one carton in ${rowLen}.`} />
+                      <NumberField compact id={`w-${it.id}`} label="Width" suffix={rowLen} required value={showLen(it.width, rowLen)} onChange={setLen(it.id, "width", rowLen)} hint={`Outer width in ${rowLen}.`} />
+                      <NumberField compact id={`h-${it.id}`} label="Height" suffix={rowLen} required value={showLen(it.height, rowLen)} onChange={setLen(it.id, "height", rowLen)} hint={`Outer height in ${rowLen}.`} />
+                      <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
+                      <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
                       <div
-                        className="flex items-center justify-between gap-2 rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-2 md:min-h-full md:flex-col md:items-stretch md:justify-center"
+                        className="flex flex-col justify-center rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-1.5"
                         aria-label={`Item ${idx + 1} CBM`}
                       >
                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CBM</span>
-                        <span className="text-lg font-bold leading-tight md:text-xl" style={{ color: "var(--brand-orange)" }}>
+                        <span className="text-lg font-bold leading-tight" style={{ color: "var(--brand-orange)" }}>
                           {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
                           <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
                         </span>
