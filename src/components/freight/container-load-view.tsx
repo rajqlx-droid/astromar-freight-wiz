@@ -613,6 +613,34 @@ function RowStepperBar({
               <Button
                 type="button"
                 size="sm"
+                variant={isPlaying ? "default" : "outline"}
+                onClick={onTogglePlay}
+                disabled={!canStep}
+                className={cn(
+                  "h-7 px-2 text-[11px]",
+                  isPlaying && "bg-emerald-600 text-white hover:bg-emerald-700",
+                )}
+                aria-pressed={isPlaying}
+                aria-label={isPlaying ? "Pause walkthrough" : "Play all rows"}
+                title={
+                  isPlaying
+                    ? "Pause auto-walkthrough"
+                    : "Auto-advance Row 1 → Row N (1.5s per row)"
+                }
+              >
+                {isPlaying ? (
+                  <>
+                    <Pause className="size-3" /> Pause
+                  </>
+                ) : (
+                  <>
+                    <Play className="size-3" /> Play all
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 variant="outline"
                 onClick={onReset}
                 disabled={!canStep || atEmpty}
