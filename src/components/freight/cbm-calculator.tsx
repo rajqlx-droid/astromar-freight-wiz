@@ -237,6 +237,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                 <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
                 <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} hint={`Actual weight of ONE carton (gross) in ${wtUnit}.`} />
               </div>
+            </Card>
           );
         })}
         <div className="flex flex-wrap gap-2">
