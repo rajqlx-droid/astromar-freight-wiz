@@ -59,6 +59,11 @@ interface Props {
   previewRequires3D?: boolean;
   /** Index of the row currently being inspected by the 3D step-load mode (null when stepper off). */
   activeRowIdx?: number | null;
+  /**
+   * Called when the user clicks a row card header. Parent uses this to drive
+   * the 3D step-loader — clicking Row N reveals rows 0..N cumulatively.
+   */
+  onRowSelect?: (rowIdx: number) => void;
 }
 
 /** Per-item count breakdown for a row (returns array of {itemIdx, count, color}). */
@@ -92,6 +97,7 @@ export function LoadingRowsPanel({
   shufflePreviewActive = false,
   previewRequires3D = false,
   activeRowIdx = null,
+  onRowSelect,
 }: Props) {
   // Configurable kg/pkg threshold for the "heavy" mixed-pallet warning.
   // Hydrate from localStorage AFTER mount to avoid SSR/CSR mismatch.
@@ -546,7 +552,10 @@ export function LoadingRowsPanel({
             >
               <button
                 type="button"
-                onClick={() => toggle(row.rowIdx)}
+                onClick={() => {
+                  toggle(row.rowIdx);
+                  onRowSelect?.(row.rowIdx);
+                }}
                 className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/40"
               >
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-brand-navy text-[11px] font-bold text-white shadow">
