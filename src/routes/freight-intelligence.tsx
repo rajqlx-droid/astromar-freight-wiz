@@ -496,7 +496,7 @@ function FreightIntelligencePage() {
               {active === "air" && (
                 <AirCalculator items={airItems} setItems={setAirItems} divisor={airDivisor} setDivisor={setAirDivisor} />
               )}
-              {active === "landed" && <LandedCalculator state={landed} setState={setLanded} />}
+              {active === "landed" && <LandedCalculator state={landed} setState={setLanded} onDuplicateToExport={duplicateLandedToExport} />}
               {active === "export" && <ExportCalculator state={exp} setState={setExp} />}
               {active === "compare" && <CompareCalculator state={compare} setState={setCompare} />}
               {active === "risk" && <RiskCalculator state={risk} setState={setRisk} />}

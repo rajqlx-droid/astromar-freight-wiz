@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Plus, Trash2, Copy as CopyIcon } from "lucide-react";
+import { Plus, Trash2, Copy as CopyIcon, ArrowRightLeft } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -18,9 +18,11 @@ import { nextId } from "@/lib/freight/ids";
 interface Props {
   state: LandedInput;
   setState: (v: LandedInput) => void;
+  /** Optional callback to copy line items into the Export Price calculator. */
+  onDuplicateToExport?: () => void;
 }
 
-export function LandedCalculator({ state, setState }: Props) {
+export function LandedCalculator({ state, setState, onDuplicateToExport }: Props) {
   const result = useMemo(() => calcLanded(state), [state]);
   const set = (patch: Partial<LandedInput>) => setState({ ...state, ...patch });
 
