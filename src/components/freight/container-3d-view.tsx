@@ -1162,3 +1162,107 @@ function TiltInfoCard({ mode, color }: { mode: "tipped" | "turned"; color: strin
     </div>
   );
 }
+
+/* --------------- Gap heatmap (floor + back wall void overlay) --------------- */
+
+/**
+ * Paints translucent red rectangles where the active row has voids:
+ *   - Floor voids: along the container width (y-axis) within the row's x-slice.
+ *   - Back wall void above the bottom-layer footprint, capped at row height.
+ *
+ * All scene coords are in metres; row coords are in mm. The parent group
+ * translates so the back-bottom-left corner sits at the local origin.
+ */
+function GapHeatmap({
+  row,
+  containerW,
+  containerH,
+}: {
+  row: RowGroup;
+  containerW: number; // mm
+  containerH: number; // mm
+}) {
+  const RED = "#ef4444";
+  const HEATMAP_Y = 0.005; // lift just above the floor to avoid z-fighting
+
+  // Bottom-layer y-intervals → merged → voids along container width.
+  const bottoms = row.boxes.filter((b) => b.z < 10);
+
+  // 1. Compute floor voids along y (container width) within the row x-slice.
+  const intervals = bottoms
+    .map((b) => [b.y, b.y + b.w] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const iv of intervals) {
+    const last = merged[merged.length - 1];
+    if (last && iv[0] <= last[1]) {
+      last[1] = Math.max(last[1], iv[1]);
+    } else {
+      merged.push([...iv] as [number, number]);
+    }
+  }
+  const floorVoids: { y0: number; y1: number }[] = [];
+  let cursor = 0;
+  for (const [s, e] of merged) {
+    if (s > cursor) floorVoids.push({ y0: cursor, y1: s });
+    cursor = Math.max(cursor, e);
+  }
+  if (cursor < containerW) floorVoids.push({ y0: cursor, y1: containerW });
+
+  // 2. Compute the bottom-layer max height — anything above that against the
+  //    back wall is a "wall void" worth flagging.
+  const rowDepthM = (row.xEnd - row.xStart) / 1000;
+  const xStartM = row.xStart / 1000;
+  const containerHm = containerH / 1000;
+  // Top of the highest box in this row's footprint (only count back-wall column,
+  // i.e. boxes whose x-start is at the row start).
+  const backWallBoxes = row.boxes.filter((b) => Math.abs(b.x - row.xStart) < 50);
+  const backWallTopMm =
+    backWallBoxes.length === 0
+      ? 0
+      : Math.max(...backWallBoxes.map((b) => b.z + b.h));
+  const backWallTopM = backWallTopMm / 1000;
+  const wallVoidH = Math.max(0, containerHm - backWallTopM);
+
+  return (
+    <group>
+      {/* Floor voids — laid flat in the x/y plane, lifted slightly to avoid z-fighting */}
+      {floorVoids.map((v, i) => {
+        const widthM = (v.y1 - v.y0) / 1000;
+        const cxM = xStartM + rowDepthM / 2;
+        const czM = (v.y0 + v.y1) / 2 / 1000;
+        return (
+          <mesh
+            key={`fv-${i}`}
+            position={[cxM, HEATMAP_Y, czM]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <planeGeometry args={[rowDepthM, widthM]} />
+            <meshBasicMaterial color={RED} transparent opacity={0.35} depthWrite={false} />
+          </mesh>
+        );
+      })}
+      {/* Back-wall void — vertical plane sitting at the row's xStart, between
+          backWallTop and ceiling. Only drawn when there's meaningful headroom. */}
+      {wallVoidH > 0.1 && (
+        <mesh
+          position={[xStartM + 0.005, backWallTopM + wallVoidH / 2, containerW / 1000 / 2]}
+          rotation={[0, Math.PI / 2, 0]}
+        >
+          <planeGeometry args={[containerW / 1000, wallVoidH]} />
+          <meshBasicMaterial color={RED} transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {/* Hover-free label — tells the user what they're looking at. */}
+      <Html
+        position={[xStartM + rowDepthM / 2, containerHm + 0.15, containerW / 1000 / 2]}
+        center
+        zIndexRange={[50, 0]}
+      >
+        <div className="pointer-events-none rounded-md border border-red-400 bg-red-50/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700 shadow">
+          ⚠ Gaps in row {row.rowIdx + 1} — {Math.round(100 - row.wallUtilizationPct)}% void
+        </div>
+      </Html>
+    </group>
+  );
+}
