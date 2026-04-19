@@ -263,7 +263,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,200px)]">
+                    <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(180px,220px)] md:items-start">
                       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
                         <NumberField compact id={`l-${it.id}`} label="Length" suffix={rowLen} required value={showLen(it.length, rowLen)} onChange={setLen(it.id, "length", rowLen)} hint={`Outer length of one carton in ${rowLen}.`} />
                         <NumberField compact id={`w-${it.id}`} label="Width" suffix={rowLen} required value={showLen(it.width, rowLen)} onChange={setLen(it.id, "width", rowLen)} hint={`Outer width in ${rowLen}.`} />
@@ -272,7 +272,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                         <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
                       </div>
                       <div
-                        className="rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 p-2.5"
+                        className="rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 p-2.5 md:min-h-full"
                         aria-label={`Item ${idx + 1} totals`}
                       >
                         <div className="mb-1 flex items-baseline justify-between gap-2">
