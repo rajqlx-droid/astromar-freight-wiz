@@ -426,6 +426,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           return Object.keys(extras).length ? extras : undefined;
         }}
       />
+      </div>
     </div>
 
     {/* Full-width optimization plan — sits below the inputs+results grid so the
