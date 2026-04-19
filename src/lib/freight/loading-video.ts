@@ -698,41 +698,15 @@ async function encodeWithMediaRecorder(
   bitrate = 8_000_000,
 ): Promise<{ blob: Blob; mime: string; ext: "mp4" | "webm" }> {
   const videoStream = canvas.captureStream(fps);
-
-  // Build reverse-beep audio track and mix it into the recorded stream.
-  let audioCtx: AudioContext | null = null;
-  let audioSource: AudioBufferSourceNode | null = null;
-  const tracks: MediaStreamTrack[] = videoStream.getVideoTracks();
-  try {
-    const intervals = reverseGapIntervalsSec(timeline);
-    const engineWin = engineWindowSec(timeline);
-    // Always create the audio track (engine hum runs even with no reverse gaps).
-    if (typeof AudioContext !== "undefined") {
-      audioCtx = new AudioContext();
-      const durationSec = totalFrames / fps;
-      const buffer = buildBeepBuffer(audioCtx, durationSec, intervals, engineWin);
-      const dest = audioCtx.createMediaStreamDestination();
-      audioSource = audioCtx.createBufferSource();
-      audioSource.buffer = buffer;
-      audioSource.connect(dest);
-      dest.stream.getAudioTracks().forEach((t) => tracks.push(t));
-    }
-  } catch (e) {
-    console.warn("Reverse-beep audio unavailable, recording video only:", e);
-  }
-
-  const stream = new MediaStream(tracks);
+  const stream = videoStream;
 
   // Prefer H.264 High profile MP4 for crisper output, then fall back.
+  // No audio track — the user explicitly requested a silent export.
   const candidates = [
-    "video/mp4;codecs=avc1.640028,mp4a.40.2", // H.264 High + AAC
     "video/mp4;codecs=avc1.640028",
-    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
     "video/mp4;codecs=avc1.42E01E",
     "video/mp4",
-    "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8,opus",
     "video/webm;codecs=vp8",
     "video/webm",
   ];
@@ -745,7 +719,6 @@ async function encodeWithMediaRecorder(
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
     videoBitsPerSecond: bitrate,
-    audioBitsPerSecond: 96_000,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
@@ -757,10 +730,6 @@ async function encodeWithMediaRecorder(
   });
 
   recorder.start();
-  // Start the audio AT the same moment recording starts so timings align.
-  if (audioSource && audioCtx) {
-    audioSource.start(audioCtx.currentTime);
-  }
 
   const frameDurationMs = 1000 / fps;
   for (let f = 0; f < totalFrames; f++) {
@@ -776,13 +745,6 @@ async function encodeWithMediaRecorder(
   recorder.stop();
   await stopped;
   stream.getTracks().forEach((t) => t.stop());
-  videoStream.getTracks().forEach((t) => t.stop());
-  if (audioSource) {
-    try { audioSource.stop(); } catch { /* already stopped */ }
-  }
-  if (audioCtx) {
-    try { await audioCtx.close(); } catch { /* ignore */ }
-  }
   return { blob: new Blob(chunks, { type: mime }), mime, ext };
 }
 
