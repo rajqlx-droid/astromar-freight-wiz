@@ -901,20 +901,21 @@ function ForkliftDriver({ headYaw = 0 }: { headYaw?: number }) {
         <boxGeometry args={[0.22, 0.07, 0.07]} />
         <meshStandardMaterial color={VEST} roughness={0.7} />
       </mesh>
-      {/* Head */}
-      <mesh castShadow position={[0.08, 0.55, 0]}>
-        <sphereGeometry args={[0.1, 16, 12]} />
-        <meshStandardMaterial color={SKIN} roughness={0.85} />
-      </mesh>
-      {/* Hard hat — flat dome with brim */}
-      <mesh castShadow position={[0.08, 0.62, 0]}>
-        <sphereGeometry args={[0.11, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color={HAT} roughness={0.6} />
-      </mesh>
-      <mesh position={[0.04, 0.62, 0]}>
-        <cylinderGeometry args={[0.13, 0.13, 0.012, 16]} />
-        <meshStandardMaterial color={HAT} roughness={0.6} />
-      </mesh>
+      {/* Head + hat — rotates as a unit when driver looks back over shoulder */}
+      <group position={[0.08, 0.55, 0]} rotation={[0, headYaw, 0]}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.1, 16, 12]} />
+          <meshStandardMaterial color={SKIN} roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, 0.07, 0]}>
+          <sphereGeometry args={[0.11, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color={HAT} roughness={0.6} />
+        </mesh>
+        <mesh position={[-0.04, 0.07, 0]}>
+          <cylinderGeometry args={[0.13, 0.13, 0.012, 16]} />
+          <meshStandardMaterial color={HAT} roughness={0.6} />
+        </mesh>
+      </group>
     </group>
   );
 }
