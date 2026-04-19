@@ -168,6 +168,67 @@ export function downloadResultPdf(
     });
   }
 
+  // Row-by-row loading guide — own page so the loader can print/scan it.
+  if (extras?.loadingRows && extras.loadingRows.length) {
+    doc.addPage();
+    let ry = 60;
+    doc.setTextColor(...NAVY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Row-by-Row Loading Guide", 40, ry);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(110, 110, 110);
+    ry += 14;
+    doc.text(
+      `${extras.loadingRows.length} row${extras.loadingRows.length > 1 ? "s" : ""} - back wall to door - always work from the rear forward, never climb on cargo.`,
+      40,
+      ry,
+    );
+    ry += 16;
+
+    autoTable(doc, {
+      startY: ry,
+      head: [["Done", "Row", "Position", "Pkg", "Layers", "CBM", "Weight", "Flags", "Loader Action"]],
+      body: extras.loadingRows.map((r) => {
+        const flags: string[] = [];
+        if (r.hasFragile) flags.push("FRAGILE");
+        if (r.hasNonStack) flags.push("NO-STACK");
+        if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
+        const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
+        return [
+          "[ ]",
+          `R${r.rowIdx + 1}`,
+          `${r.xStartM.toFixed(2)}-${r.xEndM.toFixed(2)} m`,
+          String(r.pkgCount),
+          String(r.layers),
+          r.cbm.toFixed(2),
+          r.weightKg > 0
+            ? `~${r.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
+            : "-",
+          flags.join(" "),
+          `${itemsTxt}\n${r.instruction}`,
+        ];
+      }),
+      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold", fontSize: 9 },
+      bodyStyles: { textColor: 40, valign: "top" },
+      alternateRowStyles: { fillColor: [240, 245, 251] },
+      styles: { fontSize: 8, cellPadding: 4, overflow: "linebreak" },
+      columnStyles: {
+        0: { cellWidth: 22, halign: "center", fontStyle: "bold" },
+        1: { cellWidth: 26, fontStyle: "bold", textColor: NAVY },
+        2: { cellWidth: 58 },
+        3: { cellWidth: 26, halign: "right" },
+        4: { cellWidth: 36, halign: "right" },
+        5: { cellWidth: 36, halign: "right" },
+        6: { cellWidth: 50, halign: "right" },
+        7: { cellWidth: 54, fontSize: 7, fontStyle: "bold" },
+        8: { cellWidth: "auto" },
+      },
+      margin: { left: 40, right: 40 },
+    });
+  }
+
   const ph = doc.internal.pageSize.getHeight();
   doc.setDrawColor(...NAVY);
   doc.setLineWidth(1);
