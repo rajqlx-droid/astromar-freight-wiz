@@ -228,16 +228,16 @@ export function computeBoxTransforms(
   pack: AdvancedPackResult,
   timeline: Timeline,
   frame: number,
-): { visible: boolean; offset: [number, number, number]; scale: number }[] {
+): { visible: boolean; offset: [number, number, number]; scale: number; onForklift: boolean }[] {
   const result = pack.placed.map(() => ({
     visible: false,
     offset: [0, 0, 0] as [number, number, number],
     scale: 1,
+    onForklift: false,
   }));
   const Cl = pack.container.inner.l / MM_PER_M;
   const Ch = pack.container.inner.h / MM_PER_M;
 
-  // Intro: nothing visible yet (or all visible at low alpha — we keep simple).
   if (frame < timeline.introFrames) return result;
 
   for (const a of timeline.anims) {
@@ -249,20 +249,99 @@ export function computeBoxTransforms(
       item.scale = 1;
       continue;
     }
-    // Animate from above-and-outside-door to final position.
+    // Two-phase animation: forklift carries box from outside the door (+x)
+    // toward its slot (first 70%), then box settles down to the floor (last 30%).
     const t = (frame - a.startFrame) / Math.max(1, a.endFrame - a.startFrame);
-    const ease = 1 - Math.pow(1 - t, 3);
+    const carryT = Math.min(1, t / 0.7);
+    const settleT = Math.max(0, (t - 0.7) / 0.3);
+    const carryEase = 1 - Math.pow(1 - carryT, 3);
     item.visible = true;
-    // Door is at +x in scene (cargo group is positioned at -Cl/2, so world +x).
-    // We fly from outside (+ x beyond door) downward and into place.
-    item.offset = [
-      Cl * 0.6 * (1 - ease),         // x slides in from the door
-      Ch * 0.9 * (1 - ease),         // y drops down
-      0,
-    ];
-    item.scale = 0.85 + 0.15 * ease;
+    // Box rides on forklift forks at fork height (~0.6 m above floor) while carried,
+    // then descends to its true z during settle.
+    const carryX = Cl * 0.9 * (1 - carryEase); // slide from door (+x) into place
+    const liftY = Ch * 0.35 * (1 - settleT);   // hover at fork height, then drop
+    item.offset = [carryX, liftY, 0];
+    item.onForklift = settleT < 1;
+    item.scale = 0.92 + 0.08 * carryEase;
   }
   return result;
+}
+
+/** Door + forklift state for the current frame (0..1 progress + carrier pose). */
+export function stagingForFrame(
+  pack: AdvancedPackResult,
+  timeline: Timeline,
+  frame: number,
+): {
+  doorOpen: number;     // 0 = closed, 1 = fully open
+  forkliftActive: boolean;
+  forkliftX: number;    // world +x position of forklift center (m)
+  forkliftZ: number;    // world z (lateral) position
+  forkliftY: number;    // mast lift height for the forks (m)
+  carriedBoxIdx: number | null;
+} {
+  const Cl = pack.container.inner.l / MM_PER_M;
+  const introF = timeline.introFrames;
+  const outroStart = timeline.introFrames + timeline.loadFrames;
+  const totalF = timeline.totalFrames;
+
+  // Doors: open during intro (0→1), stay open while loading, close during outro (1→0).
+  let doorOpen = 1;
+  if (frame < introF) {
+    doorOpen = Math.min(1, frame / Math.max(1, introF - 2));
+    doorOpen = 1 - Math.pow(1 - doorOpen, 2);
+  } else if (frame >= outroStart) {
+    const t = Math.min(1, (frame - outroStart) / Math.max(1, totalF - outroStart - 2));
+    doorOpen = 1 - t * t;
+  }
+
+  // Find the active anim (the box currently being carried) if any.
+  let active: BoxAnim | null = null;
+  for (const a of timeline.anims) {
+    if (a.startFrame <= frame && frame < a.endFrame) {
+      active = a;
+      break;
+    }
+  }
+
+  if (!active || frame < introF || frame >= outroStart) {
+    return {
+      doorOpen,
+      forkliftActive: false,
+      forkliftX: Cl / 2 + 2.5,
+      forkliftZ: 0,
+      forkliftY: 0.6,
+      carriedBoxIdx: null,
+    };
+  }
+
+  // Forklift mirrors the box carrier path: drives in from outside the door,
+  // then reverses out (we just play the in-phase and snap reset between boxes).
+  const t = (frame - active.startFrame) / Math.max(1, active.endFrame - active.startFrame);
+  const carryT = Math.min(1, t / 0.7);
+  const settleT = Math.max(0, (t - 0.7) / 0.3);
+  const carryEase = 1 - Math.pow(1 - carryT, 3);
+  const box = pack.placed[active.placedIdx];
+  // Forklift world-x: starts ~2.5 m outside door (+x of Cl/2), ends at the box slot.
+  const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
+  const startX = Cl / 2 + 2.5;
+  const forkliftX = startX + (boxWorldX - startX) * carryEase;
+  // Lateral align with box.
+  const Cw = pack.container.inner.w / MM_PER_M;
+  const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
+  const forkliftZ = boxWorldZ * carryEase;
+  // Fork lift height: drops as box settles.
+  const restY = box.z / MM_PER_M + 0.05;
+  const forkliftY = 0.55 + (restY - 0.55) * settleT;
+
+  return {
+    doorOpen,
+    forkliftActive: true,
+    forkliftX,
+    forkliftZ,
+    forkliftY,
+    carriedBoxIdx: settleT < 1 ? active.placedIdx : null,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
