@@ -84,6 +84,26 @@ interface Props {
    * its fly-in animation even if the same set reference is passed.
    */
   flyInKey?: number;
+  /**
+   * placedIdx of the pallet currently being placed. Drives the green
+   * checkmark stamp and the follow-cam target. null = none active.
+   */
+  activePalletIdx?: number | null;
+  /**
+   * placedIdx of the pallet to be placed next (preview). Renders a pulsing
+   * yellow target outline at its slot before the box flies in.
+   */
+  nextPalletIdx?: number | null;
+  /**
+   * When true, drives the camera to a "shoulder of loader" position behind
+   * the door, tracking the active pallet. False = normal orbit/presets.
+   */
+  followCam?: boolean;
+  /**
+   * Show a low-poly forklift token that slides in from the door to the
+   * active pallet column. Toggleable from the HUD.
+   */
+  showForkliftToken?: boolean;
 }
 
 /**
@@ -92,7 +112,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0 },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0, activePalletIdx = null, nextPalletIdx = null, followCam = false, showForkliftToken = false },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -232,12 +252,17 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             gapHeatmapRow={gapHeatmapRow}
             flyInPlacedSet={flyInPlacedSet}
             flyInKey={flyInKey}
+            activePalletIdx={activePalletIdx}
+            nextPalletIdx={nextPalletIdx}
+            followCam={followCam}
+            showForkliftToken={showForkliftToken}
           />
         </Suspense>
       </Canvas>
 
-      {/* Camera preset buttons */}
-      <div className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg bg-background/85 p-1 shadow backdrop-blur">
+      {/* Camera preset buttons — hidden in follow-cam mode */}
+      {!followCam && (
+        <div className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg bg-background/85 p-1 shadow backdrop-blur">
         {(["iso", "front", "side", "top", "inside"] as Preset[]).map((p) => (
           <Button
             key={p}
@@ -255,7 +280,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             {p}
           </Button>
         ))}
-      </div>
+        </div>
+      )}
 
       {/* Fullscreen toggle */}
       <button
@@ -357,6 +383,10 @@ function SceneContents({
   gapHeatmapRow,
   flyInPlacedSet,
   flyInKey,
+  activePalletIdx,
+  nextPalletIdx,
+  followCam,
+  showForkliftToken,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -369,14 +399,22 @@ function SceneContents({
   gapHeatmapRow: RowGroup | null;
   flyInPlacedSet: Set<number> | null;
   flyInKey: number;
+  activePalletIdx: number | null;
+  nextPalletIdx: number | null;
+  followCam: boolean;
+  showForkliftToken: boolean;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
   const target = useMemo(() => new THREE.Vector3(0, Cm.h / 2, 0), [Cm.h]);
 
-  // Apply preset only when not recording (recording drives the camera externally).
+  // Active / next pallet boxes for highlights + follow cam.
+  const activeBox = activePalletIdx != null ? pack.placed[activePalletIdx] ?? null : null;
+  const nextBox = nextPalletIdx != null ? pack.placed[nextPalletIdx] ?? null : null;
+
+  // Apply preset only when not recording AND not in follow-cam mode.
   useEffect(() => {
-    if (recording) return;
+    if (recording || followCam) return;
     if (!camera) return;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
@@ -421,12 +459,16 @@ function SceneContents({
         ref={controlsRef}
         target={target}
         enablePan
-        enabled={!recording}
+        enabled={!recording && !followCam}
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
 
+      {/* Follow camera — drives camera & target every frame when active */}
+      {followCam && !recording && (
+        <FollowCam Cm={Cm} activeBox={activeBox} />
+      )}
       {/* Tarmac ground extending past the container — sells the "real yard" */}
       <mesh
         receiveShadow
@@ -472,6 +514,7 @@ function SceneContents({
           ];
           const isPreviewed = !recording && shuffleZ !== 0;
           const flyIn = !recording && !!flyInPlacedSet?.has(i);
+          const isActivePallet = !recording && i === activePalletIdx;
           return (
             <CargoBox
               key={i}
@@ -484,14 +527,24 @@ function SceneContents({
               flyInKey={flyInKey}
               containerL={Cm.l}
               containerH={Cm.h}
+              showCheckmark={isActivePallet}
             />
           );
         })}
+        {/* Pulsing yellow target outline at the NEXT pallet's slot */}
+        {!recording && nextBox && (
+          <NextPalletTarget box={nextBox} />
+        )}
         {/* Gap heatmap overlay — translucent red rectangles on the floor and
             back wall of the active row's slice. Hidden during recording so
             video frames stay clean. */}
         {!recording && gapHeatmapRow && (
           <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
+        )}
+        {/* Lightweight forklift token — slides in from the door to the active
+            pallet column. No animations during recording. */}
+        {!recording && showForkliftToken && activeBox && (
+          <LightForkliftToken box={activeBox} containerL={Cm.l} />
         )}
       </group>
 
@@ -1027,6 +1080,7 @@ function CargoBox({
   flyInKey = 0,
   containerL = 12,
   containerH = 2.6,
+  showCheckmark = false,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1037,6 +1091,7 @@ function CargoBox({
   flyInKey?: number;
   containerL?: number;
   containerH?: number;
+  showCheckmark?: boolean;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1175,8 +1230,134 @@ function CargoBox({
           )}
         </>
       )}
+      {/* Green checkmark stamp — shown briefly when this is the active pallet
+          (parent clears showCheckmark after ~400ms). */}
+      {showCheckmark && (
+        <Html position={[0, hm / 2 + 0.18, 0]} center zIndexRange={[100, 0]}>
+          <div className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-lg">
+            ✓
+          </div>
+        </Html>
+      )}
     </group>
   );
+}
+
+/* --------------- Next-pallet target outline (pulsing yellow) --------------- */
+
+function NextPalletTarget({ box }: { box: PlacedBox }) {
+  const lm = box.l / MM_PER_M;
+  const wm = box.w / MM_PER_M;
+  const hm = box.h / MM_PER_M;
+  const cx = box.x / MM_PER_M + lm / 2;
+  const cy = box.z / MM_PER_M + hm / 2;
+  const cz = box.y / MM_PER_M + wm / 2;
+  const matRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  useFrame(({ clock }) => {
+    if (matRef.current) {
+      matRef.current.opacity = 0.4 + 0.4 * Math.abs(Math.sin(clock.elapsedTime * 3));
+    }
+  });
+  return (
+    <group position={[cx, cy, cz]}>
+      <mesh>
+        <boxGeometry args={[lm * 1.02, hm * 1.02, wm * 1.02]} />
+        <meshBasicMaterial
+          ref={matRef}
+          color="#facc15"
+          transparent
+          opacity={0.6}
+          wireframe
+        />
+      </mesh>
+      {/* Glowing floor footprint */}
+      <mesh position={[0, -hm / 2 + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[lm * 1.05, wm * 1.05]} />
+        <meshBasicMaterial color="#facc15" transparent opacity={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+/* --------------- Lightweight forklift token (HUD walkthrough) --------------- */
+
+function LightForkliftToken({ box, containerL }: { box: PlacedBox; containerL: number }) {
+  // A simple low-poly stand-in: yellow chassis + two grey forks. Slides from
+  // the door (+x in world space, mapped to container x = containerL_mm) toward
+  // the active pallet's column. We position it just in front of the pallet
+  // (door side) so it doesn't occlude the box itself.
+  const lm = box.l / MM_PER_M;
+  const wm = box.w / MM_PER_M;
+  const cx = box.x / MM_PER_M + lm / 2;
+  const cz = box.y / MM_PER_M + wm / 2;
+  // Position just door-side of the pallet, on the floor.
+  const targetX = Math.min(containerL - 0.6, cx + lm / 2 + 0.6);
+  const ref = useRef<THREE.Group | null>(null);
+  const startRef = useRef<number | null>(null);
+  useFrame((_s, delta) => {
+    if (!ref.current) return;
+    if (startRef.current === null) {
+      startRef.current = 0;
+      ref.current.position.set(containerL + 1.2, 0, cz);
+    }
+    startRef.current += delta;
+    const t = Math.min(1, startRef.current / 0.6);
+    const e = 1 - Math.pow(1 - t, 3);
+    const x = (containerL + 1.2) + (targetX - (containerL + 1.2)) * e;
+    ref.current.position.set(x, 0, cz);
+  });
+  return (
+    <group ref={ref} position={[containerL + 1.2, 0, cz]}>
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <boxGeometry args={[0.6, 0.45, 0.55]} />
+        <meshStandardMaterial color="#fbbf24" roughness={0.6} />
+      </mesh>
+      <mesh position={[-0.45, 0.05, -0.15]}>
+        <boxGeometry args={[0.55, 0.04, 0.06]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.7} roughness={0.3} />
+      </mesh>
+      <mesh position={[-0.45, 0.05, 0.15]}>
+        <boxGeometry args={[0.55, 0.04, 0.06]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.7} roughness={0.3} />
+      </mesh>
+    </group>
+  );
+}
+
+/* --------------- Follow camera (shoulder of loader) --------------- */
+
+function FollowCam({ Cm, activeBox }: { Cm: { l: number; w: number; h: number }; activeBox: PlacedBox | null }) {
+  const { camera } = useThree();
+  const targetVec = useRef(new THREE.Vector3());
+  const camPos = useRef(new THREE.Vector3());
+
+  useFrame(() => {
+    // Active box position in scene coords (the cargo group is centred at origin
+    // with translation [-Cm.l/2, 0, -Cm.w/2], so we mirror the same maths.)
+    let tx = 0;
+    let ty = Cm.h / 2;
+    let tz = 0;
+    let layer = 0;
+    if (activeBox) {
+      const lm = activeBox.l / MM_PER_M;
+      const wm = activeBox.w / MM_PER_M;
+      const hm = activeBox.h / MM_PER_M;
+      tx = -Cm.l / 2 + activeBox.x / MM_PER_M + lm / 2;
+      ty = activeBox.z / MM_PER_M + hm / 2;
+      tz = -Cm.w / 2 + activeBox.y / MM_PER_M + wm / 2;
+      layer = Math.floor(activeBox.z / 100);
+    }
+    // Camera sits ~1.5m past the door (+x) at loader eye height (1.7m), lifts
+    // when stacking 2nd+ layer. Pans laterally to follow active pallet's z.
+    const eyeY = 1.7 + layer * 0.4;
+    const camX = Cm.l / 2 + 1.6;
+    const camZ = tz * 0.5; // partial track so the loader feels like they're stepping with the pallet
+    camPos.current.set(camX, eyeY, camZ);
+    camera.position.lerp(camPos.current, 0.12);
+    targetVec.current.set(tx, ty, tz);
+    camera.lookAt(targetVec.current);
+  });
+  return null;
 }
 
 /* --------------- Tilt info card (shown on hover) --------------- */

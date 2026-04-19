@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Layers, Play, Pause } from "lucide-react";
+import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { LoaderHUD } from "./loader-hud";
+import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -304,99 +306,83 @@ function SinglePlanBody({
     null,
   );
 
-  // Manual row-stepper. When `stepMode` is on, only rows 0..stepIdx are shown
-  // in the 3D viewer. stepIdx === -1 means the container is EMPTY (start state)
-  // so the user can inspect the floor and back wall before loading row 1.
-  const [stepMode, setStepMode] = useState(false);
-  const [stepIdx, setStepIdx] = useState(-1);
+  // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
+  const [palletIdx, setPalletIdx] = useState(-1);
+  const [showForkliftToken, setShowForkliftToken] = useState(true);
+  const [speed, setSpeed] = useState<0.5 | 1 | 2>(1);
 
   // Row groups (back wall → door). Re-derived only when the pack changes.
   const rows = useMemo(() => buildRows(pack, readHeavyThreshold()), [pack]);
+  // Per-pallet sequence (loader hand-order). Re-derived per pack.
+  const palletSequence = useMemo<PalletStep[]>(
+    () => buildPalletSequence(pack, rows),
+    [pack, rows],
+  );
 
-  // Clamp stepIdx if rows shrink (e.g. user changed cargo).
+  // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
-    if (stepIdx > rows.length - 1) setStepIdx(rows.length - 1);
-  }, [rows.length, stepIdx]);
+    if (palletIdx > palletSequence.length - 1) {
+      setPalletIdx(palletSequence.length - 1);
+    }
+  }, [palletSequence.length, palletIdx]);
 
-  // Build the visible-placedIdx set for rows 0..stepIdx.
-  // stepIdx === -1 → empty set (container is empty, nothing rendered).
+  const stepMode = is3D && palletSequence.length > 0;
+
+  // Visible-placed set: every pallet from index 0..palletIdx.
   const visiblePlacedSet = useMemo<Set<number> | null>(() => {
     if (!stepMode) return null;
     const s = new Set<number>();
-    for (let r = 0; r <= stepIdx; r++) {
-      const row = rows[r];
-      if (!row) continue;
-      for (const b of row.boxes) {
-        const idx = pack.placed.indexOf(b);
-        if (idx >= 0) s.add(idx);
-      }
+    for (let k = 0; k <= palletIdx; k++) {
+      const step = palletSequence[k];
+      if (step) s.add(step.placedIdx);
     }
     return s;
-  }, [stepMode, stepIdx, rows, pack.placed]);
+  }, [stepMode, palletIdx, palletSequence]);
 
-  // Fly-in tracking — the set of placedIdx for the row that was JUST revealed.
-  // Increments `flyInKey` on every reveal so CargoBox restarts its anim.
+  // Current + next pallet.
+  const currentStep = palletIdx >= 0 ? palletSequence[palletIdx] ?? null : null;
+  const nextStep =
+    palletIdx + 1 < palletSequence.length ? palletSequence[palletIdx + 1] ?? null : null;
+  const activePalletIdx = currentStep?.placedIdx ?? null;
+  const nextPalletIdx = !stepMode ? null : nextStep?.placedIdx ?? null;
+
+  // Fly-in animation for the most-recently-placed pallet only.
   const [flyInPlacedSet, setFlyInPlacedSet] = useState<Set<number> | null>(null);
   const [flyInKey, setFlyInKey] = useState(0);
-  const prevStepIdxRef = useRef(-1);
+  const prevPalletIdxRef = useRef(-1);
   useEffect(() => {
-    const prev = prevStepIdxRef.current;
-    prevStepIdxRef.current = stepIdx;
-    if (!stepMode) {
+    const prev = prevPalletIdxRef.current;
+    prevPalletIdxRef.current = palletIdx;
+    if (!stepMode || palletIdx < 0) {
       setFlyInPlacedSet(null);
       return;
     }
-    // Only animate when stepIdx INCREASED by 1+ (forward reveal). On reset or
-    // back-step, just snap — no fly-in.
-    if (stepIdx > prev) {
-      const newRow = rows[stepIdx];
-      if (!newRow) return;
-      const s = new Set<number>();
-      for (const b of newRow.boxes) {
-        const idx = pack.placed.indexOf(b);
-        if (idx >= 0) s.add(idx);
-      }
-      setFlyInPlacedSet(s);
+    if (palletIdx > prev) {
+      const step = palletSequence[palletIdx];
+      if (!step) return;
+      setFlyInPlacedSet(new Set([step.placedIdx]));
       setFlyInKey((k) => k + 1);
-      // Clear fly-in flag after 700ms so subsequent renders don't re-animate.
       const t = setTimeout(() => setFlyInPlacedSet(null), 700);
       return () => clearTimeout(t);
-    } else {
-      setFlyInPlacedSet(null);
     }
-  }, [stepIdx, stepMode, rows, pack.placed]);
+    setFlyInPlacedSet(null);
+  }, [palletIdx, stepMode, palletSequence]);
 
-  // Reset the stepper when leaving 3D. When entering 3D, auto-enable step mode
-  // starting from EMPTY so the user sees an empty container and reveals each
-  // row by clicking the row card (Row 1 → row 1 only, Row 2 → rows 1+2, etc.).
+  // Reset stepper when toggling 3D.
   useEffect(() => {
-    if (!is3D) {
-      setStepMode(false);
-      setStepIdx(-1);
-    } else {
-      setStepMode(true);
-      setStepIdx(-1);
-    }
+    setPalletIdx(-1);
   }, [is3D]);
 
-  const canStep = stepMode && is3D && rows.length > 0;
-  const atEmpty = stepIdx < 0;
-  const atFirst = stepIdx <= 0;
-  const atLast = stepIdx >= rows.length - 1;
-
-  // Active row = the row most recently loaded by the stepper. Used to drive
-  // both the gap heatmap and the row-card highlight/scroll.
-  const activeRowIdx = stepMode && stepIdx >= 0 ? stepIdx : null;
+  // Active row (right-panel highlight + gap heatmap) = current pallet's row.
+  const activeRowIdx = currentStep?.rowIdx ?? null;
   const activeRow = activeRowIdx != null ? rows[activeRowIdx] ?? null : null;
 
-  // User toggle for the gap heatmap. Default ON whenever step mode is on.
   const [showGapHeatmap, setShowGapHeatmap] = useState(true);
   const gapHeatmapRow =
     stepMode && showGapHeatmap && activeRow && activeRow.gapWarning ? activeRow : null;
 
-  // ── Play-all walkthrough ────────────────────────────────────────────
-  // Auto-advances stepIdx every PLAY_INTERVAL_MS until the last row.
-  const PLAY_INTERVAL_MS = 1500;
+  // Auto-play: 1× = 600ms per pallet, 0.5× = 1200ms, 2× = 300ms.
+  const stepDurationMs = Math.round(600 / speed);
   const [isPlaying, setIsPlaying] = useState(false);
   const playTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopPlay = () => {
@@ -406,30 +392,44 @@ function SinglePlanBody({
       playTimerRef.current = null;
     }
   };
-  const startPlay = () => {
-    if (rows.length === 0) return;
-    // Always start from empty for a clean walkthrough.
-    setStepIdx(-1);
+  const togglePlay = () => {
+    if (isPlaying) {
+      stopPlay();
+      return;
+    }
+    if (palletSequence.length === 0) return;
+    if (palletIdx >= palletSequence.length - 1) setPalletIdx(-1);
     setIsPlaying(true);
   };
   useEffect(() => {
     if (!isPlaying) return;
-    if (stepIdx >= rows.length - 1) {
-      // Reached the last row — stop after a final beat.
-      const t = setTimeout(() => setIsPlaying(false), PLAY_INTERVAL_MS);
+    if (palletIdx >= palletSequence.length - 1) {
+      const t = setTimeout(() => setIsPlaying(false), stepDurationMs);
       return () => clearTimeout(t);
     }
     playTimerRef.current = setTimeout(() => {
-      setStepIdx((i) => Math.min(rows.length - 1, i + 1));
-    }, PLAY_INTERVAL_MS);
+      setPalletIdx((i) => Math.min(palletSequence.length - 1, i + 1));
+    }, stepDurationMs);
     return () => {
       if (playTimerRef.current) clearTimeout(playTimerRef.current);
     };
-  }, [isPlaying, stepIdx, rows.length]);
-  // Stop play when leaving 3D / step mode.
+  }, [isPlaying, palletIdx, palletSequence.length, stepDurationMs]);
   useEffect(() => {
-    if (!is3D || !stepMode) stopPlay();
-  }, [is3D, stepMode]);
+    if (!is3D) stopPlay();
+  }, [is3D]);
+
+  const goPrev = () => {
+    stopPlay();
+    setPalletIdx((i) => Math.max(-1, i - 1));
+  };
+  const goNext = () => {
+    stopPlay();
+    setPalletIdx((i) => Math.min(palletSequence.length - 1, i + 1));
+  };
+  const goReset = () => {
+    stopPlay();
+    setPalletIdx(-1);
+  };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
@@ -445,51 +445,51 @@ function SinglePlanBody({
                   </div>
                 }
               >
-                <Container3DView
-                  ref={isActive ? view3DRef : undefined}
-                  pack={pack}
-                  shufflePreview={shufflePreview}
-                  visiblePlacedSet={visiblePlacedSet}
-                  hideDoors={stepMode}
-                  gapHeatmapRow={gapHeatmapRow}
-                  flyInPlacedSet={flyInPlacedSet}
-                  flyInKey={flyInKey}
-                />
+                <div className="relative">
+                  <Container3DView
+                    ref={isActive ? view3DRef : undefined}
+                    pack={pack}
+                    shufflePreview={shufflePreview}
+                    visiblePlacedSet={visiblePlacedSet}
+                    hideDoors={stepMode}
+                    gapHeatmapRow={gapHeatmapRow}
+                    flyInPlacedSet={flyInPlacedSet}
+                    flyInKey={flyInKey}
+                    activePalletIdx={activePalletIdx}
+                    nextPalletIdx={nextPalletIdx}
+                    followCam={isPlaying}
+                    showForkliftToken={showForkliftToken && currentStep != null}
+                  />
+                  {stepMode && (
+                    <LoaderHUD
+                      step={currentStep}
+                      totalSteps={palletSequence.length}
+                      currentIdx={palletIdx}
+                      isPlaying={isPlaying}
+                      speed={speed}
+                      onPlayPause={togglePlay}
+                      onPrev={goPrev}
+                      onNext={goNext}
+                      onReset={goReset}
+                      onSpeedChange={setSpeed}
+                      showForklift={showForkliftToken}
+                      onToggleForklift={() => setShowForkliftToken((v) => !v)}
+                    />
+                  )}
+                </div>
               </Suspense>
             ) : (
               <IsoContainer pack={pack} />
             )}
-            {is3D && rows.length > 0 && (
-              <RowStepperBar
-                stepMode={stepMode}
-                onToggleStepMode={() => {
-                  stopPlay();
-                  setStepMode((v) => !v);
-                  setStepIdx(-1);
-                }}
-                stepIdx={stepIdx}
+            {is3D && palletSequence.length > 0 && (
+              <PalletStatusBar
+                currentIdx={palletIdx}
+                total={palletSequence.length}
+                rowIdx={currentStep?.rowIdx ?? null}
                 totalRows={rows.length}
-                onPrev={() => {
-                  stopPlay();
-                  setStepIdx((i) => Math.max(-1, i - 1));
-                }}
-                onNext={() => {
-                  stopPlay();
-                  setStepIdx((i) => Math.min(rows.length - 1, i + 1));
-                }}
-                onReset={() => {
-                  stopPlay();
-                  setStepIdx(-1);
-                }}
-                canStep={canStep}
-                atEmpty={atEmpty}
-                atFirst={atFirst}
-                atLast={atLast}
                 showGapHeatmap={showGapHeatmap}
                 onToggleGapHeatmap={() => setShowGapHeatmap((v) => !v)}
                 activeRowHasGap={!!activeRow?.gapWarning}
-                isPlaying={isPlaying}
-                onTogglePlay={() => (isPlaying ? stopPlay() : startPlay())}
               />
             )}
           </div>
@@ -503,13 +503,11 @@ function SinglePlanBody({
           previewRequires3D={!is3D}
           activeRowIdx={activeRowIdx}
           onRowSelect={(idx) => {
-            // Clicking a row card in 3D reveals rows 0..idx cumulatively.
-            // In 2D, just leave it to the accordion toggle.
-            if (is3D) {
-              stopPlay();
-              if (!stepMode) setStepMode(true);
-              setStepIdx(idx);
-            }
+            // Clicking a row card jumps to the FIRST pallet of that row.
+            if (!is3D) return;
+            stopPlay();
+            const firstStepInRow = palletSequence.findIndex((s) => s.rowIdx === idx);
+            if (firstStepInRow >= 0) setPalletIdx(firstStepInRow);
           }}
         />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -521,181 +519,56 @@ function SinglePlanBody({
   );
 }
 
-/* ---------------- Row stepper bar (under the 3D viewer) ---------------- */
+/* ---------------- Slim status bar (under the 3D viewer) ---------------- */
 
-function RowStepperBar({
-  stepMode,
-  onToggleStepMode,
-  stepIdx,
+function PalletStatusBar({
+  currentIdx,
+  total,
+  rowIdx,
   totalRows,
-  onPrev,
-  onNext,
-  onReset,
-  canStep,
-  atEmpty,
-  atFirst: _atFirst,
-  atLast,
   showGapHeatmap,
   onToggleGapHeatmap,
   activeRowHasGap,
-  isPlaying,
-  onTogglePlay,
 }: {
-  stepMode: boolean;
-  onToggleStepMode: () => void;
-  stepIdx: number;
+  currentIdx: number;
+  total: number;
+  rowIdx: number | null;
   totalRows: number;
-  onPrev: () => void;
-  onNext: () => void;
-  onReset: () => void;
-  canStep: boolean;
-  atEmpty: boolean;
-  atFirst: boolean;
-  atLast: boolean;
   showGapHeatmap: boolean;
   onToggleGapHeatmap: () => void;
   activeRowHasGap: boolean;
-  isPlaying: boolean;
-  onTogglePlay: () => void;
 }) {
-  const nextRowNum = Math.min(totalRows, stepIdx + 2); // 1-indexed for label
-  const statusLabel = atEmpty
-    ? "Empty container — inspect floor & back wall"
-    : `Loaded ${stepIdx + 1} of ${totalRows} rows · back wall → door`;
-
+  const empty = currentIdx < 0;
+  const status = empty
+    ? "Empty container — press ▶ in the HUD to start the loader walkthrough"
+    : `Pallet ${currentIdx + 1} of ${total}${rowIdx != null ? ` · row ${rowIdx + 1} / ${totalRows}` : ""}`;
   return (
-    <div className="mt-3 space-y-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant={stepMode ? "default" : "outline"}
-          onClick={onToggleStepMode}
-          className={cn(
-            "h-7 rounded-full px-3 text-[11px]",
-            stepMode
-              ? "bg-brand-navy text-white hover:bg-brand-navy/90"
-              : "border-brand-navy/30 text-brand-navy hover:bg-brand-navy/10",
-          )}
-        >
-          <Layers className="size-3" />
-          {stepMode ? "Step-load mode ON" : "Step-load mode"}
-        </Button>
-
-        {stepMode && (
-          <>
-            <span className="text-[11px] font-medium text-muted-foreground">
-              {statusLabel}
-            </span>
-
-            <div className="ml-auto flex items-center gap-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={showGapHeatmap ? "default" : "outline"}
-                onClick={onToggleGapHeatmap}
-                disabled={!canStep || atEmpty}
-                className={cn(
-                  "h-7 px-2 text-[11px]",
-                  showGapHeatmap && activeRowHasGap
-                    ? "bg-rose-600 text-white hover:bg-rose-700"
-                    : "",
-                )}
-                aria-pressed={showGapHeatmap}
-                aria-label="Toggle gap heatmap"
-                title={
-                  activeRowHasGap
-                    ? "Toggle red overlay highlighting floor & wall voids in this row"
-                    : "Active row has no gap — heatmap will appear on rows flagged with gap warnings"
-                }
-              >
-                ⚠ Gaps
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={isPlaying ? "default" : "outline"}
-                onClick={onTogglePlay}
-                disabled={!canStep}
-                className={cn(
-                  "h-7 px-2 text-[11px]",
-                  isPlaying && "bg-emerald-600 text-white hover:bg-emerald-700",
-                )}
-                aria-pressed={isPlaying}
-                aria-label={isPlaying ? "Pause walkthrough" : "Play all rows"}
-                title={
-                  isPlaying
-                    ? "Pause auto-walkthrough"
-                    : "Auto-advance Row 1 → Row N (1.5s per row)"
-                }
-              >
-                {isPlaying ? (
-                  <>
-                    <Pause className="size-3" /> Pause
-                  </>
-                ) : (
-                  <>
-                    <Play className="size-3" /> Play all
-                  </>
-                )}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onReset}
-                disabled={!canStep || atEmpty}
-                className="h-7 px-2 text-[11px]"
-                aria-label="Empty the container"
-                title="Remove all rows — start over from empty container"
-              >
-                Empty
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onPrev}
-                disabled={!canStep || atEmpty}
-                className="h-7 px-2 text-[11px]"
-                aria-label="Unload last row"
-                title="Unload the last row (undo)"
-              >
-                <ChevronLeft className="size-3" /> Unload
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={atLast ? onReset : onNext}
-                disabled={!canStep}
-                className="h-7 bg-brand-navy px-2 text-[11px] text-white hover:bg-brand-navy/90"
-                aria-label={atLast ? "Reset to empty" : `Load row ${nextRowNum}`}
-                title={atLast ? "All rows loaded — click to reset" : `Load row ${nextRowNum} of ${totalRows}`}
-              >
-                {atLast ? (
-                  "Reset"
-                ) : (
-                  <>
-                    Load row {nextRowNum} <ChevronRight className="size-3" />
-                  </>
-                )}
-              </Button>
-            </div>
-          </>
+    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-1.5">
+      <span className="text-[11px] font-medium text-muted-foreground">{status}</span>
+      <Button
+        type="button"
+        size="sm"
+        variant={showGapHeatmap ? "default" : "outline"}
+        onClick={onToggleGapHeatmap}
+        className={cn(
+          "ml-auto h-7 px-2 text-[11px]",
+          showGapHeatmap && activeRowHasGap
+            ? "bg-rose-600 text-white hover:bg-rose-700"
+            : "",
         )}
-      </div>
-      {stepMode && (
-        <p className="text-[10px] leading-snug text-muted-foreground">
-          {atEmpty
-            ? "Container is empty. Click 'Load row 1' to place the back-wall row, then inspect for floor/wall gaps before continuing."
-            : atLast
-              ? "All rows loaded. Use 'Unload' to step back, or 'Reset' to empty."
-              : "Inspect this row for gaps against the wall and floor, then load the next row."}
-        </p>
-      )}
+        aria-pressed={showGapHeatmap}
+        title={
+          activeRowHasGap
+            ? "Toggle red overlay highlighting floor & wall voids"
+            : "Heatmap appears on rows flagged with gap warnings"
+        }
+      >
+        ⚠ Gaps
+      </Button>
     </div>
   );
 }
+
 
 /* ---------------- Sub-components ---------------- */
 
