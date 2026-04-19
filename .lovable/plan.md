@@ -1,49 +1,53 @@
 
 
 ## Goal
-Generate an MP4 video that teaches a loader, in true 3D, how to pack the container row-by-row using the **same rules** the app's 3D viewer follows: back-wall-first columns, heavy-on-bottom, fragile near the door, non-stackables on the floor, gap awareness, and tilted/turned rotation hints.
+Wire the loading-guide video to the user's **actual current scenario** from the Container Load Optimizer, and offer a **40s detailed version** with no download-speed penalty.
 
-## Video structure (~25s @ 30fps, 1920×1080)
+## Download speed answer (short)
+File size for 1080p H.264 @ 30fps:
+- 25s standard ≈ **7 MB** (~1s download on broadband)
+- 40s detailed ≈ **11–13 MB** (~1.5–2s download)
 
-1. **Intro (0–3s)** — Title "How to load your container", container dims, total cartons, ETA. Empty wireframe container does a slow 360° orbit so the loader sees length × width × height.
-2. **Rules recap (3–6s)** — Four icon cards: Heavy ↓ Bottom · Back wall first · Fragile near door · No-stack stays on floor.
-3. **Row-by-row load (6–22s)** — One mini-scene per row from `buildRows()`:
-   - Camera arcs iso → side → top-down → iso so you see all 3 dimensions of that row.
-   - Boxes drop in with stagger: bottom layer first, then stacked layers.
-   - Side caption: `Row N of M · X cartons · Y kg · against {back wall | row N-1}`.
-   - Tilted/turned boxes flash a hazard band + "ROTATE H↔L" overlay.
-   - Rows with a gap warning pulse a red heatmap on the void + caption "Add dunnage here".
-4. **Door close (22–24s)** — Camera pulls back, doors swing shut, seal applied.
-5. **Outro (24–25s)** — Summary: utilization %, total weight, COG offset, "Match this in the trailer."
+That's a negligible difference — the bottleneck is **render time in the sandbox** (10-min cap), not download. We do NOT need to speed up frames or drop quality. I'll render the 40s version at native 30fps with full detail.
 
-## Approach
-Build a Remotion project under `remotion/` (per the Remotion skill: musl compositor fix, ffmpeg symlinks, programmatic render script with `chromeMode: "chrome-for-testing"` and `muted: true`).
+## What I'll build
 
-3D scene uses `@react-three/fiber` + `three` inside Remotion, with the camera driven by `useCurrentFrame()` + `interpolate()` (no OrbitControls — every frame is deterministic).
+### Part A — Wire to current scenario (the real ask)
+1. **Snapshot button** in `container-load-view.tsx`: "🎬 Generate loading video" — serializes the current `PackResult` + container dims + boxes to JSON.
+2. **Bridge file** `remotion/public/scenario.json` — written when the button is clicked (via a download-then-instructions flow, since the browser can't write to the sandbox repo directly). For automation in the sandbox, I'll add a small node script `remotion/scripts/snapshot-from-app.mjs` that reads a posted JSON or a fixture.
+3. **Refactor** `remotion/src/scenario.ts` → `scenario-loader.ts`:
+   - Reads `staticFile('scenario.json')` via Remotion's `calculateMetadata()` so duration auto-scales to row count.
+   - Falls back to the hard-coded demo scenario if `scenario.json` is missing.
+   - Maps the app's `PackResult.placedBoxes` → Remotion `Box[]` (same coordinate system already).
 
-To guarantee the video matches the app's logic, the Remotion scene **imports the existing packing math directly**: `packAdvanced` and `buildRows` from `src/lib/freight/`. Same boxes, same positions, same row order as the in-app viewer.
+### Part B — 40s detailed version
+Extend `LoadingGuide.tsx` timing:
+- Intro 90f → **120f** (slower 360° orbit, dims call-out)
+- Rules 90f → **90f** (unchanged)
+- Per-row 96f → **150f** with added **per-row 360° micro-orbit** in the last 40 frames
+- New **COG explainer scene** (90f) — shows weight-weighted centroid as a glowing marker sliding into position with target safe-zone band
+- New **Dunnage close-up scene** (60f) — zooms into the gap on row 4, adds animated dunnage block sliding in
+- Door close 60f → **75f**
+- Outro 30f → **45f**
+- **Total: ~1200f = 40s @ 30fps** (no frame-rate tricks, no quality loss)
 
-## Visual direction
-- Palette: cargo teal `#14b8a6`, dark slate bg `#0f172a`, amber `#f59e0b` for fragile/hazard, red `#ef4444` for gaps, off-white `#f5f5f4` text.
-- Typography: **Space Grotesk** (display) + **Inter** (body) via `@remotion/google-fonts`.
-- Motion system: spring entrance for boxes (`damping: 18, stiffness: 180`), smooth ease for camera, snappy fade for captions. One transition style between scenes (`fade`).
+### Part C — Render
+- Re-run `node scripts/render-remotion.mjs` → `/mnt/documents/loading-guide-v2.mp4`
+- QA via ffmpeg frame extraction at 6 timestamps
+- Keep v1 (`loading-guide.mp4`) untouched as the 25s baseline
 
-## Output
-- `/mnt/documents/loading-guide.mp4`
-- All Remotion source committed under `remotion/` so the video can be re-rendered/iterated later.
+## Files to touch
+- `remotion/src/scenario.ts` → split into `scenario-demo.ts` + `scenario-loader.ts`
+- `remotion/src/LoadingGuide.tsx` → extended timing + 2 new scenes (COG, Dunnage)
+- `remotion/src/Root.tsx` → use `calculateMetadata` for dynamic duration
+- `remotion/scripts/render-remotion.mjs` → output `/mnt/documents/loading-guide-v2.mp4`
+- `remotion/public/scenario.json` → fixture (mirrors current optimizer state when button is wired)
+- `src/components/freight/container-load-view.tsx` → add "Generate loading video" button that downloads `scenario.json` (user drops it into `remotion/public/` to re-render with their exact pack)
 
-## Three quick choices before I build
+## Honest caveat
+Browser → sandbox-filesystem in one click is not directly possible. The button will:
+1. Download `scenario.json` to the user's machine, AND
+2. Trigger a follow-up message with the JSON contents inlined so I can write it to `remotion/public/scenario.json` and re-render.
 
-**1. Scenario source**
-- (A) **Use my current scenario** — I add a "Generate loading video" button to the Container Load Optimizer that snapshots the current pack + container into `remotion/public/scenario.json`, then renders. Video matches exactly what you just packed.
-- (B) **Generic demo** — Hard-coded 20ft GP + mixed cartons + 1 fragile pallet. No app changes, faster.
-- (C) **Both** — Render generic demo this turn, wire up the per-scenario button in a follow-up.
-
-**2. Length / detail**
-- Quick (~15s, montage), **Standard (~25s, recommended)**, or Detailed (~40s with per-row 360° orbit, COG explainer, dunnage close-ups).
-
-**3. Voiceover**
-- Captions only (no audio, smaller file), or ElevenLabs narration (needs ElevenLabs API key in the project).
-
-Reply with your picks (e.g. "A, Standard, captions only") and I'll build and render.
+For this turn, I'll render the 40s detailed video using the **demo scenario** so you have something concrete to watch immediately, and ship the snapshot button so future renders are scenario-specific.
 
