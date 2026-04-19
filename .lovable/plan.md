@@ -1,46 +1,43 @@
 
 
-## Updated plan — gate packing options on CBM calculator only (not required elsewhere)
+## Revised gating — CBM always works, only optimization is gated
 
-Same as before, but the **mandatory packing-options gate applies ONLY to the CBM calculator** (the one with 3D loading + container optimization). Other calculators (Air, Landed, Export, Compare, Risk) are unaffected — they don't use packing options anyway.
+You're right. Current behavior blocks the popover too aggressively. Fix: **CBM math is never gated. Packing options are only required when the user explicitly requests container optimization.**
 
-### 1. Add `packingConfirmed` flag
-Add to `CbmItem` in `src/lib/freight/calculators.ts`:
-- `packingConfirmed: boolean` (default `false`)
+### New flow
+1. User fills dimensions + qty + weight → **CBM, chargeable weight, totals calculate immediately** (no warnings, no amber chips, no popover pressure).
+2. Container suggestion banner is **replaced with a CTA card**: *"Get container optimization plan"* button.
+3. Clicking the CTA checks: do all rows have `packingConfirmed === true`?
+   - **Yes** → run optimization, show `<ContainerSuggestion>` + unlock 3D view, Loading Video, PDF download.
+   - **No** → open a single modal listing unconfirmed items with inline toggles (stackable / fragile / sideways / axis / max stack weight) + "Apply to all" + Confirm button. On confirm → run optimization automatically.
+4. Once optimized, a small "Edit packing options" link stays visible so user can re-tune and re-run.
 
-Only used by the CBM tab. Other calculators ignore it.
+### UI changes in `cbm-calculator.tsx`
+- Remove the per-row amber "⚠ Packing options required" pressure chip.
+- Per-row packing chip becomes **neutral/optional** by default (small grey "Packing options" link). Only turns green summary chip *after* user has confirmed.
+- Replace gated banner with the **"Optimize container loading" CTA card** (always visible once at least one row has dimensions).
+- Add a new **"Confirm packing options" modal** (reuses existing popover toggles in a list per item + Apply-to-all + Confirm button).
+- 3D view, Loading Video, Download PDF are hidden (not greyed) until optimization has been requested at least once.
 
-### 2. CBM calculator UI (`cbm-calculator.tsx`)
-Group the existing flags (stackable, fragile, sideways, axis rotation, max stack weight) into a compact **"Packing options"** popover per cargo row:
-- Trigger button shows status: *"⚠ Packing options required"* (amber) when not confirmed, or summary chip *"Stackable · Sideways OK · Max 200kg"* (green) when confirmed.
-- Popover contains all toggles + max-stack-weight number field with tooltips.
-- "Apply to all items" button for bulk setup.
-- Auto-confirms the row the moment the user toggles anything inside.
+### State
+- Keep `packingConfirmed: boolean` on `CbmItem` (already added).
+- Add local UI state `optimizationRequested: boolean` in `cbm-calculator.tsx` — flips to true after user confirms in the modal. Drives whether `<ContainerSuggestion>` + 3D + Video + PDF render.
 
-### 3. Gate optimization features (CBM only)
-When any row has `packingConfirmed === false`:
-- Replace `<ContainerSuggestion>` banner with an amber warning card listing unconfirmed item names + "Review packing options" button that scrolls to the first incomplete row.
-- Disable (greyed + tooltip) the 3D loading view, Loading Video button, and Download PDF button.
-- Basic CBM math (volume, chargeable weight, totals) still runs normally.
+### Other calculators
+Unchanged. (Air, Landed, Export, Compare, Risk never showed packing options.)
 
-### 4. Persist
-Save `packingConfirmed` + flags via existing localStorage history snapshot in `storage.ts`.
-
-### 5. Fix unrelated SSR hydration warning
-In `src/routes/freight-intelligence.tsx`, fix the whitespace mismatch in the footer email span next to the `<Mail>` icon (server renders `" sales@..."`, client renders `" "`).
+### Hydration warning
+Already fixed in the previous turn (`freight-intelligence.tsx` footer span). The runtime error in context is stale from before the fix — verify and leave alone if resolved.
 
 ## Files touched
 ```text
-EDIT  src/lib/freight/calculators.ts                  — add packingConfirmed: boolean to CbmItem
-EDIT  src/components/freight/cbm-calculator.tsx       — Packing options popover, confirmation chip, gate logic, "Apply to all"
-EDIT  src/components/freight/container-suggestion.tsx — accept "blocked" state + unconfirmed item list (CBM only)
-EDIT  src/components/freight/results-card.tsx        — disable 3D / Video / PDF when CBM rows not confirmed
-EDIT  src/lib/freight/storage.ts                      — persist new flag
-EDIT  src/routes/freight-intelligence.tsx             — fix hydration whitespace bug in footer
+EDIT  src/components/freight/cbm-calculator.tsx       — remove amber pressure, add Optimize CTA + confirm-packing modal, optimizationRequested state
+EDIT  src/components/freight/container-suggestion.tsx — remove "blocked" warning variant (no longer needed)
+EDIT  src/components/freight/results-card.tsx         — hide (not disable) 3D / Video / PDF until optimizationRequested
 ```
 
 ## Out of scope
-- Applying the gate to Air / Landed / Export / Compare / Risk calculators (not needed)
-- Server-side validation
-- Auto-detecting packing options from item dimensions
+- Changing the packing-options field set
+- Changes to other calculators
+- Persisting `optimizationRequested` across reloads (session-only is fine)
 
