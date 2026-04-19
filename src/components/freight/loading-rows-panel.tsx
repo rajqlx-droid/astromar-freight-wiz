@@ -29,96 +29,20 @@ function itemCounts(row: RowGroup, pack: AdvancedPackResult) {
 }
 
 /**
- * Mini side-view of a single row — a loader's-eye projection looking down the
- * container length toward the door. Width axis is horizontal, height axis is
- * vertical, the floor sits at the bottom. Only this row's boxes are drawn.
+ * Mini side-view of a single row — wraps the shared SVG builder so the panel,
+ * print HTML, and PDF all render the exact same artwork.
  */
 function RowSideView({ row, pack }: { row: RowGroup; pack: AdvancedPackResult }) {
-  const containerW = pack.container.inner.w; // mm
-  const containerH = pack.container.inner.h; // mm
-  const VIEW_W = 220;
-  const VIEW_H = 90;
-  const PAD = 4;
-  const innerW = VIEW_W - PAD * 2;
-  const innerH = VIEW_H - PAD * 2;
-  const sx = innerW / containerW;
-  const sy = innerH / containerH;
-
+  const svg = buildRowSideViewSvg(row, pack);
   return (
-    <svg
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      className="h-[90px] w-full max-w-[260px] rounded border bg-background text-brand-navy"
-      role="img"
-      aria-label={`Side view of row ${row.rowIdx + 1}`}
-    >
-      <rect
-        x={PAD}
-        y={PAD}
-        width={innerW}
-        height={innerH}
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity={0.25}
-        strokeDasharray="3 3"
-      />
-      <line
-        x1={PAD}
-        y1={VIEW_H - PAD}
-        x2={VIEW_W - PAD}
-        y2={VIEW_H - PAD}
-        stroke="currentColor"
-        strokeOpacity={0.45}
-        strokeWidth={1}
-      />
-      {row.boxes.map((b, i) => {
-        const color = pack.perItem[b.itemIdx]?.color ?? "#888";
-        const x = PAD + b.y * sx;
-        const w = b.w * sx;
-        const h = b.h * sy;
-        const y = VIEW_H - PAD - (b.z + b.h) * sy;
-        const tilted = b.rotated === "sideways" || b.rotated === "axis";
-        return (
-          <g key={i}>
-            <rect
-              x={x}
-              y={y}
-              width={Math.max(w, 1)}
-              height={Math.max(h, 1)}
-              fill={color}
-              fillOpacity={0.85}
-              stroke="rgba(0,0,0,0.35)"
-              strokeWidth={0.5}
-            />
-            {tilted && w > 10 && h > 10 && (
-              <text
-                x={x + w / 2}
-                y={y + h / 2 + 3}
-                fontSize={8}
-                fontWeight={700}
-                textAnchor="middle"
-                fill="#854d0e"
-              >
-                ↻
-              </text>
-            )}
-          </g>
-        );
-      })}
-      <text x={PAD + 2} y={PAD + 8} fontSize={7} fill="currentColor" fillOpacity={0.5}>
-        ← width →
-      </text>
-      <text
-        x={PAD + 2}
-        y={VIEW_H - PAD - 2}
-        fontSize={7}
-        fill="currentColor"
-        fillOpacity={0.5}
-      >
-        floor
-      </text>
-    </svg>
+    <div
+      className="row-side-view h-[90px] w-full max-w-[260px] overflow-hidden rounded border bg-background [&_svg]:h-full [&_svg]:w-full"
+      // SVG is built from sanitised numeric data + theme constants — safe to inject.
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
   );
 }
+
 
 
 export function LoadingRowsPanel({ pack }: Props) {
