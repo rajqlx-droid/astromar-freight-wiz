@@ -83,9 +83,11 @@ export interface GeneratedVideo {
  */
 function loadingOrder(pack: AdvancedPackResult): number[] {
   const idx = pack.placed.map((_, i) => i);
-  // Bucket boxes by depth slab (~600 mm) so we finish a back-wall column
-  // (back→top) before moving the column toward the door.
-  const SLAB_MM = 600;
+  // Loading rule: completely fill the back wall (full width × full height)
+  // before advancing toward the door. Within a wall slab, fill side-to-side
+  // along the floor first, then build upward. Use a tight 300 mm depth slab
+  // so a single column of pallets is treated as one "wall".
+  const SLAB_MM = 300;
   idx.sort((a, b) => {
     const A = pack.placed[a];
     const B = pack.placed[b];
@@ -97,14 +99,16 @@ function loadingOrder(pack: AdvancedPackResult): number[] {
     // Non-stackable last (loaded near door / top of stack)
     if (sa?.stackable !== sb?.stackable) return sa?.stackable ? -1 : 1;
 
-    // Back wall → door: bucket by x slab so we don't ping-pong along the length
+    // Back wall → door: bucket by x slab so we finish the entire back wall
+    // before any box is placed in the next column toward the door.
     const slabA = Math.floor(A.x / SLAB_MM);
     const slabB = Math.floor(B.x / SLAB_MM);
     if (slabA !== slabB) return slabA - slabB;
 
-    // Within a slab: side-to-side first (lower y), then bottom-to-top (lower z)
-    if (A.y !== B.y) return A.y - B.y;
+    // Within the same wall slab: fill the floor across the width first (low z),
+    // then build upward layer by layer (side-to-side within each layer).
     if (A.z !== B.z) return A.z - B.z;
+    if (A.y !== B.y) return A.y - B.y;
     return A.x - B.x;
   });
   return idx;

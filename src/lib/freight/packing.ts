@@ -115,6 +115,11 @@ export function packContainer(
   // Largest first by volume → better packing.
   cartons.sort((a, b) => b.l * b.w * b.h - a.l * a.w * a.h);
 
+  // Score weights: x (back-to-front) dominates, then z (build up), then y (side).
+  // A 100mm advance forward outweighs the tallest stack at the same x slot, so
+  // the back wall is fully filled (floor → ceiling, side → side) before the
+  // packer moves toward the door. Mirrors packing-advanced.ts.
+
   const placed: PlacedBox[] = [];
   const C = container.inner;
   const cellsX = Math.ceil(C.l / CELL_MM);
@@ -162,7 +167,7 @@ export function packContainer(
         }
         if (topZ > 0 && total > 0 && supported / total < SUPPORT_MIN_RATIO) continue;
 
-        const score = topZ * 1000 + (x + y);
+        const score = x * 10_000 + topZ * 100 + y * 0.1;
         if (score < bestScore) {
           bestScore = score;
           bestX = x;
