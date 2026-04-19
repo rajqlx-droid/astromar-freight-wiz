@@ -37,7 +37,7 @@ export function ContainerSuggestion({ recommendation, currentChoice, onApply }: 
 
   const reasonText =
     reason === "exceeds-single-cbm"
-      ? `Your ${totalCbm.toFixed(1)} m³ shipment exceeds the largest single container (40ft HC ≈ 68 m³ usable).`
+      ? `Your ${totalCbm.toFixed(1)} m³ shipment exceeds the largest single container (40ft HC ≈ 70 m³ usable).`
       : reason === "exceeds-single-weight"
         ? `Your ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg payload exceeds a single container's limit.`
         : `Optimal fit for ${totalCbm.toFixed(1)} m³ / ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg.`;

@@ -17,9 +17,9 @@ import { CONTAINERS, type ContainerPreset } from "./packing";
  * what shippers like Searates / Maersk publish as practical limits.
  */
 export const USABLE_CBM: Record<ContainerPreset["id"], number> = {
-  "20gp": 28,
-  "40gp": 58,
-  "40hc": 68,
+  "20gp": 30,
+  "40gp": 60,
+  "40hc": 70,
 };
 
 export interface RecommendedUnit {
