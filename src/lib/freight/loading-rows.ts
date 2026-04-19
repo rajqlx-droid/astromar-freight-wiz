@@ -142,6 +142,10 @@ export function instructionFor(row: RowGroup): string {
   }
   if (row.hasFragile) parts.push("cap with fragile units last");
   if (row.hasNonStack) parts.push("leave no-stack items uncovered");
+  if (row.gapWarning)
+    parts.push(
+      `re-shuffle to close gaps — back wall only ${Math.round(row.wallUtilizationPct)}% utilised`,
+    );
   if (row.needsSeparator)
     parts.push("insert a separator board (plywood/cardboard) between heavy and fragile layers");
   if (row.rotatedCount > 0)
