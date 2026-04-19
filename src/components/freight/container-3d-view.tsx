@@ -754,11 +754,13 @@ function CargoBox({
   stat,
   offset,
   scale = 1,
+  previewHighlight = false,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
   offset?: [number, number, number];
   scale?: number;
+  previewHighlight?: boolean;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -782,6 +784,12 @@ function CargoBox({
   return (
     <group position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && <WoodenPallet lm={lm} wm={wm} />}
+      {previewHighlight && (
+        <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[Math.max(lm, wm) * 0.55, Math.max(lm, wm) * 0.7, 32]} />
+          <meshBasicMaterial color="#10b981" transparent opacity={0.85} />
+        </mesh>
+      )}
       <mesh castShadow receiveShadow>
         <boxGeometry args={[lm, hm, wm]} />
         <meshStandardMaterial
