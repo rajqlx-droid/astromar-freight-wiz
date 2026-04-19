@@ -1080,6 +1080,7 @@ function CargoBox({
   flyInKey = 0,
   containerL = 12,
   containerH = 2.6,
+  showCheckmark = false,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1090,6 +1091,7 @@ function CargoBox({
   flyInKey?: number;
   containerL?: number;
   containerH?: number;
+  showCheckmark?: boolean;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
