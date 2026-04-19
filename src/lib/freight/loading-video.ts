@@ -142,10 +142,10 @@ function buildTimeline(
   const order = loadingOrder(pack);
   const totalFrames = Math.max(60, Math.round(durationSec * fps));
 
-  // Allocate time: 8% intro, 84% loading, 8% outro (snappier than the
-  // previous 12/76/12 split — gets to the action faster).
-  const introFrames = Math.round(totalFrames * 0.08);
-  const outroFrames = Math.round(totalFrames * 0.08);
+  // Allocate time: 14% intro (door opening + reveal), 72% loading, 14% outro
+  // (last box settle + door closing). The longer bookends sell the door swing.
+  const introFrames = Math.round(totalFrames * 0.14);
+  const outroFrames = Math.round(totalFrames * 0.14);
   const loadFrames = totalFrames - introFrames - outroFrames;
 
   const n = order.length || 1;
