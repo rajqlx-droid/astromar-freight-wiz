@@ -425,6 +425,7 @@ function SceneContents({
           x={staging.forkliftX}
           z={staging.forkliftZ}
           forkY={staging.forkliftY}
+          headYaw={staging.headYaw}
         />
       )}
 
