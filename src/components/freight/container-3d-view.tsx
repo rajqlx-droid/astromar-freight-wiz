@@ -13,9 +13,11 @@
 import { Suspense, forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Edges, Grid, Html } from "@react-three/drei";
+import { Maximize2, Minimize2 } from "lucide-react";
 import * as THREE from "three";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
 import {
@@ -53,6 +55,17 @@ interface Props {
    * can visualise a "Suggested re-shuffle" before doing it physically.
    */
   shufflePreview?: Map<number, number> | null;
+  /**
+   * When provided, only boxes whose `placedIdx` is in this set are rendered.
+   * Used by the manual row-stepper to reveal rows one at a time, back wall
+   * → door. Pass `null` to show every box (default).
+   */
+  visiblePlacedSet?: Set<number> | null;
+  /**
+   * Hide the swing doors entirely. Useful while stepping rows or recording —
+   * an open door at 135° still occludes the camera from many iso angles.
+   */
+  hideDoors?: boolean;
 }
 
 /**
@@ -61,7 +74,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -163,10 +176,17 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     },
   }));
 
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(wrapperRef);
+
   return (
     <div
-      className="relative overflow-hidden rounded-lg border"
-      style={{ height }}
+      ref={wrapperRef}
+      className={cn(
+        "relative overflow-hidden rounded-lg border bg-background",
+        isFullscreen && "h-screen w-screen rounded-none border-none [&_canvas]:!h-full [&_canvas]:!w-full",
+      )}
+      style={isFullscreen ? undefined : { height }}
     >
       <Canvas
         shadows
@@ -177,7 +197,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
           glRef.current = gl;
           sceneRef.current = scene;
           cameraRef.current = camera as THREE.PerspectiveCamera;
-          // Realistic warehouse sky gradient + atmospheric fog.
           scene.background = makeSkyTexture();
           scene.fog = new THREE.Fog(0xb8c2cc, Cm.l * 4, Cm.l * 14);
         }}
@@ -190,6 +209,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             recording={recordingTimeline}
             frame={currentFrame}
             shufflePreview={shufflePreview}
+            visiblePlacedSet={visiblePlacedSet}
+            hideDoors={hideDoors}
           />
         </Suspense>
       </Canvas>
@@ -214,6 +235,17 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
           </Button>
         ))}
       </div>
+
+      {/* Fullscreen toggle */}
+      <button
+        type="button"
+        onClick={toggleFullscreen}
+        aria-label={isFullscreen ? "Exit fullscreen" : "Open fullscreen"}
+        title={isFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen"}
+        className="absolute left-2 top-2 flex size-8 items-center justify-center rounded-md bg-background/85 text-brand-navy shadow backdrop-blur transition-colors hover:bg-background"
+      >
+        {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+      </button>
 
       <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
         Drag to rotate · Scroll to zoom · Double-click to reset
@@ -299,6 +331,8 @@ function SceneContents({
   recording,
   frame,
   shufflePreview,
+  visiblePlacedSet,
+  hideDoors,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -306,6 +340,8 @@ function SceneContents({
   recording: Timeline | null;
   frame: number;
   shufflePreview: Map<number, number> | null;
+  visiblePlacedSet: Set<number> | null;
+  hideDoors: boolean;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -390,13 +426,15 @@ function SceneContents({
 
       <WarehouseAmbience Cm={Cm} />
 
-      <ContainerShell Cm={Cm} doorOpen={doorOpen} />
+      <ContainerShell Cm={Cm} doorOpen={doorOpen} hideDoors={hideDoors} />
 
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {pack.placed.map((b, i) => {
           const t = transforms?.[i];
           if (recording && t && !t.visible) return null;
+          // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
+          if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
           // Combine per-frame transform offset (recording) with the shuffle
           // preview offset (applied to scene-z, the container width axis).
           const shuffleZ = shufflePreview?.get(i) ?? 0;
@@ -456,9 +494,12 @@ function SceneContents({
 function ContainerShell({
   Cm,
   doorOpen = 1,
+  hideDoors = false,
 }: {
   Cm: { l: number; w: number; h: number };
   doorOpen?: number;
+  /** When true, the swing doors are not rendered at all (frame stays). */
+  hideDoors?: boolean;
 }) {
   // Real container: corrugated steel walls, plywood floor, painted steel frame.
   // Door is at +x. Two hinged doors swing outward — left hinges at -z corner,
@@ -583,50 +624,56 @@ function ContainerShell({
         <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
       </mesh>
 
-      {/* Hinged DOORS — left panel hinges at -z corner, right at +z corner */}
-      <group
-        position={[Cm.l / 2, doorH / 2 + 0.04, -Cm.w / 2]}
-        rotation={[0, -swing, 0]}
-      >
-        <mesh castShadow position={[0.025, 0, doorW / 2]}>
-          <boxGeometry args={[0.05, doorH, doorW]} />
-          <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
-        </mesh>
-        {[doorW * 0.25, doorW * 0.75].map((zz, i) => (
-          <mesh key={`bar-l-${i}`} position={[0.06, 0, zz]}>
-            <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
-            <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
-          </mesh>
-        ))}
-        {[-doorH / 3, doorH / 3].map((yy, i) => (
-          <mesh key={`hng-l-${i}`} position={[0.04, yy, 0.04]}>
-            <boxGeometry args={[0.05, 0.12, 0.06]} />
-            <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
-          </mesh>
-        ))}
-      </group>
+      {/* Hinged DOORS — left panel hinges at -z corner, right at +z corner.
+          Hidden entirely when `hideDoors` is set so the camera is never
+          occluded while stepping rows or recording video. */}
+      {!hideDoors && (
+        <>
+          <group
+            position={[Cm.l / 2, doorH / 2 + 0.04, -Cm.w / 2]}
+            rotation={[0, -swing, 0]}
+          >
+            <mesh castShadow position={[0.025, 0, doorW / 2]}>
+              <boxGeometry args={[0.05, doorH, doorW]} />
+              <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
+            </mesh>
+            {[doorW * 0.25, doorW * 0.75].map((zz, i) => (
+              <mesh key={`bar-l-${i}`} position={[0.06, 0, zz]}>
+                <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
+                <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
+              </mesh>
+            ))}
+            {[-doorH / 3, doorH / 3].map((yy, i) => (
+              <mesh key={`hng-l-${i}`} position={[0.04, yy, 0.04]}>
+                <boxGeometry args={[0.05, 0.12, 0.06]} />
+                <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
+              </mesh>
+            ))}
+          </group>
 
-      <group
-        position={[Cm.l / 2, doorH / 2 + 0.04, Cm.w / 2]}
-        rotation={[0, swing, 0]}
-      >
-        <mesh castShadow position={[0.025, 0, -doorW / 2]}>
-          <boxGeometry args={[0.05, doorH, doorW]} />
-          <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
-        </mesh>
-        {[-doorW * 0.25, -doorW * 0.75].map((zz, i) => (
-          <mesh key={`bar-r-${i}`} position={[0.06, 0, zz]}>
-            <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
-            <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
-          </mesh>
-        ))}
-        {[-doorH / 3, doorH / 3].map((yy, i) => (
-          <mesh key={`hng-r-${i}`} position={[0.04, yy, -0.04]}>
-            <boxGeometry args={[0.05, 0.12, 0.06]} />
-            <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
-          </mesh>
-        ))}
-      </group>
+          <group
+            position={[Cm.l / 2, doorH / 2 + 0.04, Cm.w / 2]}
+            rotation={[0, swing, 0]}
+          >
+            <mesh castShadow position={[0.025, 0, -doorW / 2]}>
+              <boxGeometry args={[0.05, doorH, doorW]} />
+              <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
+            </mesh>
+            {[-doorW * 0.25, -doorW * 0.75].map((zz, i) => (
+              <mesh key={`bar-r-${i}`} position={[0.06, 0, zz]}>
+                <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
+                <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
+              </mesh>
+            ))}
+            {[-doorH / 3, doorH / 3].map((yy, i) => (
+              <mesh key={`hng-r-${i}`} position={[0.04, yy, -0.04]}>
+                <boxGeometry args={[0.05, 0.12, 0.06]} />
+                <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
+              </mesh>
+            ))}
+          </group>
+        </>
+      )}
     </group>
   );
 }

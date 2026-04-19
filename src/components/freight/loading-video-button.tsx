@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { Download, Film, Loader2, RotateCw } from "lucide-react";
+import { Download, Film, Loader2, Maximize2, RotateCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -246,6 +246,23 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
                     <div className="text-[11px] opacity-90">{currentInfo.subCaption}</div>
                   </div>
                 )}
+                {/* Fullscreen the video element itself (uses native player chrome) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = videoRef.current as
+                      | (HTMLVideoElement & { webkitRequestFullscreen?: () => Promise<void> })
+                      | null;
+                    if (!el) return;
+                    if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+                    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+                  }}
+                  aria-label="Open video in fullscreen"
+                  title="Fullscreen"
+                  className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-md bg-black/65 text-white shadow backdrop-blur transition-colors hover:bg-black/80"
+                >
+                  <Maximize2 className="size-4" />
+                </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
