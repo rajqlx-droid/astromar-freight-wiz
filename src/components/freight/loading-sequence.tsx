@@ -54,6 +54,12 @@ export function LoadingSequence({ pack }: Props) {
               : p.fragile
                 ? "load last, place gently"
                 : "stack tightly";
+            // Count rotated units of this item.
+            const rotated = pack.placed.filter(
+              (b) => b.itemIdx === p.itemIdx && (b.rotated === "sideways" || b.rotated === "axis"),
+            );
+            const tippedCount = rotated.filter((b) => b.rotated === "axis").length;
+            const sidewaysCount = rotated.length - tippedCount;
             return (
               <li key={p.itemId} className="flex items-start gap-3">
                 <span
@@ -72,6 +78,14 @@ export function LoadingSequence({ pack }: Props) {
                   <div className="text-muted-foreground">
                     Place at <strong>{where}</strong> — {note}.
                   </div>
+                  {rotated.length > 0 && (
+                    <div className="mt-0.5 text-[11px] text-yellow-700 dark:text-yellow-300">
+                      ↻ {sidewaysCount > 0 && `${sidewaysCount} unit${sidewaysCount > 1 ? "s" : ""} rotated sideways`}
+                      {sidewaysCount > 0 && tippedCount > 0 && ", "}
+                      {tippedCount > 0 && `${tippedCount} tipped on side`}
+                      {" — orient as shown in 3D view."}
+                    </div>
+                  )}
                 </div>
               </li>
             );
