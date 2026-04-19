@@ -48,6 +48,7 @@ function pointsAttr(pts: { sx: number; sy: number }[]): string {
 
 export const ContainerScene: React.FC<SceneProps> = ({
   cam,
+  container,
   visibleBoxes,
   boxProgress,
   showShell = true,
@@ -56,7 +57,7 @@ export const ContainerScene: React.FC<SceneProps> = ({
   showRotateBands = true,
   doorClose = 0,
 }) => {
-  const { l, w, h } = CONTAINER.inner;
+  const { l, w, h } = container.inner;
 
   // --- Container shell wireframe ---
   const shellPaths: React.ReactNode[] = [];
