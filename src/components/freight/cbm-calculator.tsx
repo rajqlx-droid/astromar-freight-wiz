@@ -154,16 +154,16 @@ export function CbmCalculator({ items, setItems }: Props) {
   const setWt = (id: string) => (n: number) =>
     update(id, { weight: Number.isFinite(n) ? toKg(n, wtUnit) : 0 });
 
-  const inputsTable = items.flatMap((it, idx) => [
-    { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
-    { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
-    {
-      label: `Item ${idx + 1} Packing`,
-      value: it.packingConfirmed
-        ? buildSummary(it)
-        : "⚠ Packing options not confirmed",
-    },
-  ]);
+  const inputsTable = items.flatMap((it, idx) => {
+    const rows = [
+      { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
+      { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+    ];
+    if (it.packingConfirmed) {
+      rows.push({ label: `Item ${idx + 1} Packing`, value: buildSummary(it) });
+    }
+    return rows;
+  });
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
@@ -224,21 +224,20 @@ export function CbmCalculator({ items, setItems }: Props) {
                     <button
                       type="button"
                       className={cn(
-                        "inline-flex max-w-full items-center gap-1.5 rounded-full border-2 px-3 py-1 text-[11px] font-semibold transition-colors",
+                        "inline-flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-colors",
                         confirmed
                           ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
-                          : "animate-pulse border-amber-500 bg-amber-50 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-200",
+                          : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
                       )}
                     >
                       {confirmed ? (
                         <CheckCircle2 className="size-3.5 shrink-0" />
                       ) : (
-                        <AlertTriangle className="size-3.5 shrink-0" />
+                        <Settings2 className="size-3.5 shrink-0" />
                       )}
                       <span className="truncate">
-                        {confirmed ? buildSummary(it) : "Packing options required"}
+                        {confirmed ? buildSummary(it) : "Packing options"}
                       </span>
-                      <Settings2 className="size-3 shrink-0 opacity-70" />
                     </button>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-[min(420px,calc(100vw-2rem))] p-4">
