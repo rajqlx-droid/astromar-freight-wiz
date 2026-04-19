@@ -176,10 +176,17 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     },
   }));
 
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(wrapperRef);
+
   return (
     <div
-      className="relative overflow-hidden rounded-lg border"
-      style={{ height }}
+      ref={wrapperRef}
+      className={cn(
+        "relative overflow-hidden rounded-lg border bg-background",
+        isFullscreen && "h-screen w-screen rounded-none border-none [&_canvas]:!h-full [&_canvas]:!w-full",
+      )}
+      style={isFullscreen ? undefined : { height }}
     >
       <Canvas
         shadows
@@ -190,7 +197,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
           glRef.current = gl;
           sceneRef.current = scene;
           cameraRef.current = camera as THREE.PerspectiveCamera;
-          // Realistic warehouse sky gradient + atmospheric fog.
           scene.background = makeSkyTexture();
           scene.fog = new THREE.Fog(0xb8c2cc, Cm.l * 4, Cm.l * 14);
         }}
@@ -203,6 +209,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             recording={recordingTimeline}
             frame={currentFrame}
             shufflePreview={shufflePreview}
+            visiblePlacedSet={visiblePlacedSet}
+            hideDoors={hideDoors}
           />
         </Suspense>
       </Canvas>
@@ -227,6 +235,17 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
           </Button>
         ))}
       </div>
+
+      {/* Fullscreen toggle */}
+      <button
+        type="button"
+        onClick={toggleFullscreen}
+        aria-label={isFullscreen ? "Exit fullscreen" : "Open fullscreen"}
+        title={isFullscreen ? "Exit fullscreen (Esc)" : "Open fullscreen"}
+        className="absolute left-2 top-2 flex size-8 items-center justify-center rounded-md bg-background/85 text-brand-navy shadow backdrop-blur transition-colors hover:bg-background"
+      >
+        {isFullscreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+      </button>
 
       <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
         Drag to rotate · Scroll to zoom · Double-click to reset
