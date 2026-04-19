@@ -49,7 +49,7 @@ interface Props {
 type Speed = 0.5 | 1 | 2;
 type Resolution = 720 | 1080;
 
-export function LoadingVideoButton({ getHandle, ensure3DReady, containerLabel }: Props) {
+export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLabel }: Props) {
   const [open, setOpen] = useState(false);
   const [encoding, setEncoding] = useState(false);
   const [progress, setProgress] = useState({ frame: 0, total: 0 });
