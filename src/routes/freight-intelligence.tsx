@@ -479,84 +479,125 @@ function FreightIntelligencePage() {
           </div>
         </div>
 
-        {/* HERO + BREADCRUMB + BANNER */}
+        {/* HERO + BREADCRUMB + BANNER (collapses to a thin strip on scroll) */}
         <section className="mx-auto max-w-7xl px-3 pb-4 pt-4 md:px-4">
           <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
             <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
             <ChevronRight className="size-3" />
             <span>Tools</span>
             <ChevronRight className="size-3" />
-            <span className="font-semibold text-brand-navy">{meta.label}</span>
+            <span className="font-semibold text-brand-navy">
+              {compareMode
+                ? `Compare: ${CALCULATORS.find((c) => c.key === compareMode.left)?.label} vs ${CALCULATORS.find((c) => c.key === compareMode.right)?.label}`
+                : meta.label}
+            </span>
           </nav>
 
           <div
-            className="relative overflow-hidden rounded-xl border-2 p-5 md:p-6"
+            className={
+              "relative overflow-hidden rounded-xl border-2 transition-all duration-300 ease-out " +
+              (heroCollapsed ? "p-2 md:p-2" : "p-5 md:p-6")
+            }
             style={{
               borderColor: "var(--brand-navy)",
               background:
                 "linear-gradient(135deg, var(--brand-navy-soft) 0%, var(--brand-orange-soft) 100%)",
             }}
           >
-            <div
-              aria-hidden
-              className="absolute -right-10 -top-10 size-40 rounded-full opacity-10"
-              style={{ background: "var(--brand-orange)" }}
-            />
+            {!heroCollapsed && (
+              <div
+                aria-hidden
+                className="absolute -right-10 -top-10 size-40 rounded-full opacity-10"
+                style={{ background: "var(--brand-orange)" }}
+              />
+            )}
             <div className="relative text-center">
-              <h1 className="text-xl font-bold text-brand-navy md:text-2xl">Smart Freight Calculator</h1>
-              <p className="mt-1 text-sm text-muted-foreground md:text-base">
-                Calculate shipping costs and logistics metrics in real-time.
-              </p>
+              <h1
+                className={
+                  "font-bold text-brand-navy transition-all " +
+                  (heroCollapsed ? "text-sm md:text-base" : "text-xl md:text-2xl")
+                }
+              >
+                Smart Freight Calculator
+              </h1>
+              {!heroCollapsed && (
+                <p className="mt-1 text-sm text-muted-foreground md:text-base">
+                  Calculate shipping costs and logistics metrics in real-time.
+                </p>
+              )}
             </div>
           </div>
 
-          {bannerOpen ? (
-            <div
-              className="mt-3 flex items-start gap-2 rounded-lg border-l-4 p-3 text-xs md:text-sm"
-              style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
-            >
-              <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-              <p className="flex-1 text-foreground/90">{meta.tip}</p>
-              <button
-                onClick={dismissBanner}
-                aria-label="Dismiss tip"
-                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-brand-navy"
+          {!heroCollapsed && (
+            bannerOpen ? (
+              <div
+                className="mt-3 flex items-start gap-2 rounded-lg border-l-4 p-3 text-xs md:text-sm"
+                style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
               >
-                <X className="size-3.5" />
+                <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand-orange" />
+                <p className="flex-1 text-foreground/90">{meta.tip}</p>
+                <button
+                  onClick={dismissBanner}
+                  aria-label="Dismiss tip"
+                  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-brand-navy"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={reopenBanner}
+                className="mt-3 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
+              >
+                <Lightbulb className="size-3" /> Show tip
               </button>
-            </div>
-          ) : (
-            <button
-              onClick={reopenBanner}
-              className="mt-3 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
-            >
-              <Lightbulb className="size-3" /> Show tip
-            </button>
+            )
           )}
+
+          {/* Sentinel just below the hero — when it leaves the viewport,
+              the IntersectionObserver collapses the hero. */}
+          <div ref={heroSentinelRef} aria-hidden className="h-px w-full" />
         </section>
 
-        {/* CALCULATOR — full width; History is in the header sheet */}
+        {/* CALCULATOR — single tool OR split compare view */}
         <section className="mx-auto max-w-7xl px-3 pb-10 md:px-4">
-          <div className="mb-4 flex items-center gap-3">
-            <div
-              aria-hidden
-              className="h-8 w-1.5 rounded-full"
-              style={{ background: "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))" }}
+          {compareMode ? (
+            <SplitCompareView
+              left={compareMode.left}
+              right={compareMode.right}
+              renderCalc={renderCalculator}
+              onSwap={() =>
+                setCompareMode({ left: compareMode.right, right: compareMode.left })
+              }
+              onExit={() => setCompareMode(null)}
             />
-            <div>
-              <h2 className="text-lg font-bold text-brand-navy md:text-xl">{meta.label} Calculator</h2>
-              <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div className="mb-4 flex items-center gap-3">
+                <div
+                  aria-hidden
+                  className="h-8 w-1.5 rounded-full"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))",
+                  }}
+                />
+                <div>
+                  <h2 className="text-lg font-bold text-brand-navy md:text-xl">
+                    {meta.label} Calculator
+                  </h2>
+                  <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
+                </div>
+              </div>
 
-          {active === "cbm" && <CbmCalculator items={cbmItems} setItems={setCbmItems} />}
-          {active === "air" && (
-            <AirCalculator items={airItems} setItems={setAirItems} divisor={airDivisor} setDivisor={setAirDivisor} />
+              <MiniHistoryStrip
+                type={active}
+                onOpenFullHistory={() => setHistorySheetOpen(true)}
+              />
+
+              {renderCalculator(active)}
+            </>
           )}
-          {active === "landed" && <LandedCalculator state={landed} setState={setLanded} onDuplicateToExport={duplicateLandedToExport} />}
-          {active === "export" && <ExportCalculator state={exp} setState={setExp} />}
-          {active === "compare" && <CompareCalculator state={compare} setState={setCompare} />}
-          {active === "risk" && <RiskCalculator state={risk} setState={setRisk} />}
         </section>
 
         {/* Mobile-only sticky bottom result bar (mirrors active calculator's result) */}
