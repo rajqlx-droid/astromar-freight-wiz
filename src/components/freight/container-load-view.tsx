@@ -486,6 +486,28 @@ function RowStepperBar({
               <Button
                 type="button"
                 size="sm"
+                variant={showGapHeatmap ? "default" : "outline"}
+                onClick={onToggleGapHeatmap}
+                disabled={!canStep || atEmpty}
+                className={cn(
+                  "h-7 px-2 text-[11px]",
+                  showGapHeatmap && activeRowHasGap
+                    ? "bg-rose-600 text-white hover:bg-rose-700"
+                    : "",
+                )}
+                aria-pressed={showGapHeatmap}
+                aria-label="Toggle gap heatmap"
+                title={
+                  activeRowHasGap
+                    ? "Toggle red overlay highlighting floor & wall voids in this row"
+                    : "Active row has no gap — heatmap will appear on rows flagged with gap warnings"
+                }
+              >
+                ⚠ Gaps
+              </Button>
+              <Button
+                type="button"
+                size="sm"
                 variant="outline"
                 onClick={onReset}
                 disabled={!canStep || atEmpty}
