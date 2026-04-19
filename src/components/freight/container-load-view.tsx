@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Boxes, Box as BoxIcon } from "lucide-react";
+import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -71,6 +71,7 @@ export function ContainerLoadView({
   const [is3D, setIs3D] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState("0");
+  const [viewerCollapsed, setViewerCollapsed] = useState(false);
   const view3DRef = useRef<Container3DHandle | null>(null);
 
   useEffect(() => {
@@ -188,6 +189,24 @@ export function ContainerLoadView({
               <BoxIcon className="size-3" /> 3D
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setViewerCollapsed((v) => !v)}
+            aria-label={viewerCollapsed ? "Expand viewer" : "Collapse viewer"}
+            aria-expanded={!viewerCollapsed}
+            className="flex h-7 items-center gap-1 rounded-full border border-brand-navy/30 px-2.5 text-[11px] font-semibold text-brand-navy hover:bg-brand-navy/10"
+            title={viewerCollapsed ? "Show 3D viewer" : "Hide viewer (focus on row instructions)"}
+          >
+            {viewerCollapsed ? (
+              <>
+                <ChevronDown className="size-3" /> Show viewer
+              </>
+            ) : (
+              <>
+                <ChevronUp className="size-3" /> Hide viewer
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -221,6 +240,7 @@ export function ContainerLoadView({
                 mounted={mounted}
                 view3DRef={view3DRef}
                 isActive={activeTab === String(i)}
+                viewerCollapsed={viewerCollapsed}
                 rollup={{
                   totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
                   totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
@@ -242,6 +262,7 @@ export function ContainerLoadView({
           mounted={mounted}
           view3DRef={view3DRef}
           isActive
+          viewerCollapsed={viewerCollapsed}
         />
       )}
     </Card>
@@ -259,6 +280,7 @@ function SinglePlanBody({
   mounted,
   view3DRef,
   isActive,
+  viewerCollapsed = false,
   rollup,
 }: {
   pack: AdvancedPackResult;
@@ -269,6 +291,7 @@ function SinglePlanBody({
   mounted: boolean;
   view3DRef: React.MutableRefObject<Container3DHandle | null>;
   isActive: boolean;
+  viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
 }) {
   // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
@@ -281,25 +304,27 @@ function SinglePlanBody({
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
-        <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
-          {is3D && mounted ? (
-            <Suspense
-              fallback={
-                <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
-                  Loading 3D viewer…
-                </div>
-              }
-            >
-              <Container3DView
-                ref={isActive ? view3DRef : undefined}
-                pack={pack}
-                shufflePreview={shufflePreview}
-              />
-            </Suspense>
-          ) : (
-            <IsoContainer pack={pack} />
-          )}
-        </div>
+        {!viewerCollapsed && (
+          <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
+            {is3D && mounted ? (
+              <Suspense
+                fallback={
+                  <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
+                    Loading 3D viewer…
+                  </div>
+                }
+              >
+                <Container3DView
+                  ref={isActive ? view3DRef : undefined}
+                  pack={pack}
+                  shufflePreview={shufflePreview}
+                />
+              </Suspense>
+            ) : (
+              <IsoContainer pack={pack} />
+            )}
+          </div>
+        )}
         <Legend items={items} />
         <LoadingSequence pack={pack} />
         <LoadingRowsPanel

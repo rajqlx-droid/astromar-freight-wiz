@@ -334,6 +334,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Card>
         )}
       </div>
+      <div className="lg:sticky lg:top-4 lg:self-start">
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
@@ -425,6 +426,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           return Object.keys(extras).length ? extras : undefined;
         }}
       />
+      </div>
     </div>
 
     {/* Full-width optimization plan — sits below the inputs+results grid so the
