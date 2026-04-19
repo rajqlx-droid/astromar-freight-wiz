@@ -624,50 +624,56 @@ function ContainerShell({
         <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
       </mesh>
 
-      {/* Hinged DOORS — left panel hinges at -z corner, right at +z corner */}
-      <group
-        position={[Cm.l / 2, doorH / 2 + 0.04, -Cm.w / 2]}
-        rotation={[0, -swing, 0]}
-      >
-        <mesh castShadow position={[0.025, 0, doorW / 2]}>
-          <boxGeometry args={[0.05, doorH, doorW]} />
-          <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
-        </mesh>
-        {[doorW * 0.25, doorW * 0.75].map((zz, i) => (
-          <mesh key={`bar-l-${i}`} position={[0.06, 0, zz]}>
-            <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
-            <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
-          </mesh>
-        ))}
-        {[-doorH / 3, doorH / 3].map((yy, i) => (
-          <mesh key={`hng-l-${i}`} position={[0.04, yy, 0.04]}>
-            <boxGeometry args={[0.05, 0.12, 0.06]} />
-            <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
-          </mesh>
-        ))}
-      </group>
+      {/* Hinged DOORS — left panel hinges at -z corner, right at +z corner.
+          Hidden entirely when `hideDoors` is set so the camera is never
+          occluded while stepping rows or recording video. */}
+      {!hideDoors && (
+        <>
+          <group
+            position={[Cm.l / 2, doorH / 2 + 0.04, -Cm.w / 2]}
+            rotation={[0, -swing, 0]}
+          >
+            <mesh castShadow position={[0.025, 0, doorW / 2]}>
+              <boxGeometry args={[0.05, doorH, doorW]} />
+              <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
+            </mesh>
+            {[doorW * 0.25, doorW * 0.75].map((zz, i) => (
+              <mesh key={`bar-l-${i}`} position={[0.06, 0, zz]}>
+                <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
+                <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
+              </mesh>
+            ))}
+            {[-doorH / 3, doorH / 3].map((yy, i) => (
+              <mesh key={`hng-l-${i}`} position={[0.04, yy, 0.04]}>
+                <boxGeometry args={[0.05, 0.12, 0.06]} />
+                <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
+              </mesh>
+            ))}
+          </group>
 
-      <group
-        position={[Cm.l / 2, doorH / 2 + 0.04, Cm.w / 2]}
-        rotation={[0, swing, 0]}
-      >
-        <mesh castShadow position={[0.025, 0, -doorW / 2]}>
-          <boxGeometry args={[0.05, doorH, doorW]} />
-          <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
-        </mesh>
-        {[-doorW * 0.25, -doorW * 0.75].map((zz, i) => (
-          <mesh key={`bar-r-${i}`} position={[0.06, 0, zz]}>
-            <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
-            <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
-          </mesh>
-        ))}
-        {[-doorH / 3, doorH / 3].map((yy, i) => (
-          <mesh key={`hng-r-${i}`} position={[0.04, yy, -0.04]}>
-            <boxGeometry args={[0.05, 0.12, 0.06]} />
-            <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
-          </mesh>
-        ))}
-      </group>
+          <group
+            position={[Cm.l / 2, doorH / 2 + 0.04, Cm.w / 2]}
+            rotation={[0, swing, 0]}
+          >
+            <mesh castShadow position={[0.025, 0, -doorW / 2]}>
+              <boxGeometry args={[0.05, doorH, doorW]} />
+              <meshStandardMaterial map={doorTex} roughness={0.7} metalness={0.25} />
+            </mesh>
+            {[-doorW * 0.25, -doorW * 0.75].map((zz, i) => (
+              <mesh key={`bar-r-${i}`} position={[0.06, 0, zz]}>
+                <cylinderGeometry args={[0.018, 0.018, doorH * 0.95, 12]} />
+                <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.3} />
+              </mesh>
+            ))}
+            {[-doorH / 3, doorH / 3].map((yy, i) => (
+              <mesh key={`hng-r-${i}`} position={[0.04, yy, -0.04]}>
+                <boxGeometry args={[0.05, 0.12, 0.06]} />
+                <meshStandardMaterial color="#3a3a3a" metalness={0.7} roughness={0.4} />
+              </mesh>
+            ))}
+          </group>
+        </>
+      )}
     </group>
   );
 }
