@@ -503,13 +503,11 @@ function SinglePlanBody({
           previewRequires3D={!is3D}
           activeRowIdx={activeRowIdx}
           onRowSelect={(idx) => {
-            // Clicking a row card in 3D reveals rows 0..idx cumulatively.
-            // In 2D, just leave it to the accordion toggle.
-            if (is3D) {
-              stopPlay();
-              if (!stepMode) setStepMode(true);
-              setStepIdx(idx);
-            }
+            // Clicking a row card jumps to the FIRST pallet of that row.
+            if (!is3D) return;
+            stopPlay();
+            const firstStepInRow = palletSequence.findIndex((s) => s.rowIdx === idx);
+            if (firstStepInRow >= 0) setPalletIdx(firstStepInRow);
           }}
         />
         <p className="text-[11px] leading-relaxed text-muted-foreground">
