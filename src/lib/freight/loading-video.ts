@@ -82,36 +82,33 @@ export interface GeneratedVideo {
  * Returns a stable order array of indices into pack.placed.
  */
 function loadingOrder(pack: AdvancedPackResult): number[] {
+  // Match the 2D row viewer + 3D loading-sequence panel: pure spatial order,
+  // back-wall first (low x), bottom layer first (low z), then side-to-side
+  // (low y). This ensures the video plays the SAME sequence the user sees
+  // in the 2D rows panel and the 3D step list.
   const idx = pack.placed.map((_, i) => i);
-  // Loading rule: completely fill the back wall (full width × full height)
-  // before advancing toward the door. Within a wall slab, fill side-to-side
-  // along the floor first, then build upward. Use a tight 300 mm depth slab
-  // so a single column of pallets is treated as one "wall".
-  const SLAB_MM = 300;
   idx.sort((a, b) => {
     const A = pack.placed[a];
     const B = pack.placed[b];
-    const sa = pack.perItem[A.itemIdx];
-    const sb = pack.perItem[B.itemIdx];
-
-    // Fragile last (always loaded on top, very end)
-    if (!!sa?.fragile !== !!sb?.fragile) return sa?.fragile ? 1 : -1;
-    // Non-stackable last (loaded near door / top of stack)
-    if (sa?.stackable !== sb?.stackable) return sa?.stackable ? -1 : 1;
-
-    // Back wall → door: bucket by x slab so we finish the entire back wall
-    // before any box is placed in the next column toward the door.
+    // Back-to-front along container length (x slab of 300mm = one column).
+    const SLAB_MM = 300;
     const slabA = Math.floor(A.x / SLAB_MM);
     const slabB = Math.floor(B.x / SLAB_MM);
     if (slabA !== slabB) return slabA - slabB;
-
-    // Within the same wall slab: fill the floor across the width first (low z),
-    // then build upward layer by layer (side-to-side within each layer).
+    // Within a column: bottom layer first.
     if (A.z !== B.z) return A.z - B.z;
+    // Side-to-side across width.
     if (A.y !== B.y) return A.y - B.y;
     return A.x - B.x;
   });
   return idx;
+}
+
+/** True if this placed box represents a pallet (forklift-loaded). */
+function isPalletBox(pack: AdvancedPackResult, placedIdx: number): boolean {
+  const box = pack.placed[placedIdx];
+  const stat = pack.perItem[box.itemIdx];
+  return stat?.packageType === "pallet";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -146,14 +143,13 @@ function buildTimeline(
   const order = loadingOrder(pack);
   const totalFrames = Math.max(60, Math.round(durationSec * fps));
 
-  // Allocate time: 14% intro (door opening + reveal), 72% loading, 14% outro
-  // (last box settle + door closing). The longer bookends sell the door swing.
-  const introFrames = Math.round(totalFrames * 0.14);
-  const outroFrames = Math.round(totalFrames * 0.14);
-  const loadFrames = totalFrames - introFrames - outroFrames;
+  // No door-opening intro / closing outro — go straight into loading so the
+  // viewer doesn't waste seconds watching an empty container.
+  const introFrames = 0;
+  const outroFrames = 0;
+  const loadFrames = totalFrames;
 
   const n = order.length || 1;
-  // Each box gets a slice; boxes overlap slightly for smoother motion.
   const sliceLen = Math.max(3, Math.floor(loadFrames / n));
   const anims: BoxAnim[] = [];
 
@@ -257,10 +253,23 @@ export function computeBoxTransforms(
       item.scale = 1;
       continue;
     }
-    // Three phases (mirrors stagingForFrame): pickup at yard stack, drive in,
-    // settle into final slot. Box is invisible until forks complete pickup
-    // (it "materialises" on the forks as if lifted from the stack).
     const t = (frame - a.startFrame) / Math.max(1, a.endFrame - a.startFrame);
+    const isPallet = isPalletBox(pack, a.placedIdx);
+
+    // NON-PALLET (cartons, bags, drums, crates): no forklift involved.
+    // The item simply appears in its slot with a quick fade/scale-in so the
+    // viewer can see WHICH item just got loaded, but the forklift keeps moving
+    // pallets only.
+    if (!isPallet) {
+      item.visible = true;
+      item.offset = [0, 0, 0];
+      const ease = easeInOutQuad(Math.min(1, t * 2));
+      item.scale = 0.6 + 0.4 * ease;
+      item.onForklift = false;
+      continue;
+    }
+
+    // PALLET: full forklift pickup → drive-in → settle sequence.
     const box = pack.placed[a.placedIdx];
     const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
     const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
@@ -269,11 +278,7 @@ export function computeBoxTransforms(
     const pickupX = yardStackX;
     const pickupZ = side * yardStackZ;
 
-    // Box.x/y in scene-local coords = box's slot. We compute an OFFSET to
-    // shift it from its slot toward the pickup point or carry height.
-    // Container scene uses box at slot when offset = [0, 0, 0].
     if (t < 0.20) {
-      // PICKUP: box hidden until ease > 0.5 (forks fully under it).
       const r = t / 0.20;
       const ease = easeInOutQuad(r);
       if (ease <= 0.5) {
@@ -281,8 +286,6 @@ export function computeBoxTransforms(
         continue;
       }
       item.visible = true;
-      // Position the box AT the yard stack at fork height. Compute offset
-      // from its final slot to that yard pickup position.
       const carryY = 0.55 - restY;
       const dx = pickupX - boxWorldX;
       const dz = pickupZ - boxWorldZ;
@@ -290,7 +293,6 @@ export function computeBoxTransforms(
       item.onForklift = true;
       item.scale = 0.95;
     } else if (t < 0.75) {
-      // DRIVE-IN: interpolate from yard pickup to final slot at fork height.
       const r = (t - 0.20) / (0.75 - 0.20);
       const ease = 1 - Math.pow(1 - r, 3);
       item.visible = true;
@@ -301,7 +303,6 @@ export function computeBoxTransforms(
       item.onForklift = true;
       item.scale = 0.95 + 0.05 * ease;
     } else {
-      // SETTLE: at slot, lower from carry height to rest.
       const r = (t - 0.75) / 0.25;
       const ease = easeInOutQuad(r);
       item.visible = true;
@@ -454,6 +455,24 @@ export function stagingForFrame(
   //   driveIn (0.20 - 0.75): forklift drives from yard into the box's slot
   //   settle  (0.75 - 1.00): forks lower, box drops into final position
   const t = (frame - active.startFrame) / Math.max(1, active.endFrame - active.startFrame);
+
+  // If the active item is NOT a pallet (carton, drum, bag, crate), the
+  // forklift sits idle at the staging point — those items are loaded by
+  // hand, not by forklift. Park engine-on, no carry.
+  if (!isPalletBox(pack, active.placedIdx)) {
+    return {
+      doorOpen,
+      forkliftActive: true,
+      forkliftX: startX,
+      forkliftZ: 0,
+      forkliftY: 0.35,
+      headYaw: 0,
+      engineOn: false,
+      reversing: false,
+      carriedBoxIdx: null,
+    };
+  }
+
   const box = pack.placed[active.placedIdx];
   const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
   const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
@@ -679,41 +698,15 @@ async function encodeWithMediaRecorder(
   bitrate = 8_000_000,
 ): Promise<{ blob: Blob; mime: string; ext: "mp4" | "webm" }> {
   const videoStream = canvas.captureStream(fps);
-
-  // Build reverse-beep audio track and mix it into the recorded stream.
-  let audioCtx: AudioContext | null = null;
-  let audioSource: AudioBufferSourceNode | null = null;
-  const tracks: MediaStreamTrack[] = videoStream.getVideoTracks();
-  try {
-    const intervals = reverseGapIntervalsSec(timeline);
-    const engineWin = engineWindowSec(timeline);
-    // Always create the audio track (engine hum runs even with no reverse gaps).
-    if (typeof AudioContext !== "undefined") {
-      audioCtx = new AudioContext();
-      const durationSec = totalFrames / fps;
-      const buffer = buildBeepBuffer(audioCtx, durationSec, intervals, engineWin);
-      const dest = audioCtx.createMediaStreamDestination();
-      audioSource = audioCtx.createBufferSource();
-      audioSource.buffer = buffer;
-      audioSource.connect(dest);
-      dest.stream.getAudioTracks().forEach((t) => tracks.push(t));
-    }
-  } catch (e) {
-    console.warn("Reverse-beep audio unavailable, recording video only:", e);
-  }
-
-  const stream = new MediaStream(tracks);
+  const stream = videoStream;
 
   // Prefer H.264 High profile MP4 for crisper output, then fall back.
+  // No audio track — the user explicitly requested a silent export.
   const candidates = [
-    "video/mp4;codecs=avc1.640028,mp4a.40.2", // H.264 High + AAC
     "video/mp4;codecs=avc1.640028",
-    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
     "video/mp4;codecs=avc1.42E01E",
     "video/mp4",
-    "video/webm;codecs=vp9,opus",
     "video/webm;codecs=vp9",
-    "video/webm;codecs=vp8,opus",
     "video/webm;codecs=vp8",
     "video/webm",
   ];
@@ -726,7 +719,6 @@ async function encodeWithMediaRecorder(
   const recorder = new MediaRecorder(stream, {
     mimeType: mime,
     videoBitsPerSecond: bitrate,
-    audioBitsPerSecond: 96_000,
   });
   const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
@@ -738,10 +730,6 @@ async function encodeWithMediaRecorder(
   });
 
   recorder.start();
-  // Start the audio AT the same moment recording starts so timings align.
-  if (audioSource && audioCtx) {
-    audioSource.start(audioCtx.currentTime);
-  }
 
   const frameDurationMs = 1000 / fps;
   for (let f = 0; f < totalFrames; f++) {
@@ -757,13 +745,6 @@ async function encodeWithMediaRecorder(
   recorder.stop();
   await stopped;
   stream.getTracks().forEach((t) => t.stop());
-  videoStream.getTracks().forEach((t) => t.stop());
-  if (audioSource) {
-    try { audioSource.stop(); } catch { /* already stopped */ }
-  }
-  if (audioCtx) {
-    try { await audioCtx.close(); } catch { /* ignore */ }
-  }
   return { blob: new Blob(chunks, { type: mime }), mime, ext };
 }
 
