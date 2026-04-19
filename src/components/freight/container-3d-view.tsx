@@ -372,6 +372,9 @@ function CargoBox({
   const cz = box.y / MM_PER_M + wm / 2 + (offset?.[2] ?? 0);
   const nonStack = stat && !stat.stackable;
   const fragile = stat?.fragile;
+  const tilted = box.rotated === "sideways" || box.rotated === "axis";
+  // Stripe color encodes rotation type: yellow=sideways turn, magenta=tipped on side.
+  const tiltColor = box.rotated === "axis" ? "#d946ef" : "#facc15";
 
   return (
     <group position={[cx, cy, cz]} scale={scale}>
@@ -392,6 +395,32 @@ function CargoBox({
           <boxGeometry args={[lm * 0.95, 0.01, wm * 0.15]} />
           <meshStandardMaterial color="#dc2626" />
         </mesh>
+      )}
+      {/* Tilt indicator: diagonal stripe on top + small floating badge */}
+      {tilted && (
+        <>
+          <mesh
+            position={[0, hm / 2 + 0.006, 0]}
+            rotation={[0, box.rotated === "axis" ? Math.PI / 4 : Math.PI / 2, 0]}
+          >
+            <boxGeometry args={[Math.min(lm, wm) * 0.9, 0.012, 0.05]} />
+            <meshStandardMaterial color={tiltColor} />
+          </mesh>
+          <Html
+            position={[0, hm / 2 + 0.08, 0]}
+            center
+            distanceFactor={4}
+            occlude
+          >
+            <span
+              className="rounded-full border border-white px-1.5 py-0.5 text-[9px] font-bold text-white shadow"
+              style={{ background: tiltColor, color: "#1a1a1a" }}
+              title={box.rotated === "axis" ? "Tipped on side" : "Rotated sideways"}
+            >
+              {box.rotated === "axis" ? "⤾ TIP" : "↻ TURN"}
+            </span>
+          </Html>
+        </>
       )}
     </group>
   );
