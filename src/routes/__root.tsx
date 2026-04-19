@@ -1,7 +1,5 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
-import { SiteHeader } from "@/components/site/site-header";
-import { SiteFooter } from "@/components/site/site-footer";
 
 import appCss from "../styles.css?url";
 
@@ -16,10 +14,10 @@ function NotFoundComponent() {
         </p>
         <div className="mt-6">
           <Link
-            to="/"
+            to="/freight-intelligence"
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Go home
+            Go to Tools
           </Link>
         </div>
       </div>
@@ -32,22 +30,16 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Astromar Logistics — FTWZ & Freight Solutions, Chennai" },
+      { title: "Freight Intelligence Tools — Astromar Logistics" },
       {
         name: "description",
         content:
-          "Astromar Logistics Pvt Ltd — India's leading Free Trade Warehousing Zone (FTWZ) provider. Freight, customs and warehousing out of Chennai.",
+          "Free freight calculators by Astromar Logistics: CBM, air volume weight, landed cost, export pricing, air vs sea comparison and demurrage.",
       },
-      { name: "author", content: "Astromar Logistics" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
-    links: [
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
+    links: [{ rel: "stylesheet", href: appCss }],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -70,12 +62,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <SiteHeader />
-      <main className="flex-1">
-        <Outlet />
-      </main>
-      <SiteFooter />
+    <div className="min-h-screen bg-background">
+      <Outlet />
       <Toaster richColors position="top-right" />
     </div>
   );
