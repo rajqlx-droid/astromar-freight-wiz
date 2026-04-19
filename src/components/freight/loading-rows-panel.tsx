@@ -18,6 +18,7 @@ import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
   buildRowFrontViewSvg,
   buildRowSideViewSvg,
+  buildRowTopViewSvg,
   buildRows,
   DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD,
   instructionFor,
@@ -129,6 +130,7 @@ export function LoadingRowsPanel({ pack }: Props) {
             : "";
         const doorSvg = buildRowSideViewSvg(row, pack, { width: 200, height: 90 });
         const sideSvg = buildRowFrontViewSvg(row, pack, { width: 200, height: 90 });
+        const topSvg = buildRowTopViewSvg(row, pack, { width: 200, height: 90 });
         return `
           <li class="row">
             <div class="row-head">
@@ -150,6 +152,10 @@ export function LoadingRowsPanel({ pack }: Props) {
                   <div class="view">
                     <div class="view-label">Side view (depth × H)</div>
                     ${sideSvg}
+                  </div>
+                  <div class="view">
+                    <div class="view-label">Top view (W × depth)</div>
+                    ${topSvg}
                   </div>
                 </div>
                 <div class="row-body-text">
