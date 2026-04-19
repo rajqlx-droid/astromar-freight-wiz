@@ -108,3 +108,55 @@ export function itemCountsForRow(row: RowGroup, pack: AdvancedPackResult) {
       packageType: pack.perItem[itemIdx]?.packageType ?? "carton",
     }));
 }
+
+/**
+ * Build a side-view SVG (as a string) for a single row.
+ * View axis: looking down the container length toward the door.
+ * Horizontal = container width, vertical = container height (floor at bottom).
+ *
+ * Returns a complete <svg>...</svg> markup with explicit hex colors so it
+ * works in print HTML (no Tailwind/oklch) and can be rasterised for the PDF.
+ *
+ * Pass `themeColor` to override the outline color (default brand navy).
+ */
+export function buildRowSideViewSvg(
+  row: RowGroup,
+  pack: AdvancedPackResult,
+  opts: { width?: number; height?: number; themeColor?: string } = {},
+): string {
+  const VIEW_W = opts.width ?? 220;
+  const VIEW_H = opts.height ?? 90;
+  const PAD = 4;
+  const innerW = VIEW_W - PAD * 2;
+  const innerH = VIEW_H - PAD * 2;
+  const containerW = pack.container.inner.w;
+  const containerH = pack.container.inner.h;
+  const sx = innerW / containerW;
+  const sy = innerH / containerH;
+  const theme = opts.themeColor ?? "#1B3A6B";
+
+  const boxes = row.boxes
+    .map((b) => {
+      const color = pack.perItem[b.itemIdx]?.color ?? "#888";
+      const x = PAD + b.y * sx;
+      const w = Math.max(b.w * sx, 1);
+      const h = Math.max(b.h * sy, 1);
+      const y = VIEW_H - PAD - (b.z + b.h) * sy;
+      const tilted = b.rotated === "sideways" || b.rotated === "axis";
+      const tilt =
+        tilted && w > 10 && h > 10
+          ? `<text x="${x + w / 2}" y="${y + h / 2 + 3}" font-size="8" font-weight="700" text-anchor="middle" fill="#854d0e">↻</text>`
+          : "";
+      return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" fill-opacity="0.85" stroke="rgba(0,0,0,0.35)" stroke-width="0.5"/>${tilt}`;
+    })
+    .join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEW_W} ${VIEW_H}" width="${VIEW_W}" height="${VIEW_H}" role="img" aria-label="Side view of row ${row.rowIdx + 1}">
+    <rect x="${PAD}" y="${PAD}" width="${innerW}" height="${innerH}" fill="#ffffff" stroke="${theme}" stroke-opacity="0.25" stroke-dasharray="3 3"/>
+    <line x1="${PAD}" y1="${VIEW_H - PAD}" x2="${VIEW_W - PAD}" y2="${VIEW_H - PAD}" stroke="${theme}" stroke-opacity="0.45" stroke-width="1"/>
+    ${boxes}
+    <text x="${PAD + 2}" y="${PAD + 8}" font-size="7" fill="${theme}" fill-opacity="0.5">&#8592; width &#8594;</text>
+    <text x="${PAD + 2}" y="${VIEW_H - PAD - 2}" font-size="7" fill="${theme}" fill-opacity="0.5">floor</text>
+  </svg>`;
+}
+
