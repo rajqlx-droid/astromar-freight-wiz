@@ -332,7 +332,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           const extras: import("@/lib/freight/pdf").PdfExtras = {};
           if (snaps) extras.snapshots = snaps;
           if (pack && pack.placed.length > 0) {
-            const { buildRows, instructionFor, itemCountsForRow, buildRowSideViewSvg, buildRowFrontViewSvg } =
+            const { buildRows, instructionFor, itemCountsForRow, buildRowSideViewSvg, buildRowFrontViewSvg, buildRowTopViewSvg } =
               await import("@/lib/freight/loading-rows");
             const { readHeavyThreshold } = await import("@/components/freight/loading-rows-panel");
             const rows = buildRows(pack, readHeavyThreshold());
@@ -374,9 +374,11 @@ export function CbmCalculator({ items, setItems }: Props) {
               rows.map(async (r) => {
                 const doorSvg = buildRowSideViewSvg(r, pack, { width: 260, height: 104 });
                 const sideSvg = buildRowFrontViewSvg(r, pack, { width: 260, height: 104 });
-                const [sideViewPng, frontViewPng] = await Promise.all([
+                const topSvg = buildRowTopViewSvg(r, pack, { width: 260, height: 104 });
+                const [sideViewPng, frontViewPng, topViewPng] = await Promise.all([
                   svgToPng(doorSvg),
                   svgToPng(sideSvg),
+                  svgToPng(topSvg),
                 ]);
                 return {
                   rowIdx: r.rowIdx,
@@ -394,6 +396,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                   instruction: instructionFor(r),
                   sideViewPng,
                   frontViewPng,
+                  topViewPng,
                 };
               }),
             );
