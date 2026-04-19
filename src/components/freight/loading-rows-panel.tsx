@@ -138,6 +138,11 @@ export function LoadingRowsPanel({ pack }: Props) {
         .chip { display: inline-flex; align-items: center; gap: 5px; background: #f4f6fa; padding: 3px 7px; border-radius: 4px; font-size: 10px; }
         .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
         .instruction { border-left: 2px solid #F97316; padding: 4px 8px; background: #fafbfd; font-size: 11px; color: #1B3A6B; border-radius: 0 4px 4px 0; }
+        .row-body-grid { display: grid; grid-template-columns: 240px 1fr; gap: 12px; align-items: start; }
+        .side-view { display: flex; flex-direction: column; gap: 3px; }
+        .side-view svg { display: block; width: 100%; height: auto; border: 1px solid #d6dde8; border-radius: 4px; background: #fff; }
+        .side-view-label { font-size: 8px; font-weight: 600; color: #777; letter-spacing: 0.4px; text-transform: uppercase; }
+        .row-body-text { display: flex; flex-direction: column; gap: 6px; }
         .footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #d6dde8; color: #777; font-size: 9px; }
       </style></head><body>
       <h1>Loading Checklist — Row by Row</h1>
