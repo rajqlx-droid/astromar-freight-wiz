@@ -1099,10 +1099,6 @@ function CargoBox({
   return (
     <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && <WoodenPallet lm={lm} wm={wm} />}
-
-  return (
-    <group position={[cx, cy + palletLift, cz]} scale={scale}>
-      {onFloor && <WoodenPallet lm={lm} wm={wm} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[Math.max(lm, wm) * 0.55, Math.max(lm, wm) * 0.7, 32]} />
