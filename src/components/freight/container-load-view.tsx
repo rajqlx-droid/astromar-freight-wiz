@@ -372,14 +372,15 @@ function SinglePlanBody({
                 stepMode={stepMode}
                 onToggleStepMode={() => {
                   setStepMode((v) => !v);
-                  setStepIdx(0);
+                  setStepIdx(-1); // start EMPTY so user can inspect floor first
                 }}
                 stepIdx={stepIdx}
                 totalRows={rows.length}
-                onPrev={() => setStepIdx((i) => Math.max(0, i - 1))}
+                onPrev={() => setStepIdx((i) => Math.max(-1, i - 1))}
                 onNext={() => setStepIdx((i) => Math.min(rows.length - 1, i + 1))}
-                onReset={() => setStepIdx(0)}
+                onReset={() => setStepIdx(-1)}
                 canStep={canStep}
+                atEmpty={atEmpty}
                 atFirst={atFirst}
                 atLast={atLast}
               />
@@ -414,7 +415,8 @@ function RowStepperBar({
   onNext,
   onReset,
   canStep,
-  atFirst,
+  atEmpty,
+  atFirst: _atFirst,
   atLast,
 }: {
   stepMode: boolean;
@@ -425,62 +427,94 @@ function RowStepperBar({
   onNext: () => void;
   onReset: () => void;
   canStep: boolean;
+  atEmpty: boolean;
   atFirst: boolean;
   atLast: boolean;
 }) {
+  const nextRowNum = Math.min(totalRows, stepIdx + 2); // 1-indexed for label
+  const statusLabel = atEmpty
+    ? "Empty container — inspect floor & back wall"
+    : `Loaded ${stepIdx + 1} of ${totalRows} rows · back wall → door`;
+
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-2">
-      <Button
-        type="button"
-        size="sm"
-        variant={stepMode ? "default" : "outline"}
-        onClick={onToggleStepMode}
-        className={cn(
-          "h-7 rounded-full px-3 text-[11px]",
-          stepMode
-            ? "bg-brand-navy text-white hover:bg-brand-navy/90"
-            : "border-brand-navy/30 text-brand-navy hover:bg-brand-navy/10",
+    <div className="mt-3 space-y-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={stepMode ? "default" : "outline"}
+          onClick={onToggleStepMode}
+          className={cn(
+            "h-7 rounded-full px-3 text-[11px]",
+            stepMode
+              ? "bg-brand-navy text-white hover:bg-brand-navy/90"
+              : "border-brand-navy/30 text-brand-navy hover:bg-brand-navy/10",
+          )}
+        >
+          <Layers className="size-3" />
+          {stepMode ? "Step-load mode ON" : "Step-load mode"}
+        </Button>
+
+        {stepMode && (
+          <>
+            <span className="text-[11px] font-medium text-muted-foreground">
+              {statusLabel}
+            </span>
+
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onReset}
+                disabled={!canStep || atEmpty}
+                className="h-7 px-2 text-[11px]"
+                aria-label="Empty the container"
+                title="Remove all rows — start over from empty container"
+              >
+                Empty
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onPrev}
+                disabled={!canStep || atEmpty}
+                className="h-7 px-2 text-[11px]"
+                aria-label="Unload last row"
+                title="Unload the last row (undo)"
+              >
+                <ChevronLeft className="size-3" /> Unload
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={atLast ? onReset : onNext}
+                disabled={!canStep}
+                className="h-7 bg-brand-navy px-2 text-[11px] text-white hover:bg-brand-navy/90"
+                aria-label={atLast ? "Reset to empty" : `Load row ${nextRowNum}`}
+                title={atLast ? "All rows loaded — click to reset" : `Load row ${nextRowNum} of ${totalRows}`}
+              >
+                {atLast ? (
+                  "Reset"
+                ) : (
+                  <>
+                    Load row {nextRowNum} <ChevronRight className="size-3" />
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
         )}
-      >
-        <Layers className="size-3" />
-        {stepMode ? "Stepping rows" : "Step rows manually"}
-      </Button>
-
+      </div>
       {stepMode && (
-        <>
-          <span className="text-[11px] font-medium text-muted-foreground">
-            Row {stepIdx + 1} of {totalRows}{" "}
-            <span className="hidden sm:inline">· back wall → door</span>
-          </span>
-
-          <div className="ml-auto flex items-center gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={onPrev}
-              disabled={!canStep || atFirst}
-              className="h-7 px-2 text-[11px]"
-              aria-label="Previous row"
-            >
-              <ChevronLeft className="size-3" /> Prev
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={atLast ? onReset : onNext}
-              disabled={!canStep}
-              className="h-7 bg-brand-navy px-2 text-[11px] text-white hover:bg-brand-navy/90"
-              aria-label={atLast ? "Reset stepper" : "Next row"}
-            >
-              {atLast ? "Reset" : (
-                <>
-                  Next <ChevronRight className="size-3" />
-                </>
-              )}
-            </Button>
-          </div>
-        </>
+        <p className="text-[10px] leading-snug text-muted-foreground">
+          {atEmpty
+            ? "Container is empty. Click 'Load row 1' to place the back-wall row, then inspect for floor/wall gaps before continuing."
+            : atLast
+              ? "All rows loaded. Use 'Unload' to step back, or 'Reset' to empty."
+              : "Inspect this row for gaps against the wall and floor, then load the next row."}
+        </p>
       )}
     </div>
   );
