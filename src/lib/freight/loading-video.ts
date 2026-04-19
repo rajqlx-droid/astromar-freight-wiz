@@ -455,6 +455,24 @@ export function stagingForFrame(
   //   driveIn (0.20 - 0.75): forklift drives from yard into the box's slot
   //   settle  (0.75 - 1.00): forks lower, box drops into final position
   const t = (frame - active.startFrame) / Math.max(1, active.endFrame - active.startFrame);
+
+  // If the active item is NOT a pallet (carton, drum, bag, crate), the
+  // forklift sits idle at the staging point — those items are loaded by
+  // hand, not by forklift. Park engine-on, no carry.
+  if (!isPalletBox(pack, active.placedIdx)) {
+    return {
+      doorOpen,
+      forkliftActive: true,
+      forkliftX: startX,
+      forkliftZ: 0,
+      forkliftY: 0.35,
+      headYaw: 0,
+      engineOn: false,
+      reversing: false,
+      carriedBoxIdx: null,
+    };
+  }
+
   const box = pack.placed[active.placedIdx];
   const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
   const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
