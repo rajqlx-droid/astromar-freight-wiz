@@ -22,6 +22,7 @@ import {
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
+import { LoadingVideoButton } from "./loading-video-button";
 import type { Container3DHandle } from "./container-3d-view";
 
 // Lazy 3D view — keeps initial bundle light and avoids SSR.
