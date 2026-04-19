@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Calculator,
@@ -34,8 +34,15 @@ import { LandedCalculator } from "@/components/freight/landed-calculator";
 import { ExportCalculator } from "@/components/freight/export-calculator";
 import { CompareCalculator } from "@/components/freight/compare-calculator";
 import { RiskCalculator } from "@/components/freight/risk-calculator";
+import { MobileResultBar } from "@/components/freight/mobile-result-bar";
 import { CALCULATORS, type CalcKey } from "@/lib/freight/types";
 import {
+  calcAir,
+  calcCbm,
+  calcCompare,
+  calcExport,
+  calcLanded,
+  calcRisk,
   emptyAirItem,
   emptyCbmItem,
   type AirItem,
