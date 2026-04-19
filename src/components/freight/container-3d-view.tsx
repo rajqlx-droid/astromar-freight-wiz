@@ -416,42 +416,108 @@ function SceneContents({
 }
 
 function ContainerShell({ Cm }: { Cm: { l: number; w: number; h: number } }) {
-  // Centered at origin.
+  // Real container: corrugated steel walls, plywood floor, painted steel frame.
+  // Door is at +x (open), so rear wall is at -x. We render a 3-walls + roof
+  // silhouette so the camera can always see inside through the door.
+  const wallColor = "#2c4a6b";
+
+  const plywoodTex = useMemo(() => {
+    const t = makePlywoodTexture();
+    t.repeat.set(Math.max(2, Cm.l / 1.2), Math.max(2, Cm.w / 1.2));
+    return t;
+  }, [Cm.l, Cm.w]);
+
+  const wallTexX = useMemo(() => {
+    const t = makeCorrugatedTexture(wallColor);
+    t.repeat.set(Math.max(4, Cm.l / 0.3), Math.max(2, Cm.h / 1.5));
+    return t;
+  }, [Cm.l, Cm.h]);
+  const wallTexZ = useMemo(() => {
+    const t = makeCorrugatedTexture(wallColor);
+    t.repeat.set(Math.max(2, Cm.w / 0.3), Math.max(2, Cm.h / 1.5));
+    return t;
+  }, [Cm.w, Cm.h]);
+
+  const FRAME = "#1a2433";
+  const frameThk = 0.06;
+
+  const corners: Array<[number, number]> = [
+    [-Cm.l / 2, -Cm.w / 2],
+    [-Cm.l / 2, Cm.w / 2],
+    [Cm.l / 2, -Cm.w / 2],
+    [Cm.l / 2, Cm.w / 2],
+  ];
+
   return (
     <group>
-      {/* Floor — solid */}
-      <mesh receiveShadow position={[0, -0.005, 0]}>
-        <boxGeometry args={[Cm.l, 0.01, Cm.w]} />
-        <meshStandardMaterial color="#cbd5e1" />
-      </mesh>
-
-      {/* Translucent walls */}
-      <mesh position={[0, Cm.h / 2, -Cm.w / 2]}>
-        <boxGeometry args={[Cm.l, Cm.h, 0.02]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.18} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-      <mesh position={[-Cm.l / 2, Cm.h / 2, 0]}>
-        <boxGeometry args={[0.02, Cm.h, Cm.w]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.18} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-      <mesh position={[Cm.l / 2, Cm.h / 2, 0]}>
-        <boxGeometry args={[0.02, Cm.h, Cm.w]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.10} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-      <mesh position={[0, Cm.h / 2, Cm.w / 2]}>
-        <boxGeometry args={[Cm.l, Cm.h, 0.02]} />
-        <meshStandardMaterial color="#60a5fa" transparent opacity={0.08} />
-        <Edges color="#1B3A6B" />
-      </mesh>
-
-      {/* Top frame edges */}
-      <mesh position={[0, Cm.h, 0]}>
+      {/* Plywood floor */}
+      <mesh receiveShadow position={[0, 0.01, 0]}>
         <boxGeometry args={[Cm.l, 0.02, Cm.w]} />
-        <meshStandardMaterial color="#1B3A6B" transparent opacity={0.08} />
-        <Edges color="#1B3A6B" />
+        <meshStandardMaterial map={plywoodTex} roughness={0.85} />
+      </mesh>
+
+      {/* Back wall (-x) — solid corrugated */}
+      <mesh receiveShadow castShadow position={[-Cm.l / 2, Cm.h / 2, 0]}>
+        <boxGeometry args={[0.05, Cm.h, Cm.w]} />
+        <meshStandardMaterial map={wallTexZ} roughness={0.7} metalness={0.2} />
+      </mesh>
+
+      {/* Left side wall (-z) — solid corrugated */}
+      <mesh receiveShadow position={[0, Cm.h / 2, -Cm.w / 2]}>
+        <boxGeometry args={[Cm.l, Cm.h, 0.05]} />
+        <meshStandardMaterial map={wallTexX} roughness={0.7} metalness={0.2} />
+      </mesh>
+
+      {/* Right side wall (+z) — translucent so the camera can see inside */}
+      <mesh position={[0, Cm.h / 2, Cm.w / 2]}>
+        <boxGeometry args={[Cm.l, Cm.h, 0.04]} />
+        <meshStandardMaterial
+          map={wallTexX}
+          roughness={0.7}
+          metalness={0.2}
+          transparent
+          opacity={0.18}
+        />
+      </mesh>
+
+      {/* Roof — translucent */}
+      <mesh position={[0, Cm.h, 0]}>
+        <boxGeometry args={[Cm.l, 0.04, Cm.w]} />
+        <meshStandardMaterial color={wallColor} transparent opacity={0.12} />
+      </mesh>
+
+      {/* Steel corner posts (the iconic container silhouette) */}
+      {corners.map(([x, z], i) => (
+        <mesh key={`post-${i}`} castShadow position={[x, Cm.h / 2, z]}>
+          <boxGeometry args={[frameThk, Cm.h + 0.06, frameThk]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Top length rails */}
+      {[-Cm.w / 2, Cm.w / 2].map((z, i) => (
+        <mesh key={`top-l-${i}`} position={[0, Cm.h, z]}>
+          <boxGeometry args={[Cm.l + 0.06, frameThk, frameThk]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Top width rails */}
+      {[-Cm.l / 2, Cm.l / 2].map((x, i) => (
+        <mesh key={`top-w-${i}`} position={[x, Cm.h, 0]}>
+          <boxGeometry args={[frameThk, frameThk, Cm.w + 0.06]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Bottom length rails */}
+      {[-Cm.w / 2, Cm.w / 2].map((z, i) => (
+        <mesh key={`bot-l-${i}`} position={[0, 0, z]}>
+          <boxGeometry args={[Cm.l + 0.06, frameThk, frameThk]} />
+          <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
+        </mesh>
+      ))}
+      {/* Door header above the open door (+x) */}
+      <mesh position={[Cm.l / 2, Cm.h - 0.08, 0]}>
+        <boxGeometry args={[0.08, 0.16, Cm.w]} />
+        <meshStandardMaterial color={FRAME} roughness={0.5} metalness={0.6} />
       </mesh>
     </group>
   );
