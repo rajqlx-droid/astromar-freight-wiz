@@ -83,22 +83,29 @@ export interface GeneratedVideo {
  */
 function loadingOrder(pack: AdvancedPackResult): number[] {
   const idx = pack.placed.map((_, i) => i);
+  // Bucket boxes by depth slab (~600 mm) so we finish a back-wall column
+  // (back→top) before moving the column toward the door.
+  const SLAB_MM = 600;
   idx.sort((a, b) => {
     const A = pack.placed[a];
     const B = pack.placed[b];
     const sa = pack.perItem[A.itemIdx];
     const sb = pack.perItem[B.itemIdx];
 
-    // Fragile last
+    // Fragile last (always loaded on top, very end)
     if (!!sa?.fragile !== !!sb?.fragile) return sa?.fragile ? 1 : -1;
-    // Non-stackable last (loaded near door / top)
+    // Non-stackable last (loaded near door / top of stack)
     if (sa?.stackable !== sb?.stackable) return sa?.stackable ? -1 : 1;
-    // Bottom first (lower z = z is "up" in scene; PlacedBox.z is up)
+
+    // Back wall → door: bucket by x slab so we don't ping-pong along the length
+    const slabA = Math.floor(A.x / SLAB_MM);
+    const slabB = Math.floor(B.x / SLAB_MM);
+    if (slabA !== slabB) return slabA - slabB;
+
+    // Within a slab: side-to-side first (lower y), then bottom-to-top (lower z)
+    if (A.y !== B.y) return A.y - B.y;
     if (A.z !== B.z) return A.z - B.z;
-    // Back to front (lower x first; x runs from rear to door)
-    if (A.x !== B.x) return A.x - B.x;
-    // Then by y (depth)
-    return A.y - B.y;
+    return A.x - B.x;
   });
   return idx;
 }
