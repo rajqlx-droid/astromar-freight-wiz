@@ -242,6 +242,7 @@ function SinglePlanBody({
   mounted,
   view3DRef,
   isActive,
+  rollup,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -251,6 +252,7 @@ function SinglePlanBody({
   mounted: boolean;
   view3DRef: React.MutableRefObject<Container3DHandle | null>;
   isActive: boolean;
+  rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
 }) {
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
@@ -277,7 +279,7 @@ function SinglePlanBody({
           Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
         </p>
       </div>
-      <LoadReportPanel pack={pack} />
+      <LoadReportPanel pack={pack} rollup={rollup} />
     </div>
   );
 }
