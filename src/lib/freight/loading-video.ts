@@ -685,23 +685,154 @@ function engineWindowSec(timeline: Timeline): [number, number] {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Encoder                                                                   */
+/*  Encoder — WebCodecs fast path + MediaRecorder fallback                    */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * FAST PATH: WebCodecs VideoEncoder. We render frames as fast as the GPU can
+ * draw them and stamp each VideoFrame with an explicit timestamp at 1/fps
+ * intervals. Playback duration = totalFrames / fps regardless of how long
+ * encoding actually took. Typically 3-5× faster than real-time MediaRecorder.
+ *
+ * Outputs a fragmented MP4 via a tiny inline muxer.
+ */
+async function encodeWithWebCodecs(
+  canvas: HTMLCanvasElement,
+  fps: number,
+  totalFrames: number,
+  driveFrame: (n: number) => Promise<void>,
+  width: number,
+  height: number,
+  onProgress?: (n: number, total: number) => void,
+  bitrate = 8_000_000,
+): Promise<{ blob: Blob; mime: string; ext: "mp4" | "webm" } | null> {
+  // Feature detect
+  if (typeof (globalThis as any).VideoEncoder === "undefined") return null;
+  if (typeof (globalThis as any).VideoFrame === "undefined") return null;
+
+  // Try H.264 first (broadest playback compatibility), then VP9 webm.
+  type Cfg = { codec: string; container: "mp4" | "webm"; mime: string };
+  const configs: Cfg[] = [
+    { codec: "avc1.640028", container: "mp4", mime: "video/mp4" },
+    { codec: "avc1.42E01E", container: "mp4", mime: "video/mp4" },
+    { codec: "vp09.00.10.08", container: "webm", mime: "video/webm" },
+    { codec: "vp8", container: "webm", mime: "video/webm" },
+  ];
+
+  // Dynamically import muxers so we don't bloat the main bundle if WebCodecs
+  // isn't supported. We try mp4-muxer first, then webm-muxer.
+  let chosen: Cfg | null = null;
+  let supportedCfg: VideoEncoderConfig | null = null;
+  for (const c of configs) {
+    try {
+      const cfg: VideoEncoderConfig = {
+        codec: c.codec,
+        width,
+        height,
+        bitrate,
+        framerate: fps,
+        avc: c.codec.startsWith("avc1") ? { format: "avc" } : undefined,
+      } as VideoEncoderConfig;
+      const support = await (globalThis as any).VideoEncoder.isConfigSupported(cfg);
+      if (support?.supported) {
+        chosen = c;
+        supportedCfg = support.config ?? cfg;
+        break;
+      }
+    } catch {
+      /* try next */
+    }
+  }
+  if (!chosen || !supportedCfg) return null;
+
+  // Lazy-load the appropriate muxer.
+  let Muxer: any;
+  let ArrayBufferTarget: any;
+  try {
+    if (chosen.container === "mp4") {
+      const m = await import("mp4-muxer");
+      Muxer = m.Muxer;
+      ArrayBufferTarget = m.ArrayBufferTarget;
+    } else {
+      const m = await import("webm-muxer");
+      Muxer = m.Muxer;
+      ArrayBufferTarget = m.ArrayBufferTarget;
+    }
+  } catch {
+    return null; // muxer not installed → fall back
+  }
+
+  const target = new ArrayBufferTarget();
+  const muxer =
+    chosen.container === "mp4"
+      ? new Muxer({
+          target,
+          video: {
+            codec: chosen.codec.startsWith("avc1") ? "avc" : "vp9",
+            width,
+            height,
+            frameRate: fps,
+          },
+          fastStart: "in-memory",
+        })
+      : new Muxer({
+          target,
+          video: {
+            codec: chosen.codec === "vp8" ? "V_VP8" : "V_VP9",
+            width,
+            height,
+            frameRate: fps,
+          },
+        });
+
+  const encoder = new (globalThis as any).VideoEncoder({
+    output: (chunk: EncodedVideoChunk, meta: any) => muxer.addVideoChunk(chunk, meta),
+    error: (e: Error) => console.error("VideoEncoder error", e),
+  });
+  encoder.configure(supportedCfg);
+
+  const frameDurationUs = Math.round(1_000_000 / fps);
+  // Keyframe every ~2 seconds for seekable output.
+  const keyframeEvery = Math.max(1, fps * 2);
+
+  for (let f = 0; f < totalFrames; f++) {
+    await driveFrame(f);
+    // Build a VideoFrame from the canvas with an explicit timestamp so
+    // playback length = totalFrames / fps, regardless of wall-clock encode time.
+    const vf = new (globalThis as any).VideoFrame(canvas, {
+      timestamp: f * frameDurationUs,
+      duration: frameDurationUs,
+    });
+    encoder.encode(vf, { keyFrame: f % keyframeEvery === 0 });
+    vf.close();
+    onProgress?.(f + 1, totalFrames);
+    // Backpressure: if the encoder queue grows, yield so it can drain.
+    if (encoder.encodeQueueSize > 4) {
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  await encoder.flush();
+  encoder.close();
+  muxer.finalize();
+
+  const buffer = target.buffer as ArrayBuffer;
+  const blob = new Blob([buffer], { type: chosen.mime });
+  return { blob, mime: chosen.mime, ext: chosen.container };
+}
 
 async function encodeWithMediaRecorder(
   canvas: HTMLCanvasElement,
   fps: number,
   totalFrames: number,
   driveFrame: (n: number) => Promise<void>,
-  timeline: Timeline,
+  _timeline: Timeline,
   onProgress?: (n: number, total: number) => void,
   bitrate = 8_000_000,
 ): Promise<{ blob: Blob; mime: string; ext: "mp4" | "webm" }> {
   const videoStream = canvas.captureStream(fps);
   const stream = videoStream;
 
-  // Prefer H.264 High profile MP4 for crisper output, then fall back.
-  // No audio track — the user explicitly requested a silent export.
   const candidates = [
     "video/mp4;codecs=avc1.640028",
     "video/mp4;codecs=avc1.42E01E",
@@ -736,7 +867,6 @@ async function encodeWithMediaRecorder(
     const frameStart = performance.now();
     await driveFrame(f);
     onProgress?.(f + 1, totalFrames);
-    // Pace to real-time so MediaRecorder samples at the intended FPS.
     const elapsed = performance.now() - frameStart;
     const wait = Math.max(0, frameDurationMs - elapsed);
     await new Promise((r) => setTimeout(r, wait));
@@ -767,7 +897,6 @@ export async function generateLoadingVideo(
   const driveFrame = async (frame: number) => {
     opts.controls.applyFrame(frameInfo(timeline, frame));
     opts.controls.render();
-    // Wait one rAF so the browser composites the canvas before stream samples.
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
   };
 
@@ -776,6 +905,24 @@ export async function generateLoadingVideo(
     throw new Error("3D canvas not available — open the 3D view before recording.");
   }
 
+  const bitrate = opts.videoBitsPerSecond ?? 8_000_000;
+
+  // FAST PATH: WebCodecs (Chrome, Edge, Safari 16.4+). 3-5× faster than realtime.
+  const fast = await encodeWithWebCodecs(
+    canvas,
+    fps,
+    timeline.totalFrames,
+    driveFrame,
+    opts.width,
+    opts.height,
+    opts.onProgress,
+    bitrate,
+  );
+  if (fast) {
+    return { ...fast, timeline: timelineMeta };
+  }
+
+  // FALLBACK: real-time MediaRecorder (Firefox, older Safari).
   const { blob, mime, ext } = await encodeWithMediaRecorder(
     canvas,
     fps,
@@ -783,7 +930,7 @@ export async function generateLoadingVideo(
     driveFrame,
     timeline,
     opts.onProgress,
-    opts.videoBitsPerSecond ?? 8_000_000,
+    bitrate,
   );
 
   return { blob, mime, ext, timeline: timelineMeta };
