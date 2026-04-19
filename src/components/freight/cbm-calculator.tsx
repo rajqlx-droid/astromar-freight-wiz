@@ -160,9 +160,13 @@ export function CbmCalculator({ items, setItems }: Props) {
   };
 
   const inputsTable = items.flatMap((it, idx) => {
+    const itemCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
+    const itemWt = it.qty * it.weight;
     const rows = [
       { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
-      { label: `Item ${idx + 1} Qty / Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
+      { label: `Item ${idx + 1} Qty / Unit Wt`, value: `${it.qty} pcs / ${it.weight} kg` },
+      { label: `Item ${idx + 1} Subtotal CBM`, value: `${itemCbm.toFixed(4)} m³` },
+      { label: `Item ${idx + 1} Subtotal Weight`, value: `${itemWt.toFixed(2)} kg` },
     ];
     if (it.packingConfirmed) {
       rows.push({ label: `Item ${idx + 1} Packing`, value: buildSummary(it) });
