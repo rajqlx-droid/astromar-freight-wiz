@@ -459,12 +459,16 @@ function SceneContents({
         ref={controlsRef}
         target={target}
         enablePan
-        enabled={!recording}
+        enabled={!recording && !followCam}
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
 
+      {/* Follow camera — drives camera & target every frame when active */}
+      {followCam && !recording && (
+        <FollowCam Cm={Cm} activeBox={activeBox} />
+      )}
       {/* Tarmac ground extending past the container — sells the "real yard" */}
       <mesh
         receiveShadow
