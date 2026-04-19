@@ -1,26 +1,34 @@
-import { useMemo, useState } from "react";
-import { Package, Boxes } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Package, Boxes, Box as BoxIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import {
   CONTAINERS,
   ITEM_COLORS,
-  packContainer,
   pickOptimalContainer,
   splitMultiContainer,
   totalCbm,
   totalQty,
   totalWeight,
   type ContainerPreset,
-  type PackResult,
   type PlacedBox,
 } from "@/lib/freight/packing";
+import { packContainerAdvanced, type AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { CbmItem } from "@/lib/freight/calculators";
+import { LoadReportPanel } from "./load-report-panel";
+import { LoadingSequence } from "./loading-sequence";
+import type { Container3DHandle } from "./container-3d-view";
+
+// Lazy 3D view — keeps initial bundle light and avoids SSR.
+const Container3DView = lazy(() =>
+  import("./container-3d-view").then((m) => ({ default: m.Container3DView })),
+);
 
 interface Props {
   items: CbmItem[];
+  /** Expose snapshot capture so parent (PDF flow) can grab 3 angles. */
+  onReady?: (handle: { capture: () => Promise<{ iso: string; front: string; side: string } | null> }) => void;
 }
 
 type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
@@ -28,8 +36,15 @@ type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = Math.sin(Math.PI / 6);
 
-export function ContainerLoadView({ items }: Props) {
+export function ContainerLoadView({ items, onReady }: Props) {
   const [choice, setChoice] = useState<ContainerChoice>("auto");
+  const [is3D, setIs3D] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const view3DRef = useRef<Container3DHandle | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const cargoCbm = useMemo(() => totalCbm(items), [items]);
   const cargoWeight = useMemo(() => totalWeight(items), [items]);
@@ -37,17 +52,14 @@ export function ContainerLoadView({ items }: Props) {
 
   const hasCargo = cargoCbm > 0 && cargoQty > 0;
 
-  const autoContainer = useMemo(
-    () => pickOptimalContainer(cargoCbm),
-    [cargoCbm],
-  );
+  const autoContainer = useMemo(() => pickOptimalContainer(cargoCbm), [cargoCbm]);
   const activeContainer: ContainerPreset =
     choice === "auto"
       ? autoContainer
       : CONTAINERS.find((c) => c.id === choice) ?? autoContainer;
 
   const pack = useMemo(
-    () => packContainer(items, activeContainer),
+    () => packContainerAdvanced(items, activeContainer),
     [items, activeContainer],
   );
 
@@ -57,55 +69,99 @@ export function ContainerLoadView({ items }: Props) {
     [needsMulti, cargoCbm],
   );
 
+  // Expose snapshot capability to parent.
+  useEffect(() => {
+    if (!onReady) return;
+    onReady({
+      capture: async () => {
+        if (!is3D || !view3DRef.current) return null;
+        try {
+          return await view3DRef.current.captureAngles();
+        } catch {
+          return null;
+        }
+      },
+    });
+  }, [onReady, is3D]);
+
   return (
     <Card
       className="border-2 p-4 sm:p-5"
-      style={{
-        borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)",
-      }}
+      style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)" }}
     >
       <div className="mb-4 flex items-center gap-2">
         <Boxes className="size-5 text-brand-navy" />
-        <h3 className="text-base font-semibold text-brand-navy">
-          Container Load Optimizer
-        </h3>
+        <h3 className="text-base font-semibold text-brand-navy">Container Load Optimizer</h3>
         <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Indicative
         </span>
       </div>
 
-      {/* Container switcher pills */}
-      <div className="mb-4 flex flex-wrap gap-1.5">
+      {/* Container switcher pills + 2D/3D toggle */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
         <PillButton active={choice === "auto"} onClick={() => setChoice("auto")}>
           Auto · {autoContainer.name}
         </PillButton>
         {CONTAINERS.map((c) => (
-          <PillButton
-            key={c.id}
-            active={choice === c.id}
-            onClick={() => setChoice(c.id)}
-          >
+          <PillButton key={c.id} active={choice === c.id} onClick={() => setChoice(c.id)}>
             {c.name}
           </PillButton>
         ))}
+        <div className="ml-auto flex rounded-full border border-brand-navy/30 p-0.5">
+          <button
+            type="button"
+            onClick={() => setIs3D(false)}
+            className={cn(
+              "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+              !is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
+            )}
+          >
+            2D
+          </button>
+          <button
+            type="button"
+            onClick={() => setIs3D(true)}
+            className={cn(
+              "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
+              is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
+            )}
+          >
+            <BoxIcon className="size-3" /> 3D
+          </button>
+        </div>
       </div>
 
       {!hasCargo ? (
         <EmptyState />
       ) : (
-        <>
-          <StatsBar pack={pack} weight={cargoWeight} qty={cargoQty} />
-          <div className="mt-4 overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
-            <IsoContainer pack={pack} />
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+          <div className="space-y-3">
+            <StatsBar pack={pack} weight={cargoWeight} qty={cargoQty} />
+            <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
+              {is3D && mounted ? (
+                <Suspense
+                  fallback={
+                    <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
+                      Loading 3D viewer…
+                    </div>
+                  }
+                >
+                  <Container3DView ref={view3DRef} pack={pack} />
+                </Suspense>
+              ) : (
+                <IsoContainer pack={pack} />
+              )}
+            </div>
+            <Legend items={items} />
+            <LoadingSequence pack={pack} />
+            {needsMulti && multiPlan && <MultiPlan plan={multiPlan} />}
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Indicative loading pattern based on stowable capacity (30 / 60 / 70 m³ for 20ft / 40ft / 40ft HC).
+              Actual stow depends on weight distribution, carton orientation, and dunnage.
+            </p>
           </div>
-          <Legend items={items} />
-          {needsMulti && multiPlan && <MultiPlan plan={multiPlan} />}
-          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-            Indicative loading pattern based on stowable capacity (30 / 60 / 70 m³
-            for 20ft / 40ft / 40ft HC). Actual stow depends on weight distribution,
-            carton orientation, and dunnage.
-          </p>
-        </>
+          <LoadReportPanel pack={pack} />
+        </div>
       )}
     </Card>
   );
@@ -145,17 +201,12 @@ function StatsBar({
   weight,
   qty,
 }: {
-  pack: PackResult;
+  pack: AdvancedPackResult;
   weight: number;
   qty: number;
 }) {
   const util = Math.min(100, pack.utilizationPct);
-  const utilColor =
-    util < 80
-      ? "bg-emerald-500"
-      : util < 95
-        ? "bg-amber-500"
-        : "bg-rose-500";
+  const utilColor = util < 80 ? "bg-emerald-500" : util < 95 ? "bg-amber-500" : "bg-rose-500";
 
   return (
     <div className="grid gap-3 sm:grid-cols-4">
@@ -163,25 +214,18 @@ function StatsBar({
         <div className="flex items-baseline justify-between text-xs">
           <span className="font-medium text-muted-foreground">Used volume</span>
           <span className="font-semibold text-brand-navy">
-            {pack.cargoCbm.toFixed(2)} / {pack.container.capCbm} m³ ·{" "}
-            {util.toFixed(0)}%
+            {pack.cargoCbm.toFixed(2)} / {pack.container.capCbm} m³ · {util.toFixed(0)}%
           </span>
         </div>
         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn("h-full transition-all", utilColor)}
-            style={{ width: `${util}%` }}
-          />
+          <div className={cn("h-full transition-all", utilColor)} style={{ width: `${util}%` }} />
         </div>
       </div>
       <Stat
         label="Weight"
         value={`${weight.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
       />
-      <Stat
-        label="Packages loaded"
-        value={`${pack.placedCartons} / ${pack.totalCartons}`}
-      />
+      <Stat label="Packages loaded" value={`${pack.placedCartons} / ${pack.totalCartons}`} />
     </div>
   );
 }
@@ -217,7 +261,7 @@ function Legend({ items }: { items: CbmItem[] }) {
   );
   if (visible.length === 0) return null;
   return (
-    <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+    <div className="grid gap-1.5 sm:grid-cols-2">
       {visible.map((it, idx) => {
         const origIdx = items.indexOf(it);
         const color = ITEM_COLORS[origIdx % ITEM_COLORS.length];
@@ -243,13 +287,9 @@ function Legend({ items }: { items: CbmItem[] }) {
   );
 }
 
-function MultiPlan({
-  plan,
-}: {
-  plan: ReturnType<typeof splitMultiContainer>;
-}) {
+function MultiPlan({ plan }: { plan: ReturnType<typeof splitMultiContainer> }) {
   return (
-    <div className="mt-4 rounded-lg border border-amber-300/50 bg-amber-50 p-3 dark:bg-amber-950/20">
+    <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 dark:bg-amber-950/20">
       <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-900 dark:text-amber-200">
         <Boxes className="size-4" />
         Multi-container plan ({plan.totalCbm.toFixed(2)} m³ total)
@@ -273,24 +313,15 @@ function MultiPlan({
   );
 }
 
-/* ---------------- Isometric SVG ---------------- */
+/* ---------------- Isometric SVG (2D fallback) ---------------- */
 
-function IsoContainer({ pack }: { pack: PackResult }) {
+function IsoContainer({ pack }: { pack: AdvancedPackResult }) {
   const C = pack.container.inner;
-
-  // Fit container into a viewBox. Use mm directly, scale via viewBox.
-  // Iso projection: x' = x - z·cos30, y' = y - z·sin30 (we treat container "z" = depth/width).
-  // Mapping to 3 axes:
-  //   container length (l)  -> screen X+ (rightwards)
-  //   container height (h)  -> screen Y- (upwards)
-  //   container width  (w)  -> goes back into screen (iso)
-  // Project a 3D point (X = length, Y = height, Z = width).
   const project = (X: number, Y: number, Z: number) => ({
     x: X + Z * COS30,
     y: -Y + Z * SIN30,
   });
 
-  // Compute viewBox bounds based on 8 corners of container.
   const corners = [
     project(0, 0, 0),
     project(C.l, 0, 0),
@@ -311,7 +342,6 @@ function IsoContainer({ pack }: { pack: PackResult }) {
   const vbW = maxX - minX + pad * 2;
   const vbH = maxY - minY + pad * 2;
 
-  // Container wireframe edges (open-top: no top face).
   const cFloor = [
     project(0, 0, 0),
     project(C.l, 0, 0),
@@ -334,10 +364,7 @@ function IsoContainer({ pack }: { pack: PackResult }) {
   const polyToStr = (pts: { x: number; y: number }[]) =>
     pts.map((p) => `${p.x},${p.y}`).join(" ");
 
-  // Sort placed boxes back-to-front for painter's algorithm.
-  // Boxes farther back (higher z), more to the left (lower x), and lower (lower y) drawn first.
   const sorted = [...pack.placed].sort((a, b) => {
-    // Back boxes first → larger (y + z) drawn first; then larger z, then smaller x.
     const da = a.z + a.x * 0.001 - a.y * 0.001;
     const db = b.z + b.x * 0.001 - b.y * 0.001;
     return db - da;
@@ -351,21 +378,18 @@ function IsoContainer({ pack }: { pack: PackResult }) {
       role="img"
       aria-label={`Container loading visualisation: ${pack.container.name}`}
     >
-      {/* Floor */}
       <polygon
         points={polyToStr(cFloor)}
         fill="oklch(0.95 0.01 240)"
         stroke="oklch(0.55 0.02 240)"
         strokeWidth={20}
       />
-      {/* Back wall */}
       <polygon
         points={polyToStr(cBack)}
         fill="oklch(0.92 0.01 240)"
         stroke="oklch(0.55 0.02 240)"
         strokeWidth={20}
       />
-      {/* Left wall */}
       <polygon
         points={polyToStr(cLeft)}
         fill="oklch(0.94 0.01 240)"
@@ -373,12 +397,10 @@ function IsoContainer({ pack }: { pack: PackResult }) {
         strokeWidth={20}
       />
 
-      {/* Cartons */}
       {sorted.map((b, i) => (
         <IsoBox key={i} box={b} project={project} />
       ))}
 
-      {/* Container outline edges (front-facing for context) */}
       <polyline
         points={polyToStr([
           project(C.l, 0, 0),
@@ -411,7 +433,6 @@ function IsoBox({
   project: (x: number, y: number, z: number) => { x: number; y: number };
 }) {
   const { x, y, z, l, w, h, color } = box;
-  // 8 corners of carton.
   const p000 = project(x, y, z);
   const pL00 = project(x + l, y, z);
   const p0H0 = project(x, y + h, z);
@@ -424,7 +445,6 @@ function IsoBox({
   const polyToStr = (pts: { x: number; y: number }[]) =>
     pts.map((p) => `${p.x},${p.y}`).join(" ");
 
-  // Three visible faces: top, front (length-height plane at z+w), right (width-height plane at x+l).
   const top = [p0HW, pLHW, pLH0, p0H0];
   const front = [p00W, pL0W, pLHW, p0HW];
   const right = [pL00, pL0W, pLHW, pLH0];
@@ -453,7 +473,6 @@ function IsoBox({
   );
 }
 
-/** Lighten / darken a hex color by amount (-1..1). */
 function shade(hex: string, amt: number): string {
   const n = hex.replace("#", "");
   const r = parseInt(n.slice(0, 2), 16);
