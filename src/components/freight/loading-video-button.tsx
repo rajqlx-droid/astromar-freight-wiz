@@ -102,10 +102,10 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
         return;
       }
 
-      const timeline = handle.beginRecording(30, 20);
+      handle.beginRecording(30, 20);
 
       const result = await generateLoadingVideo({
-        pack: undefined as never, // pack is embedded in the timeline already
+        pack,
         controls: {
           applyFrame: (info) => {
             handle.applyFrame(info);
@@ -120,18 +120,12 @@ export function LoadingVideoButton({ pack, getHandle, ensure3DReady, containerLa
         fps: 30,
         durationSec: 20,
         onProgress: (frame, total) => setProgress({ frame, total }),
-      } as never);
-      // (We pass pack-less options because we embed timeline via handle.
-      //  generateLoadingVideo still needs `pack`; see below — we re-invoke the
-      //  timeline math from the handle's start call, and only need camera +
-      //  apply for each frame, which the handle's applyFrame already does.)
+      });
 
       handle.endRecording();
       const objectUrl = URL.createObjectURL(result.blob);
       setUrl(objectUrl);
       setVideo(result);
-      // Non-null guard avoids unused-var warning.
-      void timeline;
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : "Failed to generate video");
