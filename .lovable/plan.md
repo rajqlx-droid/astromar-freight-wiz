@@ -1,38 +1,34 @@
 
 
-## What you're seeing
-
-In the screenshot, the blue pallets show **two parallel dark lines** running along their shared seams — most visible on the front face of the blue stack (around the "5.90 m" label) and where blue meets green. That's not pallet borders rendering twice on one box; it's **two adjacent boxes each drawing their own edge line on the shared seam**.
-
 ## Root cause
 
-Each box in `CargoBox` (line 1189) renders an `<Edges color="rgba(0,0,0,0.35)" />` outline around its full geometry. When two pallets sit perfectly flush (share a face), both boxes draw the edge at that exact shared seam, so the line is drawn twice. Combined with:
+In `src/components/freight/loading-rows-panel.tsx` (lines 141–153), every time the 3D stepper advances (Load Row / Play All), this effect fires:
 
-- z-fighting (two coplanar surfaces fighting for the same pixels at depth)
-- a slightly transparent edge color (0.35 alpha) that **darkens when overlapped** — two 35% lines stacked = ~58%
+```
+const el = rowRefs.current.get(activeRowIdx);
+el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+```
 
-…the seam appears as a noticeably darker double-stripe vs. the single edges around the outside of the stack. Same thing happens between the blue stack and the green carton wall — both draw their edge on the meeting plane.
+The row `<li>` lives inside the right-hand panel, which is **not** itself a scroll container — it's part of the normal page flow under the 3D viewer. So `scrollIntoView` walks up the ancestor chain and ends up scrolling the **window** instead of a local pane. Result: every time you click "Load Row 2" or Play All ticks to the next row, the page yanks down to the panel and away from the 3D scene the user is actually watching.
 
-So it's not a bug in the row logic or geometry; it's a **render artefact from drawing edges per-box without dedup**. It does look like a visual error to a user, though, because real pallets in a container don't have a doubled black seam between them.
+`block: "nearest"` doesn't help here because once the row is below the fold relative to the window, "nearest" is "scroll the window down".
 
 ## The fix
 
-Three small, additive changes in `src/components/freight/container-3d-view.tsx` around the `<Edges>` line (1189):
+Two-part, both in `loading-rows-panel.tsx`:
 
-1. **Use a fully opaque edge colour with very low contrast** instead of 35% alpha black. `#1f2937` at full opacity won't double-darken when two edges overlap, because pixel value is the same regardless of how many times it's drawn. (Alpha-blended overlaps are what cause the doubling.)
+1. **Suppress window scroll.** Replace the `scrollIntoView` call with a manual scroll that only adjusts the *nearest scrollable ancestor* if there is one, and otherwise does nothing. Walk parents looking for an element with `overflow: auto/scroll` and a real scrollHeight > clientHeight; if found, do `parent.scrollTop = el.offsetTop - parent.offsetTop` (clamped). If not found, **skip scrolling entirely** — the user is already looking at the 3D scene; auto-opening the row card is enough feedback.
 
-2. **Add `renderOrder` + a tiny `polygonOffset`** on the edge material so coplanar edges from neighbouring boxes resolve to the same depth deterministically rather than z-fighting. Drei's `<Edges>` accepts a material prop — set `polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1}`.
+2. **Only scroll on user-initiated row jumps, not on every stepper tick.** Add a `prevActiveRowIdx` ref. When `activeRowIdx` changes, only attempt the local-container scroll if the *row index* actually changed (not just the pallet within the same row). During Play All, this means we scroll at most once per row transition, never per pallet.
 
-3. **Inset the edge geometry by ~1 mm** (`scale={0.999}` on `<Edges>`) so each box's outline sits just inside its own face. Adjacent boxes' edges then no longer coincide on the shared seam at all — the seam reads as a clean single thin line where the two faces meet, and only the **outer perimeter** of the stack shows an outline. This is what the user expects: "proper line of their border" = one crisp border per visible silhouette.
-
-Optional polish: when two neighbouring boxes share the **same colour and same item id** (true for stacked identical pallets), suppress the `<Edges>` altogether and let the stack read as one tall block. Out of scope unless you want it.
+Side benefit: removes the window jump entirely, so the user can keep their eyes on the 3D viewer while the panel auto-opens the matching row card in the background. If they want to see the instructions, they scroll down once — manually — and stay there.
 
 ## Files to change
 
-- `src/components/freight/container-3d-view.tsx` — line 1189 only. ~4 lines changed.
+- `src/components/freight/loading-rows-panel.tsx` — replace the effect at lines 141–153. ~15 lines changed. No API change, no other components touched.
 
 ## Out of scope
 
-- Row-grouping / packer logic (already fixed last turn).
-- WoodenPallet styling or stack-merging behaviour.
+- Restructuring the panel to be its own scroll container (bigger layout change; ask if you want this).
+- Changing the auto-open-row behaviour (kept — it's useful feedback).
 
