@@ -74,7 +74,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
