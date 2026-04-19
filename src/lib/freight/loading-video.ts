@@ -299,42 +299,101 @@ export function stagingForFrame(
     doorOpen = 1 - t * t;
   }
 
-  // Find the active anim (the box currently being carried) if any.
+  const Cw = pack.container.inner.w / MM_PER_M;
+  const startX = Cl / 2 + 2.5;
+
+  // Find active anim (box currently being carried) and previous anim (just finished).
   let active: BoxAnim | null = null;
-  for (const a of timeline.anims) {
+  let prev: BoxAnim | null = null;
+  let next: BoxAnim | null = null;
+  for (let i = 0; i < timeline.anims.length; i++) {
+    const a = timeline.anims[i];
     if (a.startFrame <= frame && frame < a.endFrame) {
       active = a;
+      prev = i > 0 ? timeline.anims[i - 1] : null;
+      next = i < timeline.anims.length - 1 ? timeline.anims[i + 1] : null;
       break;
+    }
+    if (a.endFrame <= frame) {
+      prev = a;
+      next = i < timeline.anims.length - 1 ? timeline.anims[i + 1] : null;
     }
   }
 
-  if (!active || frame < introF || frame >= outroStart) {
+  // Outside the loading window — park forklift outside the door.
+  if (frame < introF || frame >= outroStart) {
     return {
       doorOpen,
       forkliftActive: false,
-      forkliftX: Cl / 2 + 2.5,
+      forkliftX: startX,
       forkliftZ: 0,
       forkliftY: 0.6,
       carriedBoxIdx: null,
     };
   }
 
-  // Forklift mirrors the box carrier path: drives in from outside the door,
-  // then reverses out (we just play the in-phase and snap reset between boxes).
+  // Between boxes (no active anim, but loading is in progress): forklift
+  // reverses out of the container then drives back in for the next box.
+  if (!active) {
+    if (!prev || !next) {
+      return {
+        doorOpen,
+        forkliftActive: false,
+        forkliftX: startX,
+        forkliftZ: 0,
+        forkliftY: 0.6,
+        carriedBoxIdx: null,
+      };
+    }
+    const gapStart = prev.endFrame;
+    const gapEnd = next.startFrame;
+    const gapLen = Math.max(1, gapEnd - gapStart);
+    const gt = (frame - gapStart) / gapLen;
+    // Previous drop position
+    const pBox = pack.placed[prev.placedIdx];
+    const pX = pBox.x / MM_PER_M + pBox.l / MM_PER_M / 2 - Cl / 2;
+    const pZ = pBox.y / MM_PER_M + pBox.w / MM_PER_M / 2 - Cw / 2;
+    // Next pickup target
+    const nBox = pack.placed[next.placedIdx];
+    const nX = nBox.x / MM_PER_M + nBox.l / MM_PER_M / 2 - Cl / 2;
+    const nZ = nBox.y / MM_PER_M + nBox.w / MM_PER_M / 2 - Cw / 2;
+    // First half: reverse out of container to staging point. Second half:
+    // drive forward to align with next box pickup zone (still outside door).
+    let fx: number;
+    let fz: number;
+    if (gt < 0.5) {
+      const r = gt / 0.5;
+      const ease = r * r;
+      fx = pX + (startX - pX) * ease;
+      fz = pZ * (1 - ease);
+    } else {
+      const r = (gt - 0.5) / 0.5;
+      const ease = r * r;
+      // Slight lateral shuffle outside door toward next box's lateral lane
+      fx = startX;
+      fz = nZ * 0.15 * ease;
+    }
+    return {
+      doorOpen,
+      forkliftActive: true,
+      forkliftX: fx,
+      forkliftZ: fz,
+      forkliftY: 0.35, // forks lowered while empty
+      carriedBoxIdx: null,
+    };
+  }
+
+  // Active anim: forklift drives in from outside the door, then reverses
+  // briefly during settle as the box drops onto its slot.
   const t = (frame - active.startFrame) / Math.max(1, active.endFrame - active.startFrame);
   const carryT = Math.min(1, t / 0.7);
   const settleT = Math.max(0, (t - 0.7) / 0.3);
   const carryEase = 1 - Math.pow(1 - carryT, 3);
   const box = pack.placed[active.placedIdx];
-  // Forklift world-x: starts ~2.5 m outside door (+x of Cl/2), ends at the box slot.
   const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
-  const startX = Cl / 2 + 2.5;
   const forkliftX = startX + (boxWorldX - startX) * carryEase;
-  // Lateral align with box.
-  const Cw = pack.container.inner.w / MM_PER_M;
   const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
   const forkliftZ = boxWorldZ * carryEase;
-  // Fork lift height: drops as box settles.
   const restY = box.z / MM_PER_M + 0.05;
   const forkliftY = 0.55 + (restY - 0.55) * settleT;
 
