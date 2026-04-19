@@ -1,51 +1,46 @@
 
 
-## Consolidated plan — fix floating cargo + add sideways/orientation flags
+## Updated plan — gate packing options on CBM calculator only (not required elsewhere)
 
-Yes, this combines both: the **support-aware skyline packer fix** AND the **new per-item rotation flags** for better optimization.
+Same as before, but the **mandatory packing-options gate applies ONLY to the CBM calculator** (the one with 3D loading + container optimization). Other calculators (Air, Landed, Export, Compare, Risk) are unaffected — they don't use packing options anyway.
 
-### 1. New per-item input flags
-Add to `CbmItem` in `src/lib/freight/types.ts`:
-- `allowSidewaysRotation: boolean` — packer may swap L↔W (yaw 90° on the floor)
-- `allowAxisRotation: boolean` — packer may tip box onto its side (swap H with L or W)
+### 1. Add `packingConfirmed` flag
+Add to `CbmItem` in `src/lib/freight/calculators.ts`:
+- `packingConfirmed: boolean` (default `false`)
 
-Existing `stackable` and `fragile` flags stay as-is.
+Only used by the CBM tab. Other calculators ignore it.
 
-### 2. UI — two new checkboxes per cargo row
-In `src/components/freight/cbm-calculator.tsx`, next to existing "Stackable":
-- ☐ Can lay sideways (rotate 90° on floor)
-- ☐ Can stand on side (tip onto side — off by default, hidden if fragile)
-Small info tooltips on each.
+### 2. CBM calculator UI (`cbm-calculator.tsx`)
+Group the existing flags (stackable, fragile, sideways, axis rotation, max stack weight) into a compact **"Packing options"** popover per cargo row:
+- Trigger button shows status: *"⚠ Packing options required"* (amber) when not confirmed, or summary chip *"Stackable · Sideways OK · Max 200kg"* (green) when confirmed.
+- Popover contains all toggles + max-stack-weight number field with tooltips.
+- "Apply to all items" button for bulk setup.
+- Auto-confirms the row the moment the user toggles anything inside.
 
-### 3. Packer rewrite — kills the floating pink box
-Replace shelf-fit in both `src/lib/freight/packing-advanced.ts` and `src/lib/freight/packing.ts` with a **support-aware skyline packer**:
+### 3. Gate optimization features (CBM only)
+When any row has `packingConfirmed === false`:
+- Replace `<ContainerSuggestion>` banner with an amber warning card listing unconfirmed item names + "Review packing options" button that scrolls to the first incomplete row.
+- Disable (greyed + tooltip) the 3D loading view, Loading Video button, and Download PDF button.
+- Basic CBM math (volume, chargeable weight, totals) still runs normally.
 
-- **Skyline height-map** — quantise floor into ~100mm cells; track top Z per cell. New box's resting Z = `max(heightMap)` under its footprint. No more air gaps, no floating boxes.
-- **Support check** — require ≥ 90% of footprint cells at the same top Z (≤ 10% overhang allowed for realism).
-- **Multi-orientation evaluation** driven by the new flags:
-  - Always: original L×W×H
-  - If `allowSidewaysRotation`: + W×L×H
-  - If `allowAxisRotation` AND not fragile: + L×H×W and H×W×L
-- **Best-fit scoring** — for each carton, evaluate all allowed orientations × candidate (x, y); pick combo with: lowest resting Z → tightest to back-left → least wasted footprint.
-- **Hard constraints**:
-  - Non-stackable → resting Z = 0 (floor only)
-  - Fragile → placed last on top; cells under it sealed
-  - `maxStackWeightKg` → walk column under new box, reject if any supporter exceeds limit
-  - Heavy items first toward back (low X) for COG stability
+### 4. Persist
+Save `packingConfirmed` + flags via existing localStorage history snapshot in `storage.ts`.
 
-### 4. Auto-propagation
-3D view, 2D top-down view, and loading video all consume `placed[]` coordinates → fix appears everywhere automatically. No changes needed in those files.
+### 5. Fix unrelated SSR hydration warning
+In `src/routes/freight-intelligence.tsx`, fix the whitespace mismatch in the footer email span next to the `<Mail>` icon (server renders `" sales@..."`, client renders `" "`).
 
 ## Files touched
 ```text
-EDIT  src/lib/freight/types.ts                   — add allowSidewaysRotation, allowAxisRotation
-EDIT  src/components/freight/cbm-calculator.tsx  — two new checkboxes per cargo row
-EDIT  src/lib/freight/packing-advanced.ts        — skyline packer + multi-orientation + constraints
-EDIT  src/lib/freight/packing.ts                 — same skyline rule for basic mode
+EDIT  src/lib/freight/calculators.ts                  — add packingConfirmed: boolean to CbmItem
+EDIT  src/components/freight/cbm-calculator.tsx       — Packing options popover, confirmation chip, gate logic, "Apply to all"
+EDIT  src/components/freight/container-suggestion.tsx — accept "blocked" state + unconfirmed item list (CBM only)
+EDIT  src/components/freight/results-card.tsx        — disable 3D / Video / PDF when CBM rows not confirmed
+EDIT  src/lib/freight/storage.ts                      — persist new flag
+EDIT  src/routes/freight-intelligence.tsx             — fix hydration whitespace bug in footer
 ```
 
 ## Out of scope
-- Per-axle weight distribution
-- Wall-bracing / dunnage simulation
-- Auto-detecting orientation flags from item dimensions
+- Applying the gate to Air / Landed / Export / Compare / Risk calculators (not needed)
+- Server-side validation
+- Auto-detecting packing options from item dimensions
 
