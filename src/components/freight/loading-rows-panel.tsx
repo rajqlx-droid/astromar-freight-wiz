@@ -70,6 +70,8 @@ export function LoadingRowsPanel({ pack }: Props) {
         const badges: string[] = [];
         if (row.hasFragile) badges.push('<span class="badge fragile">FRAGILE</span>');
         if (row.hasNonStack) badges.push('<span class="badge nostack">NO-STACK</span>');
+        if (row.needsSeparator)
+          badges.push('<span class="badge mixed">⚠ MIXED PALLET</span>');
         if (row.rotatedCount > 0)
           badges.push(`<span class="badge tilt">↻ ${row.rotatedCount} TILTED</span>`);
         const itemsHtml = counts
@@ -102,6 +104,7 @@ export function LoadingRowsPanel({ pack }: Props) {
                 </div>
                 <div class="row-body-text">
                   <div class="chips">${itemsHtml}</div>
+                  ${row.needsSeparator ? '<div class="warn">⚠ Mixed pallet — insert a plywood/cardboard separator board between heavy non-fragile units and fragile units before stacking.</div>' : ""}
                   <div class="instruction"><strong>Loader:</strong> ${instructionFor(row)}</div>
                 </div>
               </div>
