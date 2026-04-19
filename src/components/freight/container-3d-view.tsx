@@ -514,6 +514,7 @@ function SceneContents({
           ];
           const isPreviewed = !recording && shuffleZ !== 0;
           const flyIn = !recording && !!flyInPlacedSet?.has(i);
+          const isActivePallet = !recording && i === activePalletIdx;
           return (
             <CargoBox
               key={i}
@@ -526,14 +527,24 @@ function SceneContents({
               flyInKey={flyInKey}
               containerL={Cm.l}
               containerH={Cm.h}
+              showCheckmark={isActivePallet}
             />
           );
         })}
+        {/* Pulsing yellow target outline at the NEXT pallet's slot */}
+        {!recording && nextBox && (
+          <NextPalletTarget box={nextBox} />
+        )}
         {/* Gap heatmap overlay — translucent red rectangles on the floor and
             back wall of the active row's slice. Hidden during recording so
             video frames stay clean. */}
         {!recording && gapHeatmapRow && (
           <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
+        )}
+        {/* Lightweight forklift token — slides in from the door to the active
+            pallet column. No animations during recording. */}
+        {!recording && showForkliftToken && activeBox && (
+          <LightForkliftToken box={activeBox} containerL={Cm.l} />
         )}
       </group>
 
