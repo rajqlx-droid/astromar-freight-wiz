@@ -211,19 +211,98 @@ export function buildRows(
 ): RowGroup[] {
   if (pack.placed.length === 0) return [];
 
-  const sorted = [...pack.placed].sort((a, b) => a.x - b.x);
+  // ── Back-wall-aligned rank clustering ────────────────────────────────────
+  // A "row" (rank) is defined by the floor pallets that share roughly the
+  // same x-start position against the back wall. Stacked boxes are then
+  // claimed by whichever rank's floor pallet sits directly under them.
+  const TOL = 200; // mm — same-rank tolerance on x-start
 
-  const rows: { boxes: PlacedBox[]; xStart: number; xEnd: number }[] = [];
-  for (const b of sorted) {
-    const bxEnd = b.x + b.l;
-    const last = rows[rows.length - 1];
-    if (last && b.x < last.xEnd - 1) {
+  const floorBoxes = pack.placed
+    .filter((b) => b.z < 10)
+    .sort((a, b) => a.x - b.x);
+  const stackedBoxes = pack.placed.filter((b) => b.z >= 10);
+
+  type Rank = {
+    boxes: PlacedBox[];
+    floorBoxes: PlacedBox[];
+    minX: number;
+    xStart: number;
+    xEnd: number;
+  };
+  const ranks: Rank[] = [];
+
+  // 1. Cluster floor boxes into ranks by x-start within TOL of the rank's min x.
+  for (const b of floorBoxes) {
+    const last = ranks[ranks.length - 1];
+    if (last && b.x - last.minX <= TOL) {
+      last.floorBoxes.push(b);
       last.boxes.push(b);
-      if (bxEnd > last.xEnd) last.xEnd = bxEnd;
+      if (b.x < last.xStart) last.xStart = b.x;
+      if (b.x + b.l > last.xEnd) last.xEnd = b.x + b.l;
     } else {
-      rows.push({ boxes: [b], xStart: b.x, xEnd: bxEnd });
+      ranks.push({
+        boxes: [b],
+        floorBoxes: [b],
+        minX: b.x,
+        xStart: b.x,
+        xEnd: b.x + b.l,
+      });
     }
   }
+
+  // Footprint overlap (x and y) between two boxes.
+  const overlapArea = (a: PlacedBox, f: PlacedBox): number => {
+    const xOverlap = Math.max(0, Math.min(a.x + a.l, f.x + f.l) - Math.max(a.x, f.x));
+    const yOverlap = Math.max(0, Math.min(a.y + a.w, f.y + f.w) - Math.max(a.y, f.y));
+    return xOverlap * yOverlap;
+  };
+
+  // 2. Assign each stacked box to the rank whose floor pallets it covers most.
+  for (const sb of stackedBoxes) {
+    let bestRank = -1;
+    let bestArea = 0;
+    for (let ri = 0; ri < ranks.length; ri++) {
+      let area = 0;
+      for (const fb of ranks[ri].floorBoxes) area += overlapArea(sb, fb);
+      if (area > bestArea) {
+        bestArea = area;
+        bestRank = ri;
+      }
+    }
+    if (bestRank < 0) {
+      // No floor pallet underneath — fall back to nearest rank by x-start.
+      let nearest = 0;
+      let nd = Infinity;
+      for (let ri = 0; ri < ranks.length; ri++) {
+        const d = Math.abs(sb.x - ranks[ri].xStart);
+        if (d < nd) {
+          nd = d;
+          nearest = ri;
+        }
+      }
+      bestRank = nearest;
+      if (ranks.length === 0) {
+        // Pathological: no floor boxes at all. Make one rank from this box.
+        ranks.push({
+          boxes: [sb],
+          floorBoxes: [],
+          minX: sb.x,
+          xStart: sb.x,
+          xEnd: sb.x + sb.l,
+        });
+        continue;
+      }
+    }
+    const r = ranks[bestRank];
+    r.boxes.push(sb);
+    if (sb.x + sb.l > r.xEnd) r.xEnd = sb.x + sb.l;
+    if (sb.x < r.xStart) r.xStart = sb.x;
+  }
+
+  // Order ranks back-to-front and re-shape into the structure used below.
+  const rows = ranks
+    .sort((a, b) => a.minX - b.minX)
+    .map((r) => ({ boxes: r.boxes, xStart: r.xStart, xEnd: r.xEnd }));
 
   return rows.map((r, i) => {
     let totalWeightKg = 0;
