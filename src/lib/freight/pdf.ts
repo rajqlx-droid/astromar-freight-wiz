@@ -21,6 +21,7 @@ export interface PdfLoadingRow {
   hasFragile: boolean;
   hasNonStack: boolean;
   rotatedCount: number;
+  needsSeparator: boolean;
   items: { itemIdx: number; count: number; color: string; packageType: string }[];
   instruction: string;
   /** Optional pre-rasterised side-view PNG dataURL for this row. */
