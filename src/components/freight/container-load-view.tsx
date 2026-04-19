@@ -1,0 +1,466 @@
+import { useMemo, useState } from "react";
+import { Package, Boxes } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import {
+  CONTAINERS,
+  ITEM_COLORS,
+  packContainer,
+  pickOptimalContainer,
+  splitMultiContainer,
+  totalCbm,
+  totalQty,
+  totalWeight,
+  type ContainerPreset,
+  type PackResult,
+  type PlacedBox,
+} from "@/lib/freight/packing";
+import type { CbmItem } from "@/lib/freight/calculators";
+
+interface Props {
+  items: CbmItem[];
+}
+
+type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
+
+const COS30 = Math.cos(Math.PI / 6);
+const SIN30 = Math.sin(Math.PI / 6);
+
+export function ContainerLoadView({ items }: Props) {
+  const [choice, setChoice] = useState<ContainerChoice>("auto");
+
+  const cargoCbm = useMemo(() => totalCbm(items), [items]);
+  const cargoWeight = useMemo(() => totalWeight(items), [items]);
+  const cargoQty = useMemo(() => totalQty(items), [items]);
+
+  const hasCargo = cargoCbm > 0 && cargoQty > 0;
+
+  const autoContainer = useMemo(
+    () => pickOptimalContainer(cargoCbm),
+    [cargoCbm],
+  );
+  const activeContainer: ContainerPreset =
+    choice === "auto"
+      ? autoContainer
+      : CONTAINERS.find((c) => c.id === choice) ?? autoContainer;
+
+  const pack = useMemo(
+    () => packContainer(items, activeContainer),
+    [items, activeContainer],
+  );
+
+  const needsMulti = cargoCbm > 70;
+  const multiPlan = useMemo(
+    () => (needsMulti ? splitMultiContainer(cargoCbm) : null),
+    [needsMulti, cargoCbm],
+  );
+
+  return (
+    <Card
+      className="border-2 p-4 sm:p-5"
+      style={{
+        borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)",
+      }}
+    >
+      <div className="mb-4 flex items-center gap-2">
+        <Boxes className="size-5 text-brand-navy" />
+        <h3 className="text-base font-semibold text-brand-navy">
+          Container Load Optimizer
+        </h3>
+        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          Indicative
+        </span>
+      </div>
+
+      {/* Container switcher pills */}
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        <PillButton active={choice === "auto"} onClick={() => setChoice("auto")}>
+          Auto · {autoContainer.name}
+        </PillButton>
+        {CONTAINERS.map((c) => (
+          <PillButton
+            key={c.id}
+            active={choice === c.id}
+            onClick={() => setChoice(c.id)}
+          >
+            {c.name}
+          </PillButton>
+        ))}
+      </div>
+
+      {!hasCargo ? (
+        <EmptyState />
+      ) : (
+        <>
+          <StatsBar pack={pack} weight={cargoWeight} qty={cargoQty} />
+          <div className="mt-4 overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
+            <IsoContainer pack={pack} />
+          </div>
+          <Legend items={items} />
+          {needsMulti && multiPlan && <MultiPlan plan={multiPlan} />}
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            Indicative loading pattern based on stowable capacity (30 / 60 / 70 m³
+            for 20ft / 40ft / 40ft HC). Actual stow depends on weight distribution,
+            carton orientation, and dunnage.
+          </p>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/* ---------------- Sub-components ---------------- */
+
+function PillButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={active ? "default" : "outline"}
+      onClick={onClick}
+      className={cn(
+        "h-7 rounded-full px-3 text-xs",
+        active
+          ? "bg-brand-navy text-white hover:bg-brand-navy/90"
+          : "border-brand-navy/30 text-brand-navy hover:bg-brand-navy/5",
+      )}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function StatsBar({
+  pack,
+  weight,
+  qty,
+}: {
+  pack: PackResult;
+  weight: number;
+  qty: number;
+}) {
+  const util = Math.min(100, pack.utilizationPct);
+  const utilColor =
+    util < 80
+      ? "bg-emerald-500"
+      : util < 95
+        ? "bg-amber-500"
+        : "bg-rose-500";
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-4">
+      <div className="sm:col-span-2">
+        <div className="flex items-baseline justify-between text-xs">
+          <span className="font-medium text-muted-foreground">Used volume</span>
+          <span className="font-semibold text-brand-navy">
+            {pack.cargoCbm.toFixed(2)} / {pack.container.capCbm} m³ ·{" "}
+            {util.toFixed(0)}%
+          </span>
+        </div>
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn("h-full transition-all", utilColor)}
+            style={{ width: `${util}%` }}
+          />
+        </div>
+      </div>
+      <Stat
+        label="Weight"
+        value={`${weight.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
+      />
+      <Stat
+        label="Packages loaded"
+        value={`${pack.placedCartons} / ${pack.totalCartons}`}
+      />
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <div className="text-sm font-semibold text-brand-navy">{value}</div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/20 px-4 py-10 text-center">
+      <Package className="size-8 text-muted-foreground/40" />
+      <div className="text-sm font-medium text-muted-foreground">
+        Add cartons to generate loading plan
+      </div>
+      <div className="text-xs text-muted-foreground/70">
+        Enter dimensions and quantity above to see the container fill visualisation.
+      </div>
+    </div>
+  );
+}
+
+function Legend({ items }: { items: CbmItem[] }) {
+  const visible = items.filter(
+    (it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0,
+  );
+  if (visible.length === 0) return null;
+  return (
+    <div className="mt-3 grid gap-1.5 sm:grid-cols-2">
+      {visible.map((it, idx) => {
+        const origIdx = items.indexOf(it);
+        const color = ITEM_COLORS[origIdx % ITEM_COLORS.length];
+        return (
+          <div
+            key={it.id}
+            className="flex items-center gap-2 rounded-md bg-muted/30 px-2 py-1 text-xs"
+          >
+            <span
+              className="size-3 shrink-0 rounded-sm"
+              style={{ background: color }}
+              aria-hidden
+            />
+            <span className="font-medium text-brand-navy">Item {idx + 1}</span>
+            <span className="text-muted-foreground">
+              {it.length}×{it.width}×{it.height} cm × {it.qty} pcs
+              {it.weight > 0 ? ` · ${it.weight} kg` : ""}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MultiPlan({
+  plan,
+}: {
+  plan: ReturnType<typeof splitMultiContainer>;
+}) {
+  return (
+    <div className="mt-4 rounded-lg border border-amber-300/50 bg-amber-50 p-3 dark:bg-amber-950/20">
+      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-900 dark:text-amber-200">
+        <Boxes className="size-4" />
+        Multi-container plan ({plan.totalCbm.toFixed(2)} m³ total)
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {plan.units.map((u, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-between rounded-md bg-white/70 px-2.5 py-1.5 text-xs dark:bg-amber-950/40"
+          >
+            <span className="font-semibold text-brand-navy">
+              #{i + 1} {u.container.name}
+            </span>
+            <span className="text-muted-foreground">
+              {u.fillCbm.toFixed(1)} m³ · {u.fillPct.toFixed(0)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Isometric SVG ---------------- */
+
+function IsoContainer({ pack }: { pack: PackResult }) {
+  const C = pack.container.inner;
+
+  // Fit container into a viewBox. Use mm directly, scale via viewBox.
+  // Iso projection: x' = x - z·cos30, y' = y - z·sin30 (we treat container "z" = depth/width).
+  // Mapping to 3 axes:
+  //   container length (l)  -> screen X+ (rightwards)
+  //   container height (h)  -> screen Y- (upwards)
+  //   container width  (w)  -> goes back into screen (iso)
+  // Project a 3D point (X = length, Y = height, Z = width).
+  const project = (X: number, Y: number, Z: number) => ({
+    x: X + Z * COS30,
+    y: -Y + Z * SIN30,
+  });
+
+  // Compute viewBox bounds based on 8 corners of container.
+  const corners = [
+    project(0, 0, 0),
+    project(C.l, 0, 0),
+    project(0, C.h, 0),
+    project(C.l, C.h, 0),
+    project(0, 0, C.w),
+    project(C.l, 0, C.w),
+    project(0, C.h, C.w),
+    project(C.l, C.h, C.w),
+  ];
+  const minX = Math.min(...corners.map((p) => p.x));
+  const maxX = Math.max(...corners.map((p) => p.x));
+  const minY = Math.min(...corners.map((p) => p.y));
+  const maxY = Math.max(...corners.map((p) => p.y));
+  const pad = 200;
+  const vbX = minX - pad;
+  const vbY = minY - pad;
+  const vbW = maxX - minX + pad * 2;
+  const vbH = maxY - minY + pad * 2;
+
+  // Container wireframe edges (open-top: no top face).
+  const cFloor = [
+    project(0, 0, 0),
+    project(C.l, 0, 0),
+    project(C.l, 0, C.w),
+    project(0, 0, C.w),
+  ];
+  const cBack = [
+    project(0, 0, C.w),
+    project(C.l, 0, C.w),
+    project(C.l, C.h, C.w),
+    project(0, C.h, C.w),
+  ];
+  const cLeft = [
+    project(0, 0, 0),
+    project(0, 0, C.w),
+    project(0, C.h, C.w),
+    project(0, C.h, 0),
+  ];
+
+  const polyToStr = (pts: { x: number; y: number }[]) =>
+    pts.map((p) => `${p.x},${p.y}`).join(" ");
+
+  // Sort placed boxes back-to-front for painter's algorithm.
+  // Boxes farther back (higher z), more to the left (lower x), and lower (lower y) drawn first.
+  const sorted = [...pack.placed].sort((a, b) => {
+    // Back boxes first → larger (y + z) drawn first; then larger z, then smaller x.
+    const da = a.z + a.x * 0.001 - a.y * 0.001;
+    const db = b.z + b.x * 0.001 - b.y * 0.001;
+    return db - da;
+  });
+
+  return (
+    <svg
+      viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
+      className="h-auto w-full"
+      style={{ aspectRatio: `${vbW} / ${vbH}`, maxHeight: 360 }}
+      role="img"
+      aria-label={`Container loading visualisation: ${pack.container.name}`}
+    >
+      {/* Floor */}
+      <polygon
+        points={polyToStr(cFloor)}
+        fill="oklch(0.95 0.01 240)"
+        stroke="oklch(0.55 0.02 240)"
+        strokeWidth={20}
+      />
+      {/* Back wall */}
+      <polygon
+        points={polyToStr(cBack)}
+        fill="oklch(0.92 0.01 240)"
+        stroke="oklch(0.55 0.02 240)"
+        strokeWidth={20}
+      />
+      {/* Left wall */}
+      <polygon
+        points={polyToStr(cLeft)}
+        fill="oklch(0.94 0.01 240)"
+        stroke="oklch(0.55 0.02 240)"
+        strokeWidth={20}
+      />
+
+      {/* Cartons */}
+      {sorted.map((b, i) => (
+        <IsoBox key={i} box={b} project={project} />
+      ))}
+
+      {/* Container outline edges (front-facing for context) */}
+      <polyline
+        points={polyToStr([
+          project(C.l, 0, 0),
+          project(C.l, C.h, 0),
+          project(C.l, C.h, C.w),
+        ])}
+        fill="none"
+        stroke="oklch(0.55 0.02 240)"
+        strokeWidth={20}
+        strokeDasharray="40 30"
+        opacity={0.6}
+      />
+      <polyline
+        points={polyToStr([project(0, C.h, 0), project(C.l, C.h, 0)])}
+        fill="none"
+        stroke="oklch(0.55 0.02 240)"
+        strokeWidth={20}
+        strokeDasharray="40 30"
+        opacity={0.6}
+      />
+    </svg>
+  );
+}
+
+function IsoBox({
+  box,
+  project,
+}: {
+  box: PlacedBox;
+  project: (x: number, y: number, z: number) => { x: number; y: number };
+}) {
+  const { x, y, z, l, w, h, color } = box;
+  // 8 corners of carton.
+  const p000 = project(x, y, z);
+  const pL00 = project(x + l, y, z);
+  const p0H0 = project(x, y + h, z);
+  const pLH0 = project(x + l, y + h, z);
+  const p00W = project(x, y, z + w);
+  const pL0W = project(x + l, y, z + w);
+  const p0HW = project(x, y + h, z + w);
+  const pLHW = project(x + l, y + h, z + w);
+
+  const polyToStr = (pts: { x: number; y: number }[]) =>
+    pts.map((p) => `${p.x},${p.y}`).join(" ");
+
+  // Three visible faces: top, front (length-height plane at z+w), right (width-height plane at x+l).
+  const top = [p0HW, pLHW, pLH0, p0H0];
+  const front = [p00W, pL0W, pLHW, p0HW];
+  const right = [pL00, pL0W, pLHW, pLH0];
+
+  return (
+    <g>
+      <polygon
+        points={polyToStr(front)}
+        fill={color}
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth={6}
+      />
+      <polygon
+        points={polyToStr(right)}
+        fill={shade(color, -0.18)}
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth={6}
+      />
+      <polygon
+        points={polyToStr(top)}
+        fill={shade(color, 0.18)}
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth={6}
+      />
+    </g>
+  );
+}
+
+/** Lighten / darken a hex color by amount (-1..1). */
+function shade(hex: string, amt: number): string {
+  const n = hex.replace("#", "");
+  const r = parseInt(n.slice(0, 2), 16);
+  const g = parseInt(n.slice(2, 4), 16);
+  const b = parseInt(n.slice(4, 6), 16);
+  const adj = (c: number) =>
+    Math.max(0, Math.min(255, Math.round(c + (amt > 0 ? 255 - c : c) * amt)));
+  const to = (c: number) => adj(c).toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
