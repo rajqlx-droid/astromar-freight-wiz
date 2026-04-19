@@ -48,6 +48,15 @@ export function readHeavyThreshold(): number {
 
 interface Props {
   pack: AdvancedPackResult;
+  /**
+   * Emit per-box width-axis offsets (placedIdx → metres along scene-z) when the
+   * loader applies a "Suggested re-shuffle" preview. Pass `null` to clear it.
+   */
+  onApplyShuffle?: (overrides: Map<number, number> | null) => void;
+  /** True while a preview is active (drives the Apply/Clear button label). */
+  shufflePreviewActive?: boolean;
+  /** True when the parent is showing the 2D iso view — preview needs 3D enabled to be visible. */
+  previewRequires3D?: boolean;
 }
 
 /** Per-item count breakdown for a row (returns array of {itemIdx, count, color}). */
@@ -75,7 +84,12 @@ function RowProjection({
 
 
 
-export function LoadingRowsPanel({ pack }: Props) {
+export function LoadingRowsPanel({
+  pack,
+  onApplyShuffle,
+  shufflePreviewActive = false,
+  previewRequires3D = false,
+}: Props) {
   // Configurable kg/pkg threshold for the "heavy" mixed-pallet warning.
   // Hydrate from localStorage AFTER mount to avoid SSR/CSR mismatch.
   const [heavyThreshold, setHeavyThreshold] = useState<number>(
@@ -98,6 +112,17 @@ export function LoadingRowsPanel({ pack }: Props) {
   const [openRows, setOpenRows] = useState<Set<number>>(() => new Set([0]));
   // Per-row "Suggest re-shuffle" toggle state.
   const [shuffleOpen, setShuffleOpen] = useState<Set<number>>(() => new Set());
+  // Which row's preview is currently applied to the 3D view (null = none).
+  const [previewedRow, setPreviewedRow] = useState<number | null>(null);
+
+  // Clear preview if the pack changes (re-pack invalidates placedIdx mapping).
+  useEffect(() => {
+    setPreviewedRow(null);
+    onApplyShuffle?.(null);
+    // Intentionally only on pack identity change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pack]);
+
   const toggleShuffle = (idx: number) => {
     setShuffleOpen((prev) => {
       const next = new Set(prev);
@@ -106,6 +131,56 @@ export function LoadingRowsPanel({ pack }: Props) {
       return next;
     });
   };
+
+  /**
+   * Build a placedIdx → metres-along-scene-z offset map for one row using its
+   * reshuffle suggestion. Bottom-layer boxes are slid toward the chosen side
+   * so they meet the rest of the wall pack and close the gap.
+   */
+  const buildPreviewOffsets = (row: RowGroup): Map<number, number> => {
+    const sug = suggestReshuffle(row, pack);
+    const offsets = new Map<number, number>();
+    if (sug.direction === "none") return offsets;
+    const containerWmm = pack.container.inner.w;
+    // Compute per-box slide amounts. We work in mm then convert to metres.
+    const bottoms = row.boxes.filter((b) => b.z < 10);
+    if (bottoms.length === 0) return offsets;
+    const minY = Math.min(...bottoms.map((b) => b.y));
+    const maxY = Math.max(...bottoms.map((b) => b.y + b.w));
+    // Slack on each side of the cluster.
+    const leftSlackMm = minY;
+    const rightSlackMm = containerWmm - maxY;
+    for (const b of bottoms) {
+      const placedIdx = pack.placed.indexOf(b);
+      if (placedIdx < 0) continue;
+      let slideMm = 0;
+      if (sug.direction === "left") {
+        // Slide the left-side cluster RIGHT to meet the right wall pack.
+        slideMm = leftSlackMm;
+      } else if (sug.direction === "right") {
+        // Slide the right-side cluster LEFT to meet the left wall pack.
+        slideMm = -rightSlackMm;
+      } else if (sug.direction === "split") {
+        // Move both halves toward the centre.
+        const mid = containerWmm / 2;
+        const boxCentre = b.y + b.w / 2;
+        slideMm = boxCentre < mid ? leftSlackMm / 2 : -rightSlackMm / 2;
+      }
+      offsets.set(placedIdx, slideMm / 1000);
+    }
+    return offsets;
+  };
+
+  const applyPreview = (row: RowGroup) => {
+    const offsets = buildPreviewOffsets(row);
+    setPreviewedRow(row.rowIdx);
+    onApplyShuffle?.(offsets);
+  };
+  const clearPreview = () => {
+    setPreviewedRow(null);
+    onApplyShuffle?.(null);
+  };
+
 
   if (rows.length === 0) return null;
 
@@ -229,10 +304,28 @@ export function LoadingRowsPanel({ pack }: Props) {
         .view-label { font-size: 8px; font-weight: 600; color: #777; letter-spacing: 0.4px; text-transform: uppercase; }
         .row-body-text { display: flex; flex-direction: column; gap: 6px; }
         .footer { margin-top: 14px; padding-top: 8px; border-top: 1px solid #d6dde8; color: #777; font-size: 9px; }
+        .eff { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid; }
+        .eff.green { background: #d1fae5; border-color: #059669; color: #065f46; }
+        .eff.amber { background: #fef3c7; border-color: #d97706; color: #92400e; }
+        .eff.red { background: #ffe4e6; border-color: #e11d48; color: #9f1239; }
+        .eff .pct { font-size: 18px; font-weight: 800; min-width: 48px; }
+        .eff .label { font-size: 11px; font-weight: 700; color: #1B3A6B; }
+        .eff .sub { font-size: 10px; }
       </style></head><body>
       <h1>Loading Checklist — Row by Row</h1>
       <div class="sub">${rows.length} row${rows.length > 1 ? "s" : ""} · back wall to door · heavy threshold ${heavyThreshold} kg/pkg · generated ${new Date().toLocaleString("en-IN")}</div>
       <div class="accent"></div>
+      ${
+        efficiency.rowCount > 0
+          ? `<div class="eff ${efficiency.status}"><span class="pct">${Math.round(efficiency.scorePct)}%</span><div><div class="label">Container wall efficiency target</div><div class="sub">${
+              efficiency.status === "green"
+                ? "● Optimal — all rows tight to back wall."
+                : efficiency.status === "amber"
+                  ? `● Close gaps — ${efficiency.gapRowCount} of ${efficiency.rowCount} row${efficiency.rowCount > 1 ? "s" : ""} need re-shuffle.`
+                  : `● Re-shuffle needed — ${efficiency.gapRowCount} of ${efficiency.rowCount} row${efficiency.rowCount > 1 ? "s" : ""} flagged.`
+            }</div></div></div>`
+          : ""
+      }
       <ol>${rowsHtml}</ol>
       <div class="footer">Always work from the back wall outward — never climb on loaded cargo. Build each row to full height before advancing toward the door. Tick the box once a row is fully loaded and verified.</div>
       <script>window.addEventListener('load', () => { setTimeout(() => window.print(), 250); });</script>
@@ -588,6 +681,7 @@ export function LoadingRowsPanel({ pack }: Props) {
                       </div>
                       {shuffleOpen.has(row.rowIdx) && (() => {
                         const sug = suggestReshuffle(row, pack);
+                        const isPreviewing = previewedRow === row.rowIdx;
                         return (
                           <div className="rounded border border-orange-200 bg-background/80 p-2 text-[11px] leading-relaxed text-brand-navy dark:border-orange-900/60">
                             <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
@@ -604,7 +698,39 @@ export function LoadingRowsPanel({ pack }: Props) {
                                 {" "}(currently {Math.round(row.wallUtilizationPct)}%).
                               </p>
                             )}
+                            {sug.direction !== "none" && onApplyShuffle && (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isPreviewing) clearPreview();
+                                    else applyPreview(row);
+                                  }}
+                                  className={cn(
+                                    "h-6 gap-1 px-2 text-[10px]",
+                                    isPreviewing
+                                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      : "bg-brand-navy hover:bg-brand-navy/90 text-white",
+                                  )}
+                                >
+                                  {isPreviewing ? "Clear preview" : "Apply suggested re-shuffle"}
+                                </Button>
+                                {isPreviewing && previewRequires3D && (
+                                  <span className="text-[10px] text-orange-700 dark:text-orange-300">
+                                    Switch to 3D view to see the slid pallets.
+                                  </span>
+                                )}
+                                {isPreviewing && !previewRequires3D && (
+                                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300">
+                                    ● Preview active in 3D view (green ring under slid pallets).
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
+
                         );
                       })()}
                     </div>

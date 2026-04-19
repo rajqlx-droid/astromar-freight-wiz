@@ -47,6 +47,12 @@ export interface Container3DHandle {
 interface Props {
   pack: AdvancedPackResult;
   height?: number;
+  /**
+   * Per-box width-axis preview offset (placedIdx → metres along scene-z, the
+   * container's width). Applied additively to every matched box so loaders
+   * can visualise a "Suggested re-shuffle" before doing it physically.
+   */
+  shufflePreview?: Map<number, number> | null;
 }
 
 /**
@@ -55,7 +61,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420 },
+  { pack, height = 420, shufflePreview = null },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -183,6 +189,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             preset={preset}
             recording={recordingTimeline}
             frame={currentFrame}
+            shufflePreview={shufflePreview}
           />
         </Suspense>
       </Canvas>
@@ -291,12 +298,14 @@ function SceneContents({
   preset,
   recording,
   frame,
+  shufflePreview,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
   recording: Timeline | null;
   frame: number;
+  shufflePreview: Map<number, number> | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -386,13 +395,23 @@ function SceneContents({
         {pack.placed.map((b, i) => {
           const t = transforms?.[i];
           if (recording && t && !t.visible) return null;
+          // Combine per-frame transform offset (recording) with the shuffle
+          // preview offset (applied to scene-z, the container width axis).
+          const shuffleZ = shufflePreview?.get(i) ?? 0;
+          const offset: [number, number, number] = [
+            t?.offset[0] ?? 0,
+            t?.offset[1] ?? 0,
+            (t?.offset[2] ?? 0) + shuffleZ,
+          ];
+          const isPreviewed = !recording && shuffleZ !== 0;
           return (
             <CargoBox
               key={i}
               box={b}
               stat={pack.perItem[b.itemIdx]}
-              offset={t?.offset}
+              offset={offset}
               scale={t?.scale}
+              previewHighlight={isPreviewed}
             />
           );
         })}
@@ -735,11 +754,13 @@ function CargoBox({
   stat,
   offset,
   scale = 1,
+  previewHighlight = false,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
   offset?: [number, number, number];
   scale?: number;
+  previewHighlight?: boolean;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -763,6 +784,12 @@ function CargoBox({
   return (
     <group position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && <WoodenPallet lm={lm} wm={wm} />}
+      {previewHighlight && (
+        <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[Math.max(lm, wm) * 0.55, Math.max(lm, wm) * 0.7, 32]} />
+          <meshBasicMaterial color="#10b981" transparent opacity={0.85} />
+        </mesh>
+      )}
       <mesh castShadow receiveShadow>
         <boxGeometry args={[lm, hm, wm]} />
         <meshStandardMaterial
