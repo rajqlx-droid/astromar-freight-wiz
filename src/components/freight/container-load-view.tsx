@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { LoaderHUD } from "./loader-hud";
+import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
