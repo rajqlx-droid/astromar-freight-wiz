@@ -129,22 +129,8 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
             >
               <Download className="size-3.5" /> PDF
             </Button>
-            <Button size="sm" variant="outline" className="border-brand-navy text-brand-navy" onClick={handleCopy}>
-              <Copy className="size-3.5" /> Copy
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="border-brand-navy text-brand-navy"
-              onClick={() => setSaveOpen(true)}
-            >
-              <Save className="size-3.5" /> Save
-            </Button>
             <Button size="sm" variant="outline" className="border-brand-navy text-brand-navy" onClick={handlePrint}>
               <Printer className="size-3.5" /> Print
-            </Button>
-            <Button size="sm" variant="outline" className="border-brand-navy text-brand-navy" onClick={handleShare}>
-              <Share2 className="size-3.5" /> Share
             </Button>
             <Button asChild size="sm" variant="outline" className="border-brand-navy text-brand-navy">
               <a href={mailUrl}>
