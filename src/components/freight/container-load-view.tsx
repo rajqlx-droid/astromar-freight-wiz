@@ -2,12 +2,12 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Package, Boxes, Box as BoxIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
   CONTAINERS,
   ITEM_COLORS,
   pickOptimalContainer,
-  splitMultiContainer,
   totalCbm,
   totalQty,
   totalWeight,
@@ -15,6 +15,10 @@ import {
   type PlacedBox,
 } from "@/lib/freight/packing";
 import { packContainerAdvanced, type AdvancedPackResult } from "@/lib/freight/packing-advanced";
+import {
+  splitItemsAcrossContainers,
+  type ContainerRecommendation,
+} from "@/lib/freight/container-recommender";
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
@@ -27,6 +31,12 @@ const Container3DView = lazy(() =>
 
 interface Props {
   items: CbmItem[];
+  /** Smart recommendation from the calculator. Drives multi-container tabbed view. */
+  recommendation?: ContainerRecommendation;
+  /** Manually-applied choice that overrides "auto". */
+  forcedChoice?: "20gp" | "40gp" | "40hc" | null;
+  /** Notify parent when user picks a container pill. */
+  onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | null) => void;
   /** Expose snapshot capture so parent (PDF flow) can grab 3 angles. */
   onReady?: (handle: { capture: () => Promise<{ iso: string; front: string; side: string } | null> }) => void;
 }
@@ -36,10 +46,23 @@ type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = Math.sin(Math.PI / 6);
 
-export function ContainerLoadView({ items, onReady }: Props) {
-  const [choice, setChoice] = useState<ContainerChoice>("auto");
+export function ContainerLoadView({
+  items,
+  recommendation,
+  forcedChoice,
+  onChoiceChange,
+  onReady,
+}: Props) {
+  const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
+  const choice: ContainerChoice = forcedChoice ?? internalChoice;
+  const setChoice = (c: ContainerChoice) => {
+    setInternalChoice(c);
+    onChoiceChange?.(c === "auto" ? null : c);
+  };
+
   const [is3D, setIs3D] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState("0");
   const view3DRef = useRef<Container3DHandle | null>(null);
 
   useEffect(() => {
@@ -51,6 +74,7 @@ export function ContainerLoadView({ items, onReady }: Props) {
   const cargoQty = useMemo(() => totalQty(items), [items]);
 
   const hasCargo = cargoCbm > 0 && cargoQty > 0;
+  const isMulti = recommendation?.isMulti === true;
 
   const autoContainer = useMemo(() => pickOptimalContainer(cargoCbm), [cargoCbm]);
   const activeContainer: ContainerPreset =
@@ -58,18 +82,26 @@ export function ContainerLoadView({ items, onReady }: Props) {
       ? autoContainer
       : CONTAINERS.find((c) => c.id === choice) ?? autoContainer;
 
-  const pack = useMemo(
+  // Single-container pack (used when not multi).
+  const singlePack = useMemo(
     () => packContainerAdvanced(items, activeContainer),
     [items, activeContainer],
   );
 
-  const needsMulti = cargoCbm > 70;
-  const multiPlan = useMemo(
-    () => (needsMulti ? splitMultiContainer(cargoCbm) : null),
-    [needsMulti, cargoCbm],
-  );
+  // Multi-container packs (one per recommended unit).
+  const multiPacks = useMemo<AdvancedPackResult[]>(() => {
+    if (!isMulti || !recommendation) return [];
+    const buckets = splitItemsAcrossContainers(items, recommendation);
+    return recommendation.units.map((u, i) =>
+      packContainerAdvanced(buckets[i] ?? [], u.container),
+    );
+  }, [items, isMulti, recommendation]);
 
-  // Expose snapshot capability to parent.
+  const activePack: AdvancedPackResult = isMulti
+    ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
+    : singlePack;
+
+  // Expose snapshot capability to parent (current visible pack).
   useEffect(() => {
     if (!onReady) return;
     onReady({
@@ -82,7 +114,7 @@ export function ContainerLoadView({ items, onReady }: Props) {
         }
       },
     });
-  }, [onReady, is3D]);
+  }, [onReady, is3D, activeTab]);
 
   return (
     <Card
@@ -133,37 +165,102 @@ export function ContainerLoadView({ items, onReady }: Props) {
 
       {!hasCargo ? (
         <EmptyState />
+      ) : isMulti && multiPacks.length > 0 ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="mb-3 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
+            {multiPacks.map((p, i) => (
+              <TabsTrigger
+                key={i}
+                value={String(i)}
+                className="flex-1 gap-1.5 text-[11px] sm:text-xs"
+              >
+                <span className="font-semibold">#{i + 1}</span>
+                {p.container.name}
+                <span className="hidden text-muted-foreground sm:inline">
+                  · {p.cargoCbm.toFixed(1)} m³
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {multiPacks.map((p, i) => (
+            <TabsContent key={i} value={String(i)} className="m-0">
+              <SinglePlanBody
+                pack={p}
+                weight={p.weightKg}
+                qty={p.placedCartons}
+                items={items}
+                is3D={is3D}
+                mounted={mounted}
+                view3DRef={view3DRef}
+                isActive={activeTab === String(i)}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-          <div className="space-y-3">
-            <StatsBar pack={pack} weight={cargoWeight} qty={cargoQty} />
-            <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
-              {is3D && mounted ? (
-                <Suspense
-                  fallback={
-                    <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
-                      Loading 3D viewer…
-                    </div>
-                  }
-                >
-                  <Container3DView ref={view3DRef} pack={pack} />
-                </Suspense>
-              ) : (
-                <IsoContainer pack={pack} />
-              )}
-            </div>
-            <Legend items={items} />
-            <LoadingSequence pack={pack} />
-            {needsMulti && multiPlan && <MultiPlan plan={multiPlan} />}
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Indicative loading pattern based on stowable capacity (30 / 60 / 70 m³ for 20ft / 40ft / 40ft HC).
-              Actual stow depends on weight distribution, carton orientation, and dunnage.
-            </p>
-          </div>
-          <LoadReportPanel pack={pack} />
-        </div>
+        <SinglePlanBody
+          pack={activePack}
+          weight={cargoWeight}
+          qty={cargoQty}
+          items={items}
+          is3D={is3D}
+          mounted={mounted}
+          view3DRef={view3DRef}
+          isActive
+        />
       )}
     </Card>
+  );
+}
+
+/* ---------------- Single-plan body (shared by single + per-tab) ---------------- */
+
+function SinglePlanBody({
+  pack,
+  weight,
+  qty: _qty,
+  items,
+  is3D,
+  mounted,
+  view3DRef,
+  isActive,
+}: {
+  pack: AdvancedPackResult;
+  weight: number;
+  qty: number;
+  items: CbmItem[];
+  is3D: boolean;
+  mounted: boolean;
+  view3DRef: React.MutableRefObject<Container3DHandle | null>;
+  isActive: boolean;
+}) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+      <div className="space-y-3">
+        <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
+        <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
+          {is3D && mounted ? (
+            <Suspense
+              fallback={
+                <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
+                  Loading 3D viewer…
+                </div>
+              }
+            >
+              <Container3DView ref={isActive ? view3DRef : undefined} pack={pack} />
+            </Suspense>
+          ) : (
+            <IsoContainer pack={pack} />
+          )}
+        </div>
+        <Legend items={items} />
+        <LoadingSequence pack={pack} />
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
+        </p>
+      </div>
+      <LoadReportPanel pack={pack} />
+    </div>
   );
 }
 
@@ -287,31 +384,6 @@ function Legend({ items }: { items: CbmItem[] }) {
   );
 }
 
-function MultiPlan({ plan }: { plan: ReturnType<typeof splitMultiContainer> }) {
-  return (
-    <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 dark:bg-amber-950/20">
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-amber-900 dark:text-amber-200">
-        <Boxes className="size-4" />
-        Multi-container plan ({plan.totalCbm.toFixed(2)} m³ total)
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {plan.units.map((u, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between rounded-md bg-white/70 px-2.5 py-1.5 text-xs dark:bg-amber-950/40"
-          >
-            <span className="font-semibold text-brand-navy">
-              #{i + 1} {u.container.name}
-            </span>
-            <span className="text-muted-foreground">
-              {u.fillCbm.toFixed(1)} m³ · {u.fillPct.toFixed(0)}%
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 /* ---------------- Isometric SVG (2D fallback) ---------------- */
 

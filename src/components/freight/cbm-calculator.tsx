@@ -25,7 +25,9 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
-import { ITEM_COLORS } from "@/lib/freight/packing";
+import { ITEM_COLORS, totalCbm as sumCbm, totalWeight as sumWeight } from "@/lib/freight/packing";
+import { recommendContainers } from "@/lib/freight/container-recommender";
+import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
 
@@ -46,8 +48,13 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
   const [wtUnit, setWtUnit] = usePersistentWeightUnit();
   const [advancedOpen, setAdvancedOpen] = useState<Record<string, boolean>>({});
+  const [forcedChoice, setForcedChoice] = useState<"20gp" | "40gp" | "40hc" | null>(null);
   const captureRef = useRef<(() => Promise<{ iso: string; front: string; side: string } | null>) | null>(null);
   const result = useMemo(() => calcCbm(items), [items]);
+  const recommendation = useMemo(
+    () => recommendContainers(sumCbm(items), sumWeight(items)),
+    [items],
+  );
 
   const update = (id: string, patch: Partial<CbmItem>) => {
     setItems(items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -214,8 +221,18 @@ export function CbmCalculator({ items, setItems }: Props) {
             Clear all
           </Button>
         </div>
+        {sumCbm(items) > 0 && (
+          <ContainerSuggestion
+            recommendation={recommendation}
+            currentChoice={forcedChoice ?? "auto"}
+            onApply={(id) => setForcedChoice(id)}
+          />
+        )}
         <ContainerLoadView
           items={items}
+          recommendation={recommendation}
+          forcedChoice={forcedChoice}
+          onChoiceChange={setForcedChoice}
           onReady={(h) => {
             captureRef.current = h.capture;
           }}
