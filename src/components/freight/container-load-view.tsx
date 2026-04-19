@@ -165,37 +165,102 @@ export function ContainerLoadView({
 
       {!hasCargo ? (
         <EmptyState />
+      ) : isMulti && multiPacks.length > 0 ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="mb-3 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
+            {multiPacks.map((p, i) => (
+              <TabsTrigger
+                key={i}
+                value={String(i)}
+                className="flex-1 gap-1.5 text-[11px] sm:text-xs"
+              >
+                <span className="font-semibold">#{i + 1}</span>
+                {p.container.name}
+                <span className="hidden text-muted-foreground sm:inline">
+                  · {p.cargoCbm.toFixed(1)} m³
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {multiPacks.map((p, i) => (
+            <TabsContent key={i} value={String(i)} className="m-0">
+              <SinglePlanBody
+                pack={p}
+                weight={p.weightKg}
+                qty={p.placedCartons}
+                items={items}
+                is3D={is3D}
+                mounted={mounted}
+                view3DRef={view3DRef}
+                isActive={activeTab === String(i)}
+              />
+            </TabsContent>
+          ))}
+        </Tabs>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-          <div className="space-y-3">
-            <StatsBar pack={pack} weight={cargoWeight} qty={cargoQty} />
-            <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
-              {is3D && mounted ? (
-                <Suspense
-                  fallback={
-                    <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
-                      Loading 3D viewer…
-                    </div>
-                  }
-                >
-                  <Container3DView ref={view3DRef} pack={pack} />
-                </Suspense>
-              ) : (
-                <IsoContainer pack={pack} />
-              )}
-            </div>
-            <Legend items={items} />
-            <LoadingSequence pack={pack} />
-            {needsMulti && multiPlan && <MultiPlan plan={multiPlan} />}
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Indicative loading pattern based on stowable capacity (30 / 60 / 70 m³ for 20ft / 40ft / 40ft HC).
-              Actual stow depends on weight distribution, carton orientation, and dunnage.
-            </p>
-          </div>
-          <LoadReportPanel pack={pack} />
-        </div>
+        <SinglePlanBody
+          pack={activePack}
+          weight={cargoWeight}
+          qty={cargoQty}
+          items={items}
+          is3D={is3D}
+          mounted={mounted}
+          view3DRef={view3DRef}
+          isActive
+        />
       )}
     </Card>
+  );
+}
+
+/* ---------------- Single-plan body (shared by single + per-tab) ---------------- */
+
+function SinglePlanBody({
+  pack,
+  weight,
+  qty: _qty,
+  items,
+  is3D,
+  mounted,
+  view3DRef,
+  isActive,
+}: {
+  pack: AdvancedPackResult;
+  weight: number;
+  qty: number;
+  items: CbmItem[];
+  is3D: boolean;
+  mounted: boolean;
+  view3DRef: React.MutableRefObject<Container3DHandle | null>;
+  isActive: boolean;
+}) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
+      <div className="space-y-3">
+        <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
+        <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
+          {is3D && mounted ? (
+            <Suspense
+              fallback={
+                <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
+                  Loading 3D viewer…
+                </div>
+              }
+            >
+              <Container3DView ref={isActive ? view3DRef : undefined} pack={pack} />
+            </Suspense>
+          ) : (
+            <IsoContainer pack={pack} />
+          )}
+        </div>
+        <Legend items={items} />
+        <LoadingSequence pack={pack} />
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
+        </p>
+      </div>
+      <LoadReportPanel pack={pack} />
+    </div>
   );
 }
 
