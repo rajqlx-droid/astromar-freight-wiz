@@ -325,6 +325,13 @@ function SceneContents({
       recording ? transformsForFrame(pack, recording, frame) : null,
     [recording, pack, frame],
   );
+  const staging = useMemo(
+    () => (recording ? stagingForFrame(pack, recording, frame) : null),
+    [recording, pack, frame],
+  );
+  // When NOT recording, leave doors fully open so the static scene reads as
+  // "ready to load" (matches the new realistic shell).
+  const doorOpen = staging?.doorOpen ?? 1;
 
   return (
     <>
