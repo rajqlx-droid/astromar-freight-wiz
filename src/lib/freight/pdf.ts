@@ -31,10 +31,10 @@ export function downloadResultPdf(
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text("Astromar Logistics", 40, 32);
+  doc.text("Smart Tool", 40, 32);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.text("India's leading FTWZ provider", 40, 50);
+  doc.text("Freight Intelligence Suite", 40, 50);
 
   // Accent bar
   doc.setFillColor(...ORANGE);
@@ -141,19 +141,13 @@ export function downloadResultPdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(80, 80, 80);
-  doc.text("Astromar Logistics Pvt Ltd", 40, ph - 52);
-  doc.text(
-    "No. 922, 1st Floor, H-Block, 17th Main Road, Anna Nagar, Chennai - 600 040",
-    40,
-    ph - 38,
-  );
-  doc.text("Phone: +91 99402 11014   |   Email: sales@astromarfreezone.com", 40, ph - 24);
+  doc.text("Smart Tool — Freight Intelligence", 40, ph - 38);
   doc.setTextColor(150, 150, 150);
   doc.setFontSize(7);
   doc.text(
     "These calculations are estimates and are provided as guidance only. Actual freight, duty and demurrage charges may vary by carrier and port.",
     40,
-    ph - 10,
+    ph - 20,
   );
 
   const filename = `${result.title.replace(/\s+/g, "-")}_${new Date()

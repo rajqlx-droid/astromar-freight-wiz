@@ -183,7 +183,43 @@ export function CbmCalculator({ items, setItems }: Props) {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  {/* Packing options chip — sits next to row actions to save vertical space */}
+                  <Popover
+                    open={openPopoverId === it.id}
+                    onOpenChange={(o) => setOpenPopoverId(o ? it.id : null)}
+                  >
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                          confirmed
+                            ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
+                            : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
+                        )}
+                      >
+                        {confirmed ? (
+                          <CheckCircle2 className="size-3.5 shrink-0" />
+                        ) : (
+                          <Settings2 className="size-3.5 shrink-0" />
+                        )}
+                        <span className="truncate">
+                          {confirmed ? buildSummary(it) : "Packing options"}
+                        </span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-4">
+                      {renderPackingPopoverContent({
+                        it,
+                        idx,
+                        items,
+                        updatePacking,
+                        applyToAll,
+                        closePopover: () => setOpenPopoverId(null),
+                      })}
+                    </PopoverContent>
+                  </Popover>
                   <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
                     <Copy className="size-3.5" />
                   </Button>
