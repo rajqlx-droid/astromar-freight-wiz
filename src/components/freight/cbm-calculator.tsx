@@ -332,24 +332,64 @@ export function CbmCalculator({ items, setItems }: Props) {
           const extras: import("@/lib/freight/pdf").PdfExtras = {};
           if (snaps) extras.snapshots = snaps;
           if (pack && pack.placed.length > 0) {
-            const { buildRows, instructionFor, itemCountsForRow } = await import(
-              "@/lib/freight/loading-rows"
-            );
+            const { buildRows, instructionFor, itemCountsForRow, buildRowSideViewSvg } =
+              await import("@/lib/freight/loading-rows");
             const rows = buildRows(pack);
-            extras.loadingRows = rows.map((r) => ({
-              rowIdx: r.rowIdx,
-              xStartM: r.xStart / 1000,
-              xEndM: r.xEnd / 1000,
-              pkgCount: r.boxes.length,
-              layers: r.layers,
-              cbm: r.totalCbm,
-              weightKg: r.totalWeightKg,
-              hasFragile: r.hasFragile,
-              hasNonStack: r.hasNonStack,
-              rotatedCount: r.rotatedCount,
-              items: itemCountsForRow(r, pack),
-              instruction: instructionFor(r),
-            }));
+            // Rasterise each side-view SVG to a PNG dataURL for jsPDF.
+            const svgToPng = (svg: string): Promise<string | undefined> =>
+              new Promise((resolve) => {
+                const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => {
+                  const scale = 2; // crisp on print
+                  const canvas = document.createElement("canvas");
+                  canvas.width = img.width * scale;
+                  canvas.height = img.height * scale;
+                  const ctx = canvas.getContext("2d");
+                  if (!ctx) {
+                    URL.revokeObjectURL(url);
+                    resolve(undefined);
+                    return;
+                  }
+                  ctx.fillStyle = "#ffffff";
+                  ctx.fillRect(0, 0, canvas.width, canvas.height);
+                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  URL.revokeObjectURL(url);
+                  try {
+                    resolve(canvas.toDataURL("image/png"));
+                  } catch {
+                    resolve(undefined);
+                  }
+                };
+                img.onerror = () => {
+                  URL.revokeObjectURL(url);
+                  resolve(undefined);
+                };
+                img.src = url;
+              });
+
+            extras.loadingRows = await Promise.all(
+              rows.map(async (r) => {
+                const svg = buildRowSideViewSvg(r, pack, { width: 260, height: 104 });
+                const sideViewPng = await svgToPng(svg);
+                return {
+                  rowIdx: r.rowIdx,
+                  xStartM: r.xStart / 1000,
+                  xEndM: r.xEnd / 1000,
+                  pkgCount: r.boxes.length,
+                  layers: r.layers,
+                  cbm: r.totalCbm,
+                  weightKg: r.totalWeightKg,
+                  hasFragile: r.hasFragile,
+                  hasNonStack: r.hasNonStack,
+                  rotatedCount: r.rotatedCount,
+                  items: itemCountsForRow(r, pack),
+                  instruction: instructionFor(r),
+                  sideViewPng,
+                };
+              }),
+            );
           }
           return Object.keys(extras).length ? extras : undefined;
         }}
