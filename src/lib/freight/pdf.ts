@@ -88,6 +88,43 @@ export function downloadResultPdf(
 
   let y = 150;
 
+  // Wall efficiency badge on cover — gives the loader the overall target
+  // before they start. Coloured pill matches the on-screen traffic light.
+  if (extras?.wallEfficiency && extras.wallEfficiency.rowCount > 0) {
+    const we = extras.wallEfficiency;
+    const pillColor: [number, number, number] =
+      we.status === "green" ? [5, 150, 105] : we.status === "amber" ? [217, 119, 6] : [225, 29, 72];
+    const pillBg: [number, number, number] =
+      we.status === "green" ? [209, 250, 229] : we.status === "amber" ? [254, 243, 199] : [255, 228, 230];
+    const pct = Math.round(we.scorePct);
+    const statusLabel =
+      we.status === "green" ? "Optimal" : we.status === "amber" ? "Close gaps" : "Re-shuffle needed";
+    const pillW = 220;
+    const pillH = 26;
+    doc.setFillColor(...pillBg);
+    doc.setDrawColor(...pillColor);
+    doc.setLineWidth(0.8);
+    doc.roundedRect(40, y, pillW, pillH, 4, 4, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...pillColor);
+    doc.text(`${pct}%`, 50, y + 17);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...NAVY);
+    doc.text("Container wall efficiency", 80, y + 11);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...pillColor);
+    const subTxt =
+      we.gapRowCount > 0
+        ? `${statusLabel} · ${we.gapRowCount} of ${we.rowCount} row${we.rowCount > 1 ? "s" : ""} need re-shuffle`
+        : `${statusLabel} · all ${we.rowCount} row${we.rowCount > 1 ? "s" : ""} tight to back wall`;
+    doc.text(subTxt, 80, y + 21);
+    y += pillH + 14;
+  }
+
+
   if (inputsTable && inputsTable.length) {
     autoTable(doc, {
       startY: y,
