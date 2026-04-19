@@ -359,68 +359,102 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Button>
         </div>
 
-        {/* Gate banner — replaces ContainerSuggestion when any row is unconfirmed */}
-        {sumCbm(items) > 0 && !allConfirmed && (
-          <div className="rounded-lg border-2 border-amber-400/60 bg-amber-50 p-3 sm:p-4 dark:bg-amber-950/20">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-200">
-              <AlertTriangle className="size-4" />
-              <span>Confirm packing options to unlock container optimization</span>
+        {/* Optimize-container CTA — CBM math is never gated, only this section is */}
+        {hasAnyDims && !showOptimization && (
+          <Card className="border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-4 sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <div className="rounded-full bg-brand-orange/10 p-2 text-brand-orange">
+                  <Sparkles className="size-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-brand-navy">
+                    Get container optimization plan
+                  </h3>
+                  <p className="mt-0.5 max-w-md text-[11px] text-muted-foreground">
+                    Recommend the best container, render a 3D loading plan, generate a loading
+                    video and unlock PDF export. We'll ask a few packing questions first.
+                  </p>
+                </div>
+              </div>
               <Button
                 size="sm"
-                variant="default"
-                className="ml-auto h-7 bg-amber-600 px-2.5 text-[11px] text-white hover:bg-amber-700"
-                onClick={reviewFirstUnconfirmed}
+                className="text-white shadow-sm hover:opacity-90"
+                style={{ background: "var(--brand-orange)" }}
+                onClick={() => {
+                  if (allConfirmed) {
+                    setOptimizationRequested(true);
+                  } else {
+                    setConfirmModalOpen(true);
+                  }
+                }}
               >
-                Review packing options
+                <Sparkles className="size-3.5" /> Optimize loading
               </Button>
             </div>
-            <p className="mb-2 text-[11px] text-amber-900/90 dark:text-amber-200/90">
-              We need to know which cartons are stackable, fragile, and rotatable before we can
-              recommend the right container or render an accurate 3D loading plan.
-            </p>
-            <ul className="flex flex-wrap gap-1.5">
-              {unconfirmed.map((u) => {
-                const idx = items.findIndex((it) => it.id === u.id);
-                return (
-                  <li
-                    key={u.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-amber-400/60 bg-white/70 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-black/30 dark:text-amber-200"
-                  >
-                    <AlertTriangle className="size-2.5" />
-                    Item {idx + 1}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          </Card>
         )}
 
-        {sumCbm(items) > 0 && allConfirmed && (
-          <ContainerSuggestion
-            recommendation={recommendation}
-            currentChoice={forcedChoice ?? "auto"}
-            onApply={(id) => setForcedChoice(id)}
-          />
+        {showOptimization && (
+          <>
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmModalOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
+              >
+                <Pencil className="size-3" /> Edit packing options
+              </button>
+            </div>
+            <ContainerSuggestion
+              recommendation={recommendation}
+              currentChoice={forcedChoice ?? "auto"}
+              onApply={(id) => setForcedChoice(id)}
+            />
+            <ContainerLoadView
+              items={items}
+              recommendation={recommendation}
+              forcedChoice={forcedChoice}
+              onChoiceChange={setForcedChoice}
+              onReady={(h) => {
+                captureRef.current = h.capture;
+              }}
+            />
+          </>
         )}
-
-        <ContainerLoadView
-          items={items}
-          recommendation={recommendation}
-          forcedChoice={forcedChoice}
-          onChoiceChange={setForcedChoice}
-          optimizationDisabledReason={gateReason}
-          onReady={(h) => {
-            captureRef.current = h.capture;
-          }}
-        />
       </div>
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
-        pdfDisabledReason={gateReason}
+        pdfDisabledReason={
+          showOptimization
+            ? null
+            : "Click 'Optimize loading' and confirm packing options to enable PDF export with the 3D loading plan."
+        }
         resolveExtras={async () => {
           const snaps = captureRef.current ? await captureRef.current() : null;
           return snaps ? { snapshots: snaps } : undefined;
+        }}
+      />
+
+      {/* Confirm packing options modal */}
+      <ConfirmPackingModal
+        open={confirmModalOpen}
+        onOpenChange={setConfirmModalOpen}
+        items={items}
+        onUpdate={updatePacking}
+        onApplyToAll={applyToAll}
+        onConfirm={() => {
+          // Mark every dimensioned row as confirmed and unlock optimization.
+          setItems(
+            items.map((it) =>
+              it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0
+                ? { ...it, packingConfirmed: true }
+                : it,
+            ),
+          );
+          setConfirmModalOpen(false);
+          setOptimizationRequested(true);
         }}
       />
     </div>
