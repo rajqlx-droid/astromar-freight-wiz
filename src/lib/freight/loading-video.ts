@@ -240,11 +240,15 @@ export function computeBoxTransforms(
     onForklift: false,
   }));
   const Cl = pack.container.inner.l / MM_PER_M;
-  const Ch = pack.container.inner.h / MM_PER_M;
+  const Cw = pack.container.inner.w / MM_PER_M;
+  // Yard pickup zone (must match stagingForFrame + WarehouseAmbience)
+  const yardStackZ = Cw / 2 + 1.4;
+  const yardStackX = Cl / 2 + 4.5;
 
   if (frame < timeline.introFrames) return result;
 
-  for (const a of timeline.anims) {
+  for (let ai = 0; ai < timeline.anims.length; ai++) {
+    const a = timeline.anims[ai];
     if (a.startFrame > frame) continue;
     const item = result[a.placedIdx];
     if (frame >= a.endFrame) {
@@ -253,20 +257,59 @@ export function computeBoxTransforms(
       item.scale = 1;
       continue;
     }
-    // Two-phase animation: forklift carries box from outside the door (+x)
-    // toward its slot (first 70%), then box settles down to the floor (last 30%).
+    // Three phases (mirrors stagingForFrame): pickup at yard stack, drive in,
+    // settle into final slot. Box is invisible until forks complete pickup
+    // (it "materialises" on the forks as if lifted from the stack).
     const t = (frame - a.startFrame) / Math.max(1, a.endFrame - a.startFrame);
-    const carryT = Math.min(1, t / 0.7);
-    const settleT = Math.max(0, (t - 0.7) / 0.3);
-    const carryEase = 1 - Math.pow(1 - carryT, 3);
-    item.visible = true;
-    // Box rides on forklift forks at fork height (~0.6 m above floor) while carried,
-    // then descends to its true z during settle.
-    const carryX = Cl * 0.9 * (1 - carryEase); // slide from door (+x) into place
-    const liftY = Ch * 0.35 * (1 - settleT);   // hover at fork height, then drop
-    item.offset = [carryX, liftY, 0];
-    item.onForklift = settleT < 1;
-    item.scale = 0.92 + 0.08 * carryEase;
+    const box = pack.placed[a.placedIdx];
+    const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
+    const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
+    const restY = box.z / MM_PER_M;
+    const side = ai % 2 === 0 ? 1 : -1;
+    const pickupX = yardStackX;
+    const pickupZ = side * yardStackZ;
+
+    // Box.x/y in scene-local coords = box's slot. We compute an OFFSET to
+    // shift it from its slot toward the pickup point or carry height.
+    // Container scene uses box at slot when offset = [0, 0, 0].
+    if (t < 0.20) {
+      // PICKUP: box hidden until ease > 0.5 (forks fully under it).
+      const r = t / 0.20;
+      const ease = easeInOutQuad(r);
+      if (ease <= 0.5) {
+        item.visible = false;
+        continue;
+      }
+      item.visible = true;
+      // Position the box AT the yard stack at fork height. Compute offset
+      // from its final slot to that yard pickup position.
+      const carryY = 0.55 - restY;
+      const dx = pickupX - boxWorldX;
+      const dz = pickupZ - boxWorldZ;
+      item.offset = [dx, carryY, dz];
+      item.onForklift = true;
+      item.scale = 0.95;
+    } else if (t < 0.75) {
+      // DRIVE-IN: interpolate from yard pickup to final slot at fork height.
+      const r = (t - 0.20) / (0.75 - 0.20);
+      const ease = 1 - Math.pow(1 - r, 3);
+      item.visible = true;
+      const carryY = 0.55 - restY;
+      const curX = pickupX + (boxWorldX - pickupX) * ease;
+      const curZ = pickupZ + (boxWorldZ - pickupZ) * ease;
+      item.offset = [curX - boxWorldX, carryY, curZ - boxWorldZ];
+      item.onForklift = true;
+      item.scale = 0.95 + 0.05 * ease;
+    } else {
+      // SETTLE: at slot, lower from carry height to rest.
+      const r = (t - 0.75) / 0.25;
+      const ease = easeInOutQuad(r);
+      item.visible = true;
+      const carryY = 0.55 - restY;
+      item.offset = [0, carryY * (1 - ease), 0];
+      item.onForklift = ease < 1;
+      item.scale = 1;
+    }
   }
   return result;
 }
@@ -282,6 +325,12 @@ export function stagingForFrame(
   forkliftX: number;    // world +x position of forklift center (m)
   forkliftZ: number;    // world z (lateral) position
   forkliftY: number;    // mast lift height for the forks (m)
+  /** Yaw rotation of driver's head (radians). Positive = looking back over right shoulder. */
+  headYaw: number;
+  /** Whether the engine is running (drives the engine-hum audio layer). */
+  engineOn: boolean;
+  /** True while the forklift is reversing (drives the beep audio + head turn). */
+  reversing: boolean;
   carriedBoxIdx: number | null;
 } {
   const Cl = pack.container.inner.l / MM_PER_M;
@@ -301,15 +350,20 @@ export function stagingForFrame(
 
   const Cw = pack.container.inner.w / MM_PER_M;
   const startX = Cl / 2 + 2.5;
+  // Yard feeder stack lateral positions (must match WarehouseAmbience).
+  const yardStackZ = Cw / 2 + 1.4;
+  const yardStackX = Cl / 2 + 4.5;
 
   // Find active anim (box currently being carried) and previous anim (just finished).
   let active: BoxAnim | null = null;
   let prev: BoxAnim | null = null;
   let next: BoxAnim | null = null;
+  let activeIdx = -1;
   for (let i = 0; i < timeline.anims.length; i++) {
     const a = timeline.anims[i];
     if (a.startFrame <= frame && frame < a.endFrame) {
       active = a;
+      activeIdx = i;
       prev = i > 0 ? timeline.anims[i - 1] : null;
       next = i < timeline.anims.length - 1 ? timeline.anims[i + 1] : null;
       break;
@@ -320,7 +374,7 @@ export function stagingForFrame(
     }
   }
 
-  // Outside the loading window — park forklift outside the door.
+  // Outside the loading window — park forklift outside the door, engine off.
   if (frame < introF || frame >= outroStart) {
     return {
       doorOpen,
@@ -328,6 +382,9 @@ export function stagingForFrame(
       forkliftX: startX,
       forkliftZ: 0,
       forkliftY: 0.6,
+      headYaw: 0,
+      engineOn: false,
+      reversing: false,
       carriedBoxIdx: null,
     };
   }
@@ -342,6 +399,9 @@ export function stagingForFrame(
         forkliftX: startX,
         forkliftZ: 0,
         forkliftY: 0.6,
+        headYaw: 0,
+        engineOn: true,
+        reversing: false,
         carriedBoxIdx: null,
       };
     }
@@ -353,49 +413,87 @@ export function stagingForFrame(
     const pBox = pack.placed[prev.placedIdx];
     const pX = pBox.x / MM_PER_M + pBox.l / MM_PER_M / 2 - Cl / 2;
     const pZ = pBox.y / MM_PER_M + pBox.w / MM_PER_M / 2 - Cw / 2;
-    // Next pickup target
-    const nBox = pack.placed[next.placedIdx];
-    const nX = nBox.x / MM_PER_M + nBox.l / MM_PER_M / 2 - Cl / 2;
-    const nZ = nBox.y / MM_PER_M + nBox.w / MM_PER_M / 2 - Cw / 2;
     // First half: reverse out of container to staging point. Second half:
-    // drive forward to align with next box pickup zone (still outside door).
+    // drive forward to align with next yard stack pickup zone.
     let fx: number;
     let fz: number;
+    let reversing = false;
     if (gt < 0.5) {
       const r = gt / 0.5;
       const ease = r * r;
       fx = pX + (startX - pX) * ease;
       fz = pZ * (1 - ease);
+      reversing = true;
     } else {
       const r = (gt - 0.5) / 0.5;
       const ease = r * r;
-      // Slight lateral shuffle outside door toward next box's lateral lane
-      fx = startX;
-      fz = nZ * 0.15 * ease;
+      // Drive from staging out to yard stack (alternating sides per step).
+      const side = (activeNextSide(timeline, prev) ? 1 : -1);
+      fx = startX + (yardStackX - startX) * ease;
+      fz = side * yardStackZ * ease;
     }
+    // Head turns over the right shoulder while reversing (~120°).
+    const headYaw = reversing
+      ? -Math.PI * 0.66 * easeInOutQuad(Math.min(1, gt / 0.4))
+      : 0;
     return {
       doorOpen,
       forkliftActive: true,
       forkliftX: fx,
       forkliftZ: fz,
       forkliftY: 0.35, // forks lowered while empty
+      headYaw,
+      engineOn: true,
+      reversing,
       carriedBoxIdx: null,
     };
   }
 
-  // Active anim: forklift drives in from outside the door, then reverses
-  // briefly during settle as the box drops onto its slot.
+  // Active anim: 3 phases
+  //   pickup (0.00 - 0.20): forks already at yard stack, lift the new pallet
+  //   driveIn (0.20 - 0.75): forklift drives from yard into the box's slot
+  //   settle  (0.75 - 1.00): forks lower, box drops into final position
   const t = (frame - active.startFrame) / Math.max(1, active.endFrame - active.startFrame);
-  const carryT = Math.min(1, t / 0.7);
-  const settleT = Math.max(0, (t - 0.7) / 0.3);
-  const carryEase = 1 - Math.pow(1 - carryT, 3);
   const box = pack.placed[active.placedIdx];
   const boxWorldX = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
-  const forkliftX = startX + (boxWorldX - startX) * carryEase;
   const boxWorldZ = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
-  const forkliftZ = boxWorldZ * carryEase;
   const restY = box.z / MM_PER_M + 0.05;
-  const forkliftY = 0.55 + (restY - 0.55) * settleT;
+  // Pickup yard side alternates per step so both feeder stacks get used.
+  const side = activeIdx % 2 === 0 ? 1 : -1;
+  const pickupX = yardStackX;
+  const pickupZ = side * yardStackZ;
+
+  let forkliftX: number;
+  let forkliftZ: number;
+  let forkliftY: number;
+  let carriedBoxIdx: number | null = null;
+
+  if (t < 0.20) {
+    // PICKUP: forks rise from low (0.15) to carry height (0.55) at the yard stack.
+    const r = t / 0.20;
+    const ease = easeInOutQuad(r);
+    forkliftX = pickupX;
+    forkliftZ = pickupZ;
+    forkliftY = 0.15 + (0.55 - 0.15) * ease;
+    // Box becomes "carried" once forks are halfway up.
+    carriedBoxIdx = ease > 0.5 ? active.placedIdx : null;
+  } else if (t < 0.75) {
+    // DRIVE-IN: forklift travels from yard (pickupX, pickupZ) to box slot.
+    const r = (t - 0.20) / (0.75 - 0.20);
+    const ease = 1 - Math.pow(1 - r, 3);
+    forkliftX = pickupX + (boxWorldX - pickupX) * ease;
+    forkliftZ = pickupZ + (boxWorldZ - pickupZ) * ease;
+    forkliftY = 0.55;
+    carriedBoxIdx = active.placedIdx;
+  } else {
+    // SETTLE: forks lower from 0.55 to restY, box drops into place.
+    const r = (t - 0.75) / 0.25;
+    const ease = easeInOutQuad(r);
+    forkliftX = boxWorldX;
+    forkliftZ = boxWorldZ;
+    forkliftY = 0.55 + (restY - 0.55) * ease;
+    carriedBoxIdx = ease < 1 ? active.placedIdx : null;
+  }
 
   return {
     doorOpen,
@@ -403,8 +501,21 @@ export function stagingForFrame(
     forkliftX,
     forkliftZ,
     forkliftY,
-    carriedBoxIdx: settleT < 1 ? active.placedIdx : null,
+    headYaw: 0,
+    engineOn: true,
+    reversing: false,
+    carriedBoxIdx,
   };
+}
+
+function easeInOutQuad(x: number): number {
+  return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+}
+
+/** Pick which side of yard the next pickup will happen on (alternating). */
+function activeNextSide(timeline: Timeline, prev: BoxAnim): boolean {
+  const idx = timeline.anims.findIndex((a) => a === prev);
+  return ((idx + 1) % 2) === 0;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -462,38 +573,81 @@ function reverseGapIntervalsSec(timeline: Timeline): Array<[number, number]> {
 }
 
 /**
- * Build an AudioBuffer of `durationSec` containing classic warehouse "beep …
- * beep … beep" reverse-warning tones during each reverse interval. ~1 kHz
- * square-ish tone, 250 ms on / 250 ms off, gentle envelope so it doesn't pop.
+ * Build an AudioBuffer of `durationSec` containing:
+ *   - Low engine drone (~80 Hz fundamental + 160 Hz overtone) during the
+ *     entire loading window. Slight pitch dip during reverse intervals.
+ *   - Classic warehouse "beep … beep … beep" reverse-warning tones during
+ *     each reverse interval. Soft envelope so it doesn't pop.
  */
 function buildBeepBuffer(
   ctx: AudioContext,
   durationSec: number,
-  intervals: Array<[number, number]>,
+  beepIntervals: Array<[number, number]>,
+  engineWindow: [number, number] | null,
 ): AudioBuffer {
   const sr = ctx.sampleRate;
   const totalSamples = Math.ceil(durationSec * sr);
   const buf = ctx.createBuffer(1, totalSamples, sr);
   const data = buf.getChannelData(0);
+
+  // ---- Engine hum layer ----
+  if (engineWindow) {
+    const [eStart, eEnd] = engineWindow;
+    const startSample = Math.floor(eStart * sr);
+    const endSample = Math.min(totalSamples, Math.floor(eEnd * sr));
+    const fadeT = 0.4; // seconds fade-in / fade-out
+    const fadeSamples = Math.floor(fadeT * sr);
+    const baseFreq = 78;     // Hz fundamental — diesel-ish chug
+    const idleAmp = 0.16;
+    // Reverse intervals → use lower-pitched "reverse gear" sound.
+    const isReversingAt = (sample: number): boolean => {
+      const sec = sample / sr;
+      return beepIntervals.some(([s, e]) => sec >= s && sec < e);
+    };
+    let phase = 0;
+    let phase2 = 0;
+    let phase3 = 0;
+    for (let i = startSample; i < endSample; i++) {
+      // Smooth fade in/out
+      let env = 1;
+      const fromStart = i - startSample;
+      const toEnd = endSample - i;
+      if (fromStart < fadeSamples) env *= fromStart / fadeSamples;
+      if (toEnd < fadeSamples) env *= toEnd / fadeSamples;
+      // Subtle wobble to avoid mechanical purity
+      const wobble = 1 + 0.015 * Math.sin((i / sr) * 2 * Math.PI * 1.7);
+      const reverse = isReversingAt(i);
+      const f = baseFreq * (reverse ? 0.78 : 1.0) * wobble;
+      phase += (2 * Math.PI * f) / sr;
+      phase2 += (2 * Math.PI * f * 2) / sr;
+      phase3 += (2 * Math.PI * f * 0.5) / sr;
+      // Triangle-ish blend: fundamental + 2nd harmonic + sub for diesel weight
+      const sample =
+        Math.sin(phase) * 0.7 +
+        Math.sin(phase2) * 0.22 +
+        Math.sin(phase3) * 0.18;
+      data[i] += sample * env * idleAmp;
+    }
+  }
+
+  // ---- Reverse beep layer ----
   const freq = 1050;
   const beepOn = 0.22;   // seconds on
   const beepOff = 0.28;  // seconds silent
   const period = beepOn + beepOff;
-  const attack = 0.008;  // seconds — soft envelope to avoid clicks
+  const attack = 0.008;
   const amp = 0.32;
 
-  for (const [start, end] of intervals) {
+  for (const [start, end] of beepIntervals) {
     const startSample = Math.floor(start * sr);
     const endSample = Math.min(totalSamples, Math.floor(end * sr));
     for (let i = startSample; i < endSample; i++) {
       const tInGap = (i - startSample) / sr;
       const phase = tInGap % period;
-      if (phase >= beepOn) continue; // silent half
-      // Soft attack/release envelope inside the on-phase
+      if (phase >= beepOn) continue;
       let env = 1;
       if (phase < attack) env = phase / attack;
       else if (phase > beepOn - attack) env = Math.max(0, (beepOn - phase) / attack);
-      // Square-ish tone (sine + slight 3rd harmonic for warehouse feel)
       const s =
         Math.sin(2 * Math.PI * freq * tInGap) * 0.85 +
         Math.sin(2 * Math.PI * freq * 3 * tInGap) * 0.12;
@@ -501,6 +655,14 @@ function buildBeepBuffer(
     }
   }
   return buf;
+}
+
+/** Compute the [startSec, endSec] window during which the engine should be running. */
+function engineWindowSec(timeline: Timeline): [number, number] {
+  const fps = timeline.fps;
+  const start = timeline.introFrames / fps;
+  const end = (timeline.introFrames + timeline.loadFrames) / fps;
+  return [start, end];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -524,10 +686,12 @@ async function encodeWithMediaRecorder(
   const tracks: MediaStreamTrack[] = videoStream.getVideoTracks();
   try {
     const intervals = reverseGapIntervalsSec(timeline);
-    if (intervals.length > 0 && typeof AudioContext !== "undefined") {
+    const engineWin = engineWindowSec(timeline);
+    // Always create the audio track (engine hum runs even with no reverse gaps).
+    if (typeof AudioContext !== "undefined") {
       audioCtx = new AudioContext();
       const durationSec = totalFrames / fps;
-      const buffer = buildBeepBuffer(audioCtx, durationSec, intervals);
+      const buffer = buildBeepBuffer(audioCtx, durationSec, intervals, engineWin);
       const dest = audioCtx.createMediaStreamDestination();
       audioSource = audioCtx.createBufferSource();
       audioSource.buffer = buffer;

@@ -425,6 +425,7 @@ function SceneContents({
           x={staging.forkliftX}
           z={staging.forkliftZ}
           forkY={staging.forkliftY}
+          headYaw={staging.headYaw}
         />
       )}
 
@@ -668,11 +669,16 @@ function WarehouseAmbience({ Cm }: { Cm: { l: number; w: number; h: number } }) 
   const palletL = 1.2;
   const palletW = 1.0;
 
-  // Stacks of empty pallets behind the container (x = -Cl/2 - 1.5 m), to the side.
+  // Stacks of empty pallets: ambient stacks behind, plus loading-side feeder
+  // stacks near the door (the forklift drives out to these to grab a fresh
+  // pallet+box during each loading step).
   const stacks: Array<{ pos: [number, number, number]; count: number }> = [
     { pos: [-Cm.l / 2 - 1.6, 0, -Cm.w / 2 - 1.4], count: 5 },
     { pos: [-Cm.l / 2 - 1.6, 0, Cm.w / 2 + 1.4], count: 4 },
     { pos: [-Cm.l / 2 - 3.0, 0, -Cm.w / 2 - 1.6], count: 6 },
+    // Loading-side feeder stacks (near door, +x). Forklift picks from here.
+    { pos: [Cm.l / 2 + 4.5, 0, -Cm.w / 2 - 1.4], count: 4 },
+    { pos: [Cm.l / 2 + 4.5, 0, Cm.w / 2 + 1.4], count: 4 },
   ];
 
   // Traffic cones flanking the door (door is at +Cl/2). Two pairs forming a lane.
@@ -757,7 +763,7 @@ function TrafficCone({ position }: { position: [number, number, number] }) {
 
 /* --------------- Forklift --------------- */
 
-function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
+function Forklift({ x, z, forkY, headYaw = 0 }: { x: number; z: number; forkY: number; headYaw?: number }) {
   // Recognizable forklift: yellow chassis, mast in front (-x), two forks.
   // Origin = base center on ground. Forks point in -x (toward container door).
   const BODY = "#fbbf24";
@@ -800,7 +806,7 @@ function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
       </mesh>
 
       {/* Driver figure — sits in the seat, faces forward (-x toward forks) */}
-      <ForkliftDriver />
+      <ForkliftDriver headYaw={headYaw} />
 
       {/* Wheels */}
       {([
@@ -854,7 +860,7 @@ function Forklift({ x, z, forkY }: { x: number; z: number; forkY: number }) {
 
 /* --------------- Forklift driver figure --------------- */
 
-function ForkliftDriver() {
+function ForkliftDriver({ headYaw = 0 }: { headYaw?: number }) {
   // Tiny stylised driver: hi-vis vest, hard hat, head, arms on the wheel.
   // Origin = forklift local space; seat sits at x=0.25, y=0.6, facing -x.
   const VEST = "#facc15"; // hi-vis yellow
@@ -896,20 +902,21 @@ function ForkliftDriver() {
         <boxGeometry args={[0.22, 0.07, 0.07]} />
         <meshStandardMaterial color={VEST} roughness={0.7} />
       </mesh>
-      {/* Head */}
-      <mesh castShadow position={[0.08, 0.55, 0]}>
-        <sphereGeometry args={[0.1, 16, 12]} />
-        <meshStandardMaterial color={SKIN} roughness={0.85} />
-      </mesh>
-      {/* Hard hat — flat dome with brim */}
-      <mesh castShadow position={[0.08, 0.62, 0]}>
-        <sphereGeometry args={[0.11, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-        <meshStandardMaterial color={HAT} roughness={0.6} />
-      </mesh>
-      <mesh position={[0.04, 0.62, 0]}>
-        <cylinderGeometry args={[0.13, 0.13, 0.012, 16]} />
-        <meshStandardMaterial color={HAT} roughness={0.6} />
-      </mesh>
+      {/* Head + hat — rotates as a unit when driver looks back over shoulder */}
+      <group position={[0.08, 0.55, 0]} rotation={[0, headYaw, 0]}>
+        <mesh castShadow>
+          <sphereGeometry args={[0.1, 16, 12]} />
+          <meshStandardMaterial color={SKIN} roughness={0.85} />
+        </mesh>
+        <mesh castShadow position={[0, 0.07, 0]}>
+          <sphereGeometry args={[0.11, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color={HAT} roughness={0.6} />
+        </mesh>
+        <mesh position={[-0.04, 0.07, 0]}>
+          <cylinderGeometry args={[0.13, 0.13, 0.012, 16]} />
+          <meshStandardMaterial color={HAT} roughness={0.6} />
+        </mesh>
+      </group>
     </group>
   );
 }
