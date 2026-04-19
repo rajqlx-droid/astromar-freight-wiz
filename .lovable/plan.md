@@ -1,43 +1,57 @@
 
 
-## Revised gating — CBM always works, only optimization is gated
+## Plan — Globalize calculators (concise)
 
-You're right. Current behavior blocks the popover too aggressively. Fix: **CBM math is never gated. Packing options are only required when the user explicitly requests container optimization.**
+### 1. Typable Port input
+- Convert any `Port` field (currently a `Select`) to a plain typable `Input` with placeholder "Enter port name (e.g. Chennai, Shanghai, Rotterdam)".
+- Free-text only, no dropdown, no suggestions list. State stays `string`.
+- Files: `src/components/freight/risk-calculator.tsx` (and any other calc using port — verify on implementation).
 
-### New flow
-1. User fills dimensions + qty + weight → **CBM, chargeable weight, totals calculate immediately** (no warnings, no amber chips, no popover pressure).
-2. Container suggestion banner is **replaced with a CTA card**: *"Get container optimization plan"* button.
-3. Clicking the CTA checks: do all rows have `packingConfirmed === true`?
-   - **Yes** → run optimization, show `<ContainerSuggestion>` + unlock 3D view, Loading Video, PDF download.
-   - **No** → open a single modal listing unconfirmed items with inline toggles (stackable / fragile / sideways / axis / max stack weight) + "Apply to all" + Confirm button. On confirm → run optimization automatically.
-4. Once optimized, a small "Edit packing options" link stays visible so user can re-tune and re-run.
+### 2. Multi-line cargo — Landed Cost & Export Price
+Replace single-product inputs with an invoice-style line-item table.
 
-### UI changes in `cbm-calculator.tsx`
-- Remove the per-row amber "⚠ Packing options required" pressure chip.
-- Per-row packing chip becomes **neutral/optional** by default (small grey "Packing options" link). Only turns green summary chip *after* user has confirmed.
-- Replace gated banner with the **"Optimize container loading" CTA card** (always visible once at least one row has dimensions).
-- Add a new **"Confirm packing options" modal** (reuses existing popover toggles in a list per item + Apply-to-all + Confirm button).
-- 3D view, Loading Video, Download PDF are hidden (not greyed) until optimization has been requested at least once.
+**Landed Cost line columns:** Description, HS code, Qty, Unit value, Weight (kg), Duty %.
+Per-line subtotal = Qty × Unit value. Per-line duty = subtotal × Duty%.
+Shared inputs (kept once at top): Freight, Insurance, Other charges, GST %.
 
-### State
-- Keep `packingConfirmed: boolean` on `CbmItem` (already added).
-- Add local UI state `optimizationRequested: boolean` in `cbm-calculator.tsx` — flips to true after user confirms in the modal. Drives whether `<ContainerSuggestion>` + 3D + Video + PDF render.
+**Export Price line columns:** Description, HS code, Qty, Unit cost, Margin %.
+Per-line FOB = Qty × Unit cost; CIF derived from shared Freight + Insurance allocated by value share. Selling price per line = CIF × (1 + Margin%).
 
-### Other calculators
-Unchanged. (Air, Landed, Export, Compare, Risk never showed packing options.)
+**Aggregation:**
+- Totals row: Sum of subtotals, sum of duties, GST on (CIF + total duty), Grand Total Landed Cost.
+- Export totals: Total FOB, Total CIF, Total Selling Price, blended margin %.
 
-### Hydration warning
-Already fixed in the previous turn (`freight-intelligence.tsx` footer span). The runtime error in context is stale from before the fix — verify and leave alone if resolved.
+**Add / Remove / Duplicate row** controls (mirroring CBM calculator pattern).
 
-## Files touched
+### 3. Multi-currency with manual FX
+- Add `currency` (string code, e.g. USD/EUR/INR/AED/GBP/CNY/JPY/SGD/AUD…) and `fxRate` (number) at the top of Landed Cost & Export Price.
+- Currency is a typable `Input` (free text 3-letter code) — keeps things universal, no preset list maintenance.
+- `fxRate` = how many units of base currency per 1 unit of selected currency. Default 1. Used only for display conversion in a small "≈ INR …" hint under each total. All math runs in the entered currency.
+- Currency symbol/code shown in every input prefix and result line.
+
+### 4. Types & calculators
+- Extend `LandedInput` and `ExportInput` in `src/lib/freight/calculators.ts` to accept `lines: CargoLine[]`, `currency: string`, `fxRate: number`. Keep legacy single-product fields temporarily for migration — drop after wiring.
+- New `CargoLine` shape exported from `src/lib/freight/types.ts`.
+- Update `calcLanded` / `calcExport` to iterate lines and produce per-line + total result items.
+
+### 5. PDF & Share
+- `src/lib/freight/pdf.ts`: render line-item table for Landed/Export with currency code in headers.
+- `results-card.tsx` / WhatsApp / Email summaries: include currency code + grand total only (per-line breakdown stays in PDF).
+
+### 6. Out of scope
+- Preset country VAT/GST table.
+- Live FX API.
+- Persisting currency/port across reloads.
+- Touching CBM, Air, Compare, Risk math (only Risk gets the typable port swap).
+
+### Files touched
 ```text
-EDIT  src/components/freight/cbm-calculator.tsx       — remove amber pressure, add Optimize CTA + confirm-packing modal, optimizationRequested state
-EDIT  src/components/freight/container-suggestion.tsx — remove "blocked" warning variant (no longer needed)
-EDIT  src/components/freight/results-card.tsx         — hide (not disable) 3D / Video / PDF until optimizationRequested
+EDIT  src/components/freight/risk-calculator.tsx        — port: Select → Input
+EDIT  src/components/freight/landed-calculator.tsx      — line-item UI + currency + FX
+EDIT  src/components/freight/export-calculator.tsx      — line-item UI + currency + FX
+EDIT  src/lib/freight/calculators.ts                    — new line-aware calc fns
+EDIT  src/lib/freight/types.ts                          — CargoLine + currency fields
+EDIT  src/lib/freight/pdf.ts                            — line-item tables, currency code
+EDIT  src/lib/freight/storage.ts                        — persist new shapes (defaults for old saves)
 ```
-
-## Out of scope
-- Changing the packing-options field set
-- Changes to other calculators
-- Persisting `optimizationRequested` across reloads (session-only is fine)
 
