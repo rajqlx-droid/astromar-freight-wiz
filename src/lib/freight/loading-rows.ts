@@ -18,7 +18,20 @@ export interface RowGroup {
   layers: number;
   /** True when fragile units share a multi-layer row with heavier non-fragile units — recommend a separator board between layers. */
   needsSeparator: boolean;
+  /**
+   * Back-wall floor utilization (0-100). Computed as the bottom-layer footprint
+   * (sum of l × w for boxes touching the floor) divided by the row's wall area
+   * (container width × row depth). 100% means the floor is fully tiled with no
+   * voids; lower values indicate gaps between pallets that loaders should
+   * re-shuffle to close before sealing the container.
+   */
+  wallUtilizationPct: number;
+  /** True when wallUtilizationPct < 90% — flagged for re-shuffle. */
+  gapWarning: boolean;
 }
+
+/** Minimum back-wall floor coverage before we flag a gap warning. */
+export const WALL_GAP_WARNING_THRESHOLD_PCT = 90;
 
 /** Default kg-per-package cutoff above which a non-fragile unit is treated as "heavy". */
 export const DEFAULT_HEAVY_KG_PER_PKG_THRESHOLD = 25;
@@ -59,6 +72,7 @@ export function buildRows(
     let hasNonStack = false;
     let rotatedCount = 0;
     let hasHeavyNonFragile = false;
+    let bottomFootprintMm2 = 0;
     const zLevels = new Set<number>();
     for (const b of r.boxes) {
       const stat = pack.perItem[b.itemIdx];
@@ -84,11 +98,20 @@ export function buildRows(
       }
       if (b.rotated === "sideways" || b.rotated === "axis") rotatedCount++;
       zLevels.add(Math.round(b.z / 10) * 10);
+      // Bottom-layer footprint contributes to wall utilization. We treat any
+      // box whose bottom is on (or within 10 mm of) the floor as a wall tile.
+      if (b.z < 10) bottomFootprintMm2 += b.l * b.w;
     }
     const layers = zLevels.size;
     // Recommend a separator board when fragile + heavy non-fragile share a
     // multi-layer row (anything could end up stacked on the fragile units).
     const needsSeparator = hasFragile && hasHeavyNonFragile && layers > 1;
+    // Wall utilization: bottom footprint vs. (container width × row depth).
+    const rowDepthMm = Math.max(1, r.xEnd - r.xStart);
+    const wallAreaMm2 = pack.container.inner.w * rowDepthMm;
+    const wallUtilizationPct =
+      wallAreaMm2 > 0 ? Math.min(100, (bottomFootprintMm2 / wallAreaMm2) * 100) : 0;
+    const gapWarning = wallUtilizationPct < WALL_GAP_WARNING_THRESHOLD_PCT;
     return {
       rowIdx: i,
       xStart: r.xStart,
@@ -101,6 +124,8 @@ export function buildRows(
       rotatedCount,
       layers,
       needsSeparator,
+      wallUtilizationPct,
+      gapWarning,
     };
   });
 }
@@ -117,6 +142,10 @@ export function instructionFor(row: RowGroup): string {
   }
   if (row.hasFragile) parts.push("cap with fragile units last");
   if (row.hasNonStack) parts.push("leave no-stack items uncovered");
+  if (row.gapWarning)
+    parts.push(
+      `re-shuffle to close gaps — back wall only ${Math.round(row.wallUtilizationPct)}% utilised`,
+    );
   if (row.needsSeparator)
     parts.push("insert a separator board (plywood/cardboard) between heavy and fragile layers");
   if (row.rotatedCount > 0)

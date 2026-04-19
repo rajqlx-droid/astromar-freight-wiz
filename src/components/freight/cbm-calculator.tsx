@@ -437,6 +437,8 @@ export function CbmCalculator({ items, setItems }: Props) {
                   hasNonStack: r.hasNonStack,
                   rotatedCount: r.rotatedCount,
                   needsSeparator: r.needsSeparator,
+                  wallUtilizationPct: r.wallUtilizationPct,
+                  gapWarning: r.gapWarning,
                   items: itemCountsForRow(r, pack),
                   instruction: instructionFor(r),
                   sideViewPng,
