@@ -119,6 +119,21 @@ export function ResultsCard({ result, inputsTable, resolveExtras, extras, pdfDis
         </div>
       )}
 
+      {extras?.analytics?.breakdown && (
+        <BreakdownBar
+          title={extras.analytics.breakdown.title}
+          segments={extras.analytics.breakdown.segments}
+        />
+      )}
+
+      {extras?.analytics?.comparison && (
+        <ComparisonBars
+          title={extras.analytics.comparison.title}
+          columns={extras.analytics.comparison.columns}
+          rows={extras.analytics.comparison.rows}
+        />
+      )}
+
       <TooltipProvider delayDuration={150}>
         <div className="divide-y">
           {result.items.map((it) => {
