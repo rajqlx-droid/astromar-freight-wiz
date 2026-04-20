@@ -1,32 +1,52 @@
 
 
-## Plan: Tighter packing — close residual gaps
+## Plan: Weight-limited badge + PDF gauge bars
 
-Goal: eliminate visible gaps between boxes in the 3D view by (a) scanning candidate positions on a finer grid, then (b) snapping each chosen placement tight against its left/back neighbour (or wall).
+Two surgical additions on top of the KPIs we just shipped.
 
-### Changes — single file: `src/lib/freight/packing-advanced.ts`
+### 1. "Weight-limited cargo" badge (results card)
 
-**1. Drop scan stride 100mm → 50mm**
-- `PLACE_STEP_MM`: `100` → `50`
-- Inside the orientation loop, the per-box adaptive stride already uses `Math.max(50, …)` so the floor stays 50mm; the cap also drops to 50mm. This roughly 4× the candidate positions evaluated — still fast for typical cargo counts (hundreds of boxes), and the `evaluatePlacement` early-exits keep the inner loop cheap.
+**Where**: render inside `ResultsCard`, between the header bar and the items list, when an opt-in flag is set on the result.
 
-**2. Snap-to-neighbour after pick**
-After `bestPick` is chosen and before writing the box, slide it:
-- **−X (toward back wall)**: while `x > 0`, try `x' = max(0, x - 1mm)`; re-evaluate; if still valid (in bounds, support ratio ≥ threshold, no sealed cells, weight OK, same Z), accept and continue. Use a coarse-then-fine slide (10mm steps until invalid or hits 0, then back off and 1mm steps) so it's O(stride) not O(C.l).
-- **−Y (toward left wall)**: same idea on the Y axis.
-- This collapses any sub-stride gap left by the 50mm scan, and also closes the gap when a box's chosen XY happened to land just past a shorter neighbour.
+**Trigger logic**: lives in `src/components/freight/cbm-calculator.tsx` — after computing `u` (Container Utilization) and `wu` (Weight Utilization) inside the `useMemo`, set `weightLimited = wu - u > 15` and pass it through on the result object as a new optional field `notice` (a structured object, not raw markup).
 
-The snap re-uses the existing `evaluatePlacement` + the existing weight/seal/support checks — no new validation logic. Z is held fixed (we only slide horizontally on the same resting plane); if the supporter set changes during the slide we re-run the weight check against the new supporters.
+**Wiring**:
+- `src/lib/freight/types.ts` — add `notice?: { tone: "warn" | "bad" | "info"; title: string; body: string }` to `CalcResult`.
+- `src/components/freight/cbm-calculator.tsx` — when `weightLimited`, attach:
+  - title: "Weight-limited cargo"
+  - body: "Adding more boxes won't help — this load hits the container's weight cap before it fills the volume. Consider a higher-payload container (e.g. 40HC heavy-duty) or split across two shipments."
+  - tone: `"warn"` (amber)
+- `src/components/freight/results-card.tsx` — render a small amber pill banner with `AlertTriangle` icon when `result.notice` is set. Sits just above the KPI list; included in PDF too via `print-area` (no `no-print` class).
 
-**3. Keep everything else unchanged**
-- Skyline grid stays at `CELL_MM = 100` (the resolution of the height-map). Snap operates in mm; the height-map update at the end already covers the footprint via `Math.floor`/`Math.ceil`, so finer XY positions are safely quantised back into the grid.
-- Scoring, sort order, support ratio, fragile/seal logic, COG calc, render cap — all untouched.
+**Visual**: amber background (`bg-amber-50 border-amber-300 text-amber-900`), one line title + one line body, ~px-5 py-2.5, matches the existing card aesthetic.
+
+### 2. PDF gauge bars in Results table
+
+**Where**: `src/lib/freight/pdf.ts`, the existing autoTable for `result.items`.
+
+**Approach**:
+- Switch the second column to `columnStyles: { 1: { minCellHeight: 26 } }` so there's vertical room.
+- Add a `didDrawCell` hook (sibling to existing `didParseCell`):
+  - Skip non-body / non-column-1 / no-`gauge`-value cells.
+  - Use `data.cell.x/y/width/height` and the cell's text bounding box to draw a 60×4pt rounded bar to the **right of the value text** (right-aligned to the cell's right padding), with three zone fills:
+    - red zone: 0–70% of bar width, `[254, 226, 226]`
+    - amber zone: 70–85%, `[254, 243, 199]`
+    - green zone: 85–100%, `[209, 250, 229]`
+  - Then a 3pt black-bordered white dot at `x = barX + (gauge/100) * barW`.
+- Color tone fills already applied via `didParseCell` stay; the bar sits in the empty cell space to the right.
+
+**Bar geometry**: bar width 60pt, height 4pt, centred vertically in the cell (`y + height/2 - 2`). Right edge anchored 8pt from the cell's right edge.
+
+### Files touched
+- `src/lib/freight/types.ts` — add `notice` field to `CalcResult`.
+- `src/components/freight/cbm-calculator.tsx` — compute & attach `notice` when `wu - u > 15`.
+- `src/components/freight/results-card.tsx` — render notice banner above KPI list.
+- `src/lib/freight/pdf.ts` — add `didDrawCell` gauge bar renderer + `minCellHeight` for value column.
 
 ### Out of scope
-- The 3D render scale fix (`1.001x`) from the original Part 4 is **not** included — user only asked for the packer-side density fix.
-- The runtime hydration warning about `UnitSelector` is unrelated and will be left alone.
+- The verification step (load cartons + pallets, click Optimize, hover tooltips, export PDF) is something only you can do in the preview. Once the changes are live I'll list the exact things to spot-check.
 
 ### Risk
-- Slight perf cost from the finer grid + snap loop. Bounded: snap is O(C.l/10 + 10) ≈ ~130 evaluations max per box; scan is ~4× more candidates. Still well under a frame for typical loads.
-- Snap could theoretically push a box into a corner where stack-weight on a *different* supporter set fails — handled by re-running supporter weight check inside the slide.
+- `didDrawCell` runs *after* fill, so the gauge sits on top of the tone fill — fine, contrast is good (red dot on red fill remains readable because of the white border ring).
+- Increased row height (~26pt) makes the Results table slightly taller — well within the page budget; no layout reflow concerns since this table runs before the snapshots block which already does `y > 600` page-break checks.
 
