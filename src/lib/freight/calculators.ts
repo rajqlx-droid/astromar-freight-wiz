@@ -26,7 +26,7 @@ export const safeNum = (v: unknown, fallback = 0): number => {
 };
 
 /* ---------------- CBM ---------------- */
-export type PackageType = "carton" | "pallet" | "crate" | "drum" | "bag";
+export type PackageType = "carton" | "pallet" | "crate" | "drum" | "bag" | "bale";
 
 export interface CbmItem {
   id: string;

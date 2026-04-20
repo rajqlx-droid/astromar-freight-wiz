@@ -61,7 +61,11 @@ const PACKAGE_TYPES: { value: PackageType; label: string }[] = [
   { value: "crate", label: "Crate" },
   { value: "drum", label: "Drum" },
   { value: "bag", label: "Bag" },
+  { value: "bale", label: "Bale" },
 ];
+
+/** Crates and pallets ship in fixed orientation — pallets allow only L↔W swap (4-way entry forklifts), crates fully fixed. */
+const isRigidUnit = (t?: PackageType) => t === "crate" || t === "pallet";
 
 export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
