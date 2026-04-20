@@ -123,8 +123,11 @@ export function packContainerAdvanced(
 
     const stackable = it.stackable !== false;
     const fragile = it.fragile === true;
-    const allowSideways = it.allowSidewaysRotation !== false; // default true
-    const allowAxis = it.allowAxisRotation === true;
+    // Crates and pallets ship in fixed orientation — never tip onto a side.
+    // Pallets keep L↔W (4-way entry forklift), crates also keep L↔W.
+    const isRigidUnit = it.packageType === "crate" || it.packageType === "pallet";
+    const allowSideways = isRigidUnit ? true : (it.allowSidewaysRotation !== false);
+    const allowAxis = isRigidUnit ? false : (it.allowAxisRotation === true);
 
     for (let i = 0; i < it.qty; i++) {
       expanded.push({

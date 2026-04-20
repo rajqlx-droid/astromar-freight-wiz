@@ -61,7 +61,11 @@ const PACKAGE_TYPES: { value: PackageType; label: string }[] = [
   { value: "crate", label: "Crate" },
   { value: "drum", label: "Drum" },
   { value: "bag", label: "Bag" },
+  { value: "bale", label: "Bale" },
 ];
+
+/** Crates and pallets ship in fixed orientation — pallets allow only L↔W swap (4-way entry forklifts), crates fully fixed. */
+const isRigidUnit = (t?: PackageType) => t === "crate" || t === "pallet";
 
 export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
@@ -601,19 +605,30 @@ function renderPackingPopoverContent({
           checked={it.fragile === true}
           onChange={(v) => updatePacking(it.id, { fragile: v })}
         />
-        <ToggleRow
-          title="Can lay sideways"
-          desc="Packer may rotate 90° on the floor (swap L↔W)."
-          checked={it.allowSidewaysRotation !== false}
-          onChange={(v) => updatePacking(it.id, { allowSidewaysRotation: v })}
-        />
-        {!it.fragile && (
-          <ToggleRow
-            title="Can stand on side"
-            desc="Packer may tip it onto its side. Non-fragile only."
-            checked={it.allowAxisRotation === true}
-            onChange={(v) => updatePacking(it.id, { allowAxisRotation: v })}
-          />
+        {isRigidUnit(it.packageType) ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+            <strong className="font-semibold">{it.packageType === "pallet" ? "Pallets" : "Crates"} ship in fixed orientation.</strong>{" "}
+            {it.packageType === "pallet"
+              ? "4-way entry pallets may rotate L↔W on the floor, but never tip."
+              : "Crates may rotate L↔W on the floor, but never tip onto a side."}
+          </div>
+        ) : (
+          <>
+            <ToggleRow
+              title="Can lay sideways"
+              desc="Packer may rotate 90° on the floor (swap L↔W)."
+              checked={it.allowSidewaysRotation !== false}
+              onChange={(v) => updatePacking(it.id, { allowSidewaysRotation: v })}
+            />
+            {!it.fragile && (
+              <ToggleRow
+                title="Can stand on side"
+                desc="Packer may tip it onto its side. Non-fragile only."
+                checked={it.allowAxisRotation === true}
+                onChange={(v) => updatePacking(it.id, { allowAxisRotation: v })}
+              />
+            )}
+          </>
         )}
       </div>
 
