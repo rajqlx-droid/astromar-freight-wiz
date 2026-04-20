@@ -1,52 +1,79 @@
 
 
-## Plan: Weight-limited badge + PDF gauge bars
+## Plan: Rebrand + enhanced PDF analytics for all 6 tools
 
-Two surgical additions on top of the KPIs we just shipped.
+### Part 1 — Rebrand to "Smart Tools Everywhere"
 
-### 1. "Weight-limited cargo" badge (results card)
+Find/replace user-facing brand strings only. Keep `astromar.*` localStorage keys intact (renaming would wipe existing user history).
 
-**Where**: render inside `ResultsCard`, between the header bar and the items list, when an opt-in flag is set on the result.
+**Files touched:**
+- `src/routes/__root.tsx` — page `<title>`, og:title, twitter:title, description meta → "Smart Tools Everywhere — Freight Intelligence Suite".
+- `src/routes/freight-intelligence.tsx` — head meta block; visible header brand block (line ~356: "Astromar" → "Smart Tools"; "Freight Tools" subtitle stays); footer company line ("© Smart Tools Everywhere · Freight Intelligence"). Keep contact email/phone as-is (those are real business contact details, not brand).
+- `src/lib/freight/pdf.ts` — header band line 72 already says "Smart Tool"; bump to "Smart Tools Everywhere", subtitle "Freight Intelligence Suite" stays. Footer line 531 likewise.
+- `src/components/freight/history-panel.tsx` — CSV filename prefix `astromar-history-...` → `smart-tools-history-...`.
 
-**Trigger logic**: lives in `src/components/freight/cbm-calculator.tsx` — after computing `u` (Container Utilization) and `wu` (Weight Utilization) inside the `useMemo`, set `weightLimited = wu - u > 15` and pass it through on the result object as a new optional field `notice` (a structured object, not raw markup).
+Out of scope: localStorage keys (`astromar.freight.*`, `astromar-theme`), business email/phone, the `Astromar Logistics Pvt Ltd` company name in the footer credit (real company, separate from product brand). I'll flag these in a final note for the user.
 
-**Wiring**:
-- `src/lib/freight/types.ts` — add `notice?: { tone: "warn" | "bad" | "info"; title: string; body: string }` to `CalcResult`.
-- `src/components/freight/cbm-calculator.tsx` — when `weightLimited`, attach:
-  - title: "Weight-limited cargo"
-  - body: "Adding more boxes won't help — this load hits the container's weight cap before it fills the volume. Consider a higher-payload container (e.g. 40HC heavy-duty) or split across two shipments."
-  - tone: `"warn"` (amber)
-- `src/components/freight/results-card.tsx` — render a small amber pill banner with `AlertTriangle` icon when `result.notice` is set. Sits just above the KPI list; included in PDF too via `print-area` (no `no-print` class).
+### Part 2 — Enhanced PDF analytics across all 6 tools
 
-**Visual**: amber background (`bg-amber-50 border-amber-300 text-amber-900`), one line title + one line body, ~px-5 py-2.5, matches the existing card aesthetic.
+Goal: each PDF gets a tool-appropriate **Key Metrics** block (compact 2-column KPI grid above the existing Result table) and a tool-specific **Analytics** section (mini chart/breakdown). Keep the layout tight — everything fits on page 1 alongside existing inputs/results.
 
-### 2. PDF gauge bars in Results table
+**A. Shared infrastructure (`src/lib/freight/pdf.ts`)**
 
-**Where**: `src/lib/freight/pdf.ts`, the existing autoTable for `result.items`.
+Add two reusable helpers used by all 6 tools:
 
-**Approach**:
-- Switch the second column to `columnStyles: { 1: { minCellHeight: 26 } }` so there's vertical room.
-- Add a `didDrawCell` hook (sibling to existing `didParseCell`):
-  - Skip non-body / non-column-1 / no-`gauge`-value cells.
-  - Use `data.cell.x/y/width/height` and the cell's text bounding box to draw a 60×4pt rounded bar to the **right of the value text** (right-aligned to the cell's right padding), with three zone fills:
-    - red zone: 0–70% of bar width, `[254, 226, 226]`
-    - amber zone: 70–85%, `[254, 243, 199]`
-    - green zone: 85–100%, `[209, 250, 229]`
-  - Then a 3pt black-bordered white dot at `x = barX + (gauge/100) * barW`.
-- Color tone fills already applied via `didParseCell` stay; the bar sits in the empty cell space to the right.
+1. `drawKpiGrid(doc, y, kpis: { label, value, tone? }[])` — renders KPIs as a 4-column grid of bordered tiles, ~110×42pt each, with bold value + small label + optional tone color. Returns new `y`.
+2. `drawHBar(doc, x, y, w, h, segments: { label, value, color }[])` — horizontal stacked-bar visualisation with inline labels. Used for cost breakdowns (landed, export, compare).
 
-**Bar geometry**: bar width 60pt, height 4pt, centred vertically in the cell (`y + height/2 - 2`). Right edge anchored 8pt from the cell's right edge.
+Add a new optional `analytics` field to `PdfExtras`:
+```ts
+analytics?: {
+  kpis?: { label: string; value: string; tone?: "good" | "warn" | "bad" }[];
+  breakdown?: { title: string; segments: { label: string; value: number; color: [number,number,number] }[] };
+  comparison?: { title: string; rows: { label: string; values: number[]; format?: "money" | "days" | "kg" }[]; columns: string[] };
+};
+```
+
+Render order on page 1: header → KPI grid (if present) → inputs table → per-line breakdown → results table → analytics breakdown bar → existing snapshots/load report. Page-break checks already in place.
+
+**B. Per-tool analytics payload (built in each calculator component, passed via `resolveExtras` / new direct `extras` prop)**
+
+Promote `inputsTable` prop on `ResultsCard` to also accept an inline `extras.analytics`. Each calculator builds the payload from its own state — pure additive change, no calculator math touched.
+
+| Tool | KPIs (4 tiles) | Analytics chart |
+|---|---|---|
+| **CBM / Load** | Total CBM · Total weight · Avg density (kg/m³) · Container utilization % | Already has snapshots + load report (no extra chart needed) |
+| **Air Volume** | Actual kg · Volumetric kg · Chargeable kg · Volumetric premium % | Stacked bar: actual vs volumetric weight with chargeable line |
+| **Landed Cost** | Goods value · Total duty · GST/VAT · Total landed | Stacked bar: Goods / Freight+Ins / Duty / GST share of total |
+| **Export Price** | Total cost · Total CIF · Total selling · Blended margin % | Stacked bar: Cost / F+I / Margin share of selling price |
+| **Air vs Sea** | Sea total · Air total · Days saved · Cheaper option | Side-by-side bars: freight + interest + handling for each mode |
+| **Risk / Demurrage** | Free days · Chargeable days · Demurrage · Risk level (tone-coloured) | Horizontal "risk thermometer" bar 0–100 with marker at exposure% |
+
+KPI tones use the existing traffic-light convention (e.g. risk High = bad, Low = good; export margin <10% = warn).
+
+**C. Wiring**
+- `src/components/freight/results-card.tsx` — accept optional `extras` prop and merge with `resolveExtras()` result before calling `downloadResultPdf`.
+- `src/components/freight/mobile-result-bar.tsx` — same `extras` pass-through.
+- Each of the 6 calculator components — build a small `pdfExtras` object and pass it through. Keeps calculator math files (`calculators.ts`, `packing-advanced.ts`) untouched.
+
+### Compact-layout discipline
+- KPI grid: 4 tiles per row, max 8 KPIs per page (2 rows). Tile font sizes: value 12pt bold, label 7pt grey.
+- Analytics chart height: 60pt max so KPI grid + chart together stay under ~150pt vertical budget.
+- All new sections respect the existing `y > 600` page-break checks; nothing pushes the snapshots off page 1 for typical CBM payloads.
 
 ### Files touched
-- `src/lib/freight/types.ts` — add `notice` field to `CalcResult`.
-- `src/components/freight/cbm-calculator.tsx` — compute & attach `notice` when `wu - u > 15`.
-- `src/components/freight/results-card.tsx` — render notice banner above KPI list.
-- `src/lib/freight/pdf.ts` — add `didDrawCell` gauge bar renderer + `minCellHeight` for value column.
+- `src/routes/__root.tsx`, `src/routes/freight-intelligence.tsx`, `src/components/freight/history-panel.tsx` — brand strings.
+- `src/lib/freight/pdf.ts` — KPI grid + analytics renderers, expanded `PdfExtras`.
+- `src/components/freight/results-card.tsx`, `src/components/freight/mobile-result-bar.tsx` — accept `extras` prop.
+- `src/components/freight/{cbm,air,landed,export,compare,risk}-calculator.tsx` — build & pass per-tool analytics payload.
 
 ### Out of scope
-- The verification step (load cartons + pallets, click Optimize, hover tooltips, export PDF) is something only you can do in the preview. Once the changes are live I'll list the exact things to spot-check.
+- localStorage key rename (would erase users' saved history).
+- Calculator math (`calculators.ts`, `packing-advanced.ts`) — purely a presentation enhancement.
+- The `loading-rows` PDF page (already heavily detailed; no analytics needed there).
 
-### Risk
-- `didDrawCell` runs *after* fill, so the gauge sits on top of the tone fill — fine, contrast is good (red dot on red fill remains readable because of the white border ring).
-- Increased row height (~26pt) makes the Results table slightly taller — well within the page budget; no layout reflow concerns since this table runs before the snapshots block which already does `y > 600` page-break checks.
+### Risks
+- Bigger PDF first page — KPI grid + chart + existing tables. Mitigated by tight 60pt chart height and page-break guards.
+- Calculator components grow ~25 lines each for the analytics payload. Acceptable; pure data shaping, no logic change.
+- Brand keeps two names side-by-side (product = "Smart Tools Everywhere", company in footer = "Astromar Logistics Pvt Ltd"). I'll surface this for user confirmation post-approval.
 
