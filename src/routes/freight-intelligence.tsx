@@ -526,6 +526,33 @@ function FreightIntelligencePage() {
                   </h2>
                   <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
                 </div>
+                {bannerOpen ? (
+                  <div
+                    className="no-print order-3 flex w-full min-w-0 max-w-full items-start gap-2 rounded-lg border-l-4 p-2 text-xs sm:order-none sm:max-w-[360px]"
+                    style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
+                    title={meta.tip}
+                  >
+                    <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-brand-orange" />
+                    <p className="min-w-0 flex-1 truncate text-foreground/90">
+                      <span className="font-semibold text-brand-navy">Pro tip · </span>
+                      {meta.tip}
+                    </p>
+                    <button
+                      onClick={dismissBanner}
+                      aria-label="Dismiss tip"
+                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background hover:text-brand-navy"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={reopenBanner}
+                    className="no-print inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
+                  >
+                    <Lightbulb className="size-3" /> Show tip
+                  </button>
+                )}
                 <div className="ml-auto w-full sm:w-auto">
                   <MiniHistoryStrip
                     type={active}
