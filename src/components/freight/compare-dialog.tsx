@@ -83,29 +83,44 @@ export function CompareDialog({ active, onConfirm, trigger }: Props) {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-brand-navy">
-            <ArrowLeftRight className="size-4 text-brand-orange" />
-            Compare two calculators
+          <DialogTitle className="flex items-center gap-2 pr-8 text-brand-navy">
+            <ArrowLeftRight className="size-4 shrink-0 text-brand-orange" />
+            <span className="truncate">Compare two calculators</span>
           </DialogTitle>
-          <DialogDescription>
-            Pick two tools to view side-by-side. On wide screens they render as a
-            split view; on phones you'll see a quick A / B switcher.
+          <DialogDescription className="text-xs sm:text-sm">
+            Pick two tools to view side-by-side.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
-          <div className="space-y-1">
+        <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-end">
+          <div className="min-w-0 space-y-1">
             <Label className="text-xs font-semibold text-brand-navy">Left tool</Label>
             <Select value={left} onValueChange={(v) => setLeft(v as CalcKey)}>
-              <SelectTrigger className="h-10 border-2 border-brand-navy/30">
-                <SelectValue />
+              <SelectTrigger className="h-10 w-full border-2 border-brand-navy/30">
+                <SelectValue>
+                  {(() => {
+                    const c = CALCULATORS.find((x) => x.key === left);
+                    return c ? (
+                      <span className="truncate">
+                        {c.emoji} {c.label}
+                      </span>
+                    ) : null;
+                  })()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {CALCULATORS.map((c) => (
                   <SelectItem key={c.key} value={c.key}>
-                    {c.emoji} {c.label} — {c.sub}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">
+                        {c.emoji} {c.label}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {c.sub}
+                      </span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -118,16 +133,25 @@ export function CompareDialog({ active, onConfirm, trigger }: Props) {
             size="icon"
             onClick={swap}
             aria-label="Swap left and right"
-            className="hidden sm:flex"
+            className="hidden md:flex"
           >
             <ArrowLeftRight className="size-4 text-muted-foreground" />
           </Button>
 
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <Label className="text-xs font-semibold text-brand-navy">Right tool</Label>
             <Select value={right} onValueChange={(v) => setRight(v as CalcKey)}>
-              <SelectTrigger className="h-10 border-2 border-brand-navy/30">
-                <SelectValue />
+              <SelectTrigger className="h-10 w-full border-2 border-brand-navy/30">
+                <SelectValue>
+                  {(() => {
+                    const c = CALCULATORS.find((x) => x.key === right);
+                    return c ? (
+                      <span className="truncate">
+                        {c.emoji} {c.label}
+                      </span>
+                    ) : null;
+                  })()}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {CALCULATORS.map((c) => (
@@ -136,7 +160,14 @@ export function CompareDialog({ active, onConfirm, trigger }: Props) {
                     value={c.key}
                     disabled={c.key === left}
                   >
-                    {c.emoji} {c.label} — {c.sub}
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">
+                        {c.emoji} {c.label}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {c.sub}
+                      </span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -150,14 +181,18 @@ export function CompareDialog({ active, onConfirm, trigger }: Props) {
           </p>
         )}
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setOpen(false)}
+            className="w-full sm:w-auto"
+          >
             Cancel
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={same}
-            className="text-white"
+            className="w-full text-white sm:w-auto"
             style={{ background: "var(--brand-orange)" }}
           >
             Open split view
