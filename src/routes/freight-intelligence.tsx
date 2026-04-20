@@ -350,43 +350,6 @@ function FreightIntelligencePage() {
 
             <div className="flex items-center gap-2 md:gap-3">
               <ThemeToggle />
-              <div
-                aria-hidden
-                className="hidden h-6 w-px bg-brand-navy/20 md:block"
-              />
-              <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
-                <CompareDialog
-                  active={active}
-                  onConfirm={(left, right) => setCompareMode({ left, right })}
-                  trigger={
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                    >
-                      <GitCompareArrows className="size-3.5" />
-                      <span className="hidden sm:inline">Compare</span>
-                    </Button>
-                  }
-                />
-                <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
-                <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
-                  <SheetTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                    >
-                      <HistoryIcon className="size-3.5" />
-                      <span className="hidden sm:inline">History</span>
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
-                    <SheetTitle className="sr-only">Calculation History</SheetTitle>
-                    <HistoryPanel />
-                  </SheetContent>
-                </Sheet>
-              </div>
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" className="md:hidden text-brand-navy" aria-label="Menu">
@@ -553,7 +516,40 @@ function FreightIntelligencePage() {
                     <Lightbulb className="size-3" /> Show tip
                   </button>
                 )}
-                <div className="ml-auto w-full sm:w-auto">
+                <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
+                  <CompareDialog
+                    active={active}
+                    onConfirm={(left, right) => setCompareMode({ left, right })}
+                    trigger={
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                      >
+                        <GitCompareArrows className="size-3.5" />
+                        <span className="hidden sm:inline">Compare</span>
+                      </Button>
+                    }
+                  />
+                  <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
+                  <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+                    <SheetTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                      >
+                        <HistoryIcon className="size-3.5" />
+                        <span className="hidden sm:inline">History</span>
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
+                      <SheetTitle className="sr-only">Calculation History</SheetTitle>
+                      <HistoryPanel />
+                    </SheetContent>
+                  </Sheet>
+                </div>
+                <div className="w-full sm:w-auto">
                   <MiniHistoryStrip
                     type={active}
                     variant="inline"
