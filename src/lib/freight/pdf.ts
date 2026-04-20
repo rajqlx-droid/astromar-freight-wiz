@@ -166,6 +166,7 @@ export function downloadResultPdf(
     bodyStyles: { textColor: 40 },
     alternateRowStyles: { fillColor: [255, 247, 237] },
     styles: { fontSize: 11, cellPadding: 7 },
+    columnStyles: { 1: { minCellHeight: 26 } },
     margin: { left: 40, right: 40 },
     // Traffic-light fill for tone-tagged value cells (e.g. Packing Density).
     didParseCell: (data) => {
@@ -185,6 +186,34 @@ export function downloadResultPdf(
       data.cell.styles.fillColor = fill[item.tone];
       data.cell.styles.textColor = text[item.tone];
       data.cell.styles.fontStyle = "bold";
+    },
+    // Mini gauge bar in the value cell — three coloured zones + marker dot.
+    didDrawCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 1) return;
+      const item = result.items[data.row.index];
+      if (!item || typeof item.gauge !== "number") return;
+      const gauge = Math.max(0, Math.min(100, item.gauge));
+      const barW = 60;
+      const barH = 4;
+      const cell = data.cell;
+      const barX = cell.x + cell.width - barW - 8;
+      const barY = cell.y + cell.height / 2 - barH / 2;
+      // Zones
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0);
+      doc.setFillColor(254, 226, 226); // red 0–70
+      doc.rect(barX, barY, barW * 0.7, barH, "F");
+      doc.setFillColor(254, 243, 199); // amber 70–85
+      doc.rect(barX + barW * 0.7, barY, barW * 0.15, barH, "F");
+      doc.setFillColor(209, 250, 229); // green 85–100
+      doc.rect(barX + barW * 0.85, barY, barW * 0.15, barH, "F");
+      // Marker dot — white fill, dark border
+      const dotX = barX + (gauge / 100) * barW;
+      const dotY = cell.y + cell.height / 2;
+      doc.setDrawColor(40, 40, 40);
+      doc.setLineWidth(0.6);
+      doc.setFillColor(255, 255, 255);
+      doc.circle(dotX, dotY, 1.8, "FD");
     },
   });
   // @ts-expect-error autotable injects lastAutoTable
