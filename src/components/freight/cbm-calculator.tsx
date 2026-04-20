@@ -476,6 +476,8 @@ export function CbmCalculator({ items, setItems }: Props) {
           onChoiceChange={setForcedChoice}
           onReady={(h) => {
             loadHandleRef.current = h;
+            // Pull the active pack into state so the Density KPI can render.
+            setActivePack(h.getActivePack());
           }}
         />
       </div>
