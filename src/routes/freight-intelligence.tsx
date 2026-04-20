@@ -576,27 +576,29 @@ function FreightIntelligencePage() {
             />
           ) : (
             <>
-              <div className="mb-4 flex items-center gap-3">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
                 <div
                   aria-hidden
-                  className="h-8 w-1.5 rounded-full"
+                  className="h-8 w-1.5 shrink-0 rounded-full"
                   style={{
                     background:
                       "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))",
                   }}
                 />
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-lg font-bold text-brand-navy md:text-xl">
                     {meta.label} Calculator
                   </h2>
                   <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
                 </div>
+                <div className="ml-auto w-full sm:w-auto">
+                  <MiniHistoryStrip
+                    type={active}
+                    variant="inline"
+                    onOpenFullHistory={() => setHistorySheetOpen(true)}
+                  />
+                </div>
               </div>
-
-              <MiniHistoryStrip
-                type={active}
-                onOpenFullHistory={() => setHistorySheetOpen(true)}
-              />
 
               {renderCalculator(active)}
             </>
