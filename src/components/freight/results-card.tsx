@@ -1,7 +1,7 @@
 /**
  * Results card with a single primary action: PDF download.
  */
-import { Download, Info } from "lucide-react";
+import { Download, Info, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
