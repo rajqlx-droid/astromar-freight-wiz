@@ -22,6 +22,8 @@ interface Props {
   type: CalcKey;
   /** Optional: open the full History sheet. */
   onOpenFullHistory?: () => void;
+  /** Visual variant. "block" = standalone dashed banner, "inline" = compact, borderless inline group. */
+  variant?: "block" | "inline";
 }
 
 function formatTime(ts: number) {
