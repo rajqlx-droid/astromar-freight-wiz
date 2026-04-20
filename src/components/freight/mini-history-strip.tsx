@@ -38,7 +38,7 @@ function formatTime(ts: number) {
   return new Date(ts).toLocaleDateString("en-IN");
 }
 
-export function MiniHistoryStrip({ type, onOpenFullHistory }: Props) {
+export function MiniHistoryStrip({ type, onOpenFullHistory, variant = "block" }: Props) {
   const [items, setItems] = useState<SavedCalculation[]>([]);
 
   useEffect(() => {
@@ -51,14 +51,22 @@ export function MiniHistoryStrip({ type, onOpenFullHistory }: Props) {
 
   if (items.length === 0) return null;
 
+  const isInline = variant === "inline";
+
+  const wrapperClass = isInline
+    ? "flex flex-wrap items-center justify-end gap-1.5"
+    : "mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border-2 border-dashed bg-card/50 px-3 py-2";
+
+  const wrapperStyle = isInline
+    ? undefined
+    : { borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)" };
+
   return (
-    <div
-      className="mb-3 flex flex-wrap items-center gap-1.5 rounded-lg border-2 border-dashed bg-card/50 px-3 py-2"
-      style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)" }}
-    >
+    <div className={wrapperClass} style={wrapperStyle}>
       <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         <HistoryIcon className="size-3.5 text-brand-orange" />
-        <span>Recent saves</span>
+        {!isInline && <span>Recent saves</span>}
+        {isInline && <span className="normal-case tracking-normal">Recent:</span>}
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
@@ -72,7 +80,12 @@ export function MiniHistoryStrip({ type, onOpenFullHistory }: Props) {
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className="group inline-flex max-w-[260px] items-center gap-1.5 rounded-full border border-brand-navy/25 bg-background px-2.5 py-1 text-[11px] font-medium text-brand-navy transition-colors hover:border-brand-orange hover:bg-brand-orange-soft"
+                  className={
+                    "group inline-flex items-center gap-1.5 rounded-full border border-brand-navy/25 bg-background font-medium text-brand-navy transition-colors hover:border-brand-orange hover:bg-brand-orange-soft " +
+                    (isInline
+                      ? "max-w-[180px] px-2 py-0.5 text-[10px]"
+                      : "max-w-[260px] px-2.5 py-1 text-[11px]")
+                  }
                 >
                   <span className="truncate">{label}</span>
                   {headline && (
@@ -80,13 +93,15 @@ export function MiniHistoryStrip({ type, onOpenFullHistory }: Props) {
                       {headline.value}
                     </span>
                   )}
-                  <span className="shrink-0 text-[10px] text-muted-foreground group-hover:text-brand-navy">
-                    · {formatTime(entry.savedAt)}
-                  </span>
+                  {!isInline && (
+                    <span className="shrink-0 text-[10px] text-muted-foreground group-hover:text-brand-navy">
+                      · {formatTime(entry.savedAt)}
+                    </span>
+                  )}
                 </button>
               </PopoverTrigger>
               <PopoverContent
-                align="start"
+                align="end"
                 className="w-[min(320px,calc(100vw-2rem))] p-3"
               >
                 <div className="mb-2">
@@ -142,7 +157,11 @@ export function MiniHistoryStrip({ type, onOpenFullHistory }: Props) {
           size="sm"
           variant="ghost"
           onClick={onOpenFullHistory}
-          className="ml-auto h-7 px-2 text-[11px] text-muted-foreground hover:text-brand-navy"
+          className={
+            isInline
+              ? "h-6 px-1.5 text-[10px] text-muted-foreground hover:text-brand-navy"
+              : "ml-auto h-7 px-2 text-[11px] text-muted-foreground hover:text-brand-navy"
+          }
         >
           See all
         </Button>
