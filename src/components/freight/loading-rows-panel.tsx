@@ -699,6 +699,11 @@ export function LoadingRowsPanel({
                           style={{ background: c.color }}
                           aria-hidden
                         />
+                        <PackageTypeIcon
+                          type={c.packageType as PackageType}
+                          className="text-brand-navy"
+                          size={13}
+                        />
                         <span className="font-medium text-brand-navy">
                           Item {c.itemIdx + 1}
                         </span>
