@@ -315,8 +315,18 @@ export function downloadResultPdf(
     y += pillH + 14;
   }
 
+  // Key Metrics — compact 4-column tile grid (max 8 tiles / 2 rows on page 1).
+  if (extras?.analytics?.kpis && extras.analytics.kpis.length) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...NAVY);
+    doc.text("Key Metrics", 40, y);
+    y += 10;
+    y = drawKpiGrid(doc, y, pageWidth, extras.analytics.kpis.slice(0, 8));
+    y += 10;
+  }
 
-  if (inputsTable && inputsTable.length) {
+
     autoTable(doc, {
       startY: y,
       head: [["Input", "Value"]],
