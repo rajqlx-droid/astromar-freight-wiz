@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Calculator,
+  
   ChevronRight,
   GitCompareArrows,
   History as HistoryIcon,
@@ -355,18 +355,6 @@ function FreightIntelligencePage() {
                 className="hidden h-6 w-px bg-brand-navy/20 md:block"
               />
               <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-white hover:opacity-90"
-                  style={{ background: "var(--brand-navy)" }}
-                  disabled
-                  aria-current="page"
-                >
-                  <Calculator className="size-3.5" />
-                  <span className="hidden sm:inline">Tools</span>
-                </Button>
-                <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
                 <CompareDialog
                   active={active}
                   onConfirm={(left, right) => setCompareMode({ left, right })}
@@ -427,35 +415,7 @@ function FreightIntelligencePage() {
           </div>
         </header>
 
-        {/* PRO TIP — sits above the tool tab strip */}
-        <div className="no-print mx-auto max-w-7xl px-3 pt-2 md:px-4">
-          {bannerOpen ? (
-            <div
-              className="flex items-start gap-2 rounded-lg border-l-4 p-2.5 text-xs md:text-sm"
-              style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
-            >
-              <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-              <p className="flex-1 text-foreground/90">
-                <span className="font-semibold text-brand-navy">Pro tip · </span>
-                {meta.tip}
-              </p>
-              <button
-                onClick={dismissBanner}
-                aria-label="Dismiss tip"
-                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-brand-navy"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={reopenBanner}
-              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
-            >
-              <Lightbulb className="size-3" /> Show tip
-            </button>
-          )}
-        </div>
+
 
         {/* TAB STRIP */}
         <div
@@ -522,33 +482,19 @@ function FreightIntelligencePage() {
           </div>
         </div>
 
-        {/* BREADCRUMB + brand chip */}
+        {/* BREADCRUMB */}
         <section className="mx-auto max-w-7xl px-3 pb-1 pt-2 md:px-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
-              <ChevronRight className="size-3" />
-              <span>Tools</span>
-              <ChevronRight className="size-3" />
-              <span className="font-semibold text-brand-navy">
-                {compareMode
-                  ? `Compare: ${CALCULATORS.find((c) => c.key === compareMode.left)?.label} vs ${CALCULATORS.find((c) => c.key === compareMode.right)?.label}`
-                  : meta.label}
-              </span>
-            </nav>
-            <div className="flex items-center gap-1.5">
-              <div
-                className="flex size-5 items-center justify-center rounded text-white"
-                style={{ background: "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))" }}
-                aria-hidden
-              >
-                <span className="text-[10px] font-bold">S</span>
-              </div>
-              <span className="text-[11px] font-semibold tracking-tight text-brand-navy">
-                Smart Freight Tools
-              </span>
-            </div>
-          </div>
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
+            <ChevronRight className="size-3" />
+            <span>Tools</span>
+            <ChevronRight className="size-3" />
+            <span className="font-semibold text-brand-navy">
+              {compareMode
+                ? `Compare: ${CALCULATORS.find((c) => c.key === compareMode.left)?.label} vs ${CALCULATORS.find((c) => c.key === compareMode.right)?.label}`
+                : meta.label}
+            </span>
+          </nav>
         </section>
 
         {/* CALCULATOR — single tool OR split compare view */}
@@ -580,6 +526,33 @@ function FreightIntelligencePage() {
                   </h2>
                   <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
                 </div>
+                {bannerOpen ? (
+                  <div
+                    className="no-print order-3 flex w-full min-w-0 max-w-full items-start gap-2 rounded-lg border-l-4 p-2 text-xs sm:order-none sm:max-w-[360px]"
+                    style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
+                    title={meta.tip}
+                  >
+                    <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-brand-orange" />
+                    <p className="min-w-0 flex-1 truncate text-foreground/90">
+                      <span className="font-semibold text-brand-navy">Pro tip · </span>
+                      {meta.tip}
+                    </p>
+                    <button
+                      onClick={dismissBanner}
+                      aria-label="Dismiss tip"
+                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background hover:text-brand-navy"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={reopenBanner}
+                    className="no-print inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
+                  >
+                    <Lightbulb className="size-3" /> Show tip
+                  </button>
+                )}
                 <div className="ml-auto w-full sm:w-auto">
                   <MiniHistoryStrip
                     type={active}
