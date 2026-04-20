@@ -1,79 +1,37 @@
 
 
-## Plan: Rebrand + enhanced PDF analytics for all 6 tools
+## Plan: tighten the layout, remove duplicate "History" surface
 
-### Part 1 — Rebrand to "Smart Tools Everywhere"
+The screenshot shows two history entry points stacked above the calculator: the **History button** in the top-right header *and* the **"Recent saves" strip** just above the calculator inputs. Combined with the big hero block and the section heading, the actual calculator is pushed roughly 600px down the page on a 502px-tall viewport — users have to scroll before they can do anything.
 
-Find/replace user-facing brand strings only. Keep `astromar.*` localStorage keys intact (renaming would wipe existing user history).
+### What I'll change
 
-**Files touched:**
-- `src/routes/__root.tsx` — page `<title>`, og:title, twitter:title, description meta → "Smart Tools Everywhere — Freight Intelligence Suite".
-- `src/routes/freight-intelligence.tsx` — head meta block; visible header brand block (line ~356: "Astromar" → "Smart Tools"; "Freight Tools" subtitle stays); footer company line ("© Smart Tools Everywhere · Freight Intelligence"). Keep contact email/phone as-is (those are real business contact details, not brand).
-- `src/lib/freight/pdf.ts` — header band line 72 already says "Smart Tool"; bump to "Smart Tools Everywhere", subtitle "Freight Intelligence Suite" stays. Footer line 531 likewise.
-- `src/components/freight/history-panel.tsx` — CSV filename prefix `astromar-history-...` → `smart-tools-history-...`.
+**1. Kill the duplication — fold "Recent saves" into the section heading row.**
+The `MiniHistoryStrip` (lines 593-596 in `src/routes/freight-intelligence.tsx`) currently renders as a full-width dashed banner of its own. I'll move it *inline* into the calculator section header (the row with the gradient bar + "Load Optimizer Calculator" title), right-aligned. Same chips, same popover, same "See all" button — just no longer a separate stacked block. Saves ~56px of vertical space and visually groups the two history surfaces (header button = full archive, inline chips = quick recall for *this* tool) instead of competing.
 
-Out of scope: localStorage keys (`astromar.freight.*`, `astromar-theme`), business email/phone, the `Astromar Logistics Pvt Ltd` company name in the footer credit (real company, separate from product brand). I'll flag these in a final note for the user.
+**2. Slim the hero.**
+The hero card (lines 496-529) eats ~150px when expanded. Two small fixes:
+- Drop default padding from `p-5 md:p-6` to `p-3 md:p-4`, and title from `text-xl md:text-2xl` to `text-base md:text-lg`.
+- Make the hero start *already collapsed* on viewports shorter than 700px (the IntersectionObserver still expands/collapses on scroll, just with a smaller starting footprint).
 
-### Part 2 — Enhanced PDF analytics across all 6 tools
+**3. Tighten section spacing.**
+- Hero section padding `pt-4 pb-4` → `pt-3 pb-2`.
+- Calculator section `pb-10` stays, but the top `mb-4` on the heading row → `mb-3`.
+- Breadcrumb `mb-3` → `mb-2`.
 
-Goal: each PDF gets a tool-appropriate **Key Metrics** block (compact 2-column KPI grid above the existing Result table) and a tool-specific **Analytics** section (mini chart/breakdown). Keep the layout tight — everything fits on page 1 alongside existing inputs/results.
-
-**A. Shared infrastructure (`src/lib/freight/pdf.ts`)**
-
-Add two reusable helpers used by all 6 tools:
-
-1. `drawKpiGrid(doc, y, kpis: { label, value, tone? }[])` — renders KPIs as a 4-column grid of bordered tiles, ~110×42pt each, with bold value + small label + optional tone color. Returns new `y`.
-2. `drawHBar(doc, x, y, w, h, segments: { label, value, color }[])` — horizontal stacked-bar visualisation with inline labels. Used for cost breakdowns (landed, export, compare).
-
-Add a new optional `analytics` field to `PdfExtras`:
-```ts
-analytics?: {
-  kpis?: { label: string; value: string; tone?: "good" | "warn" | "bad" }[];
-  breakdown?: { title: string; segments: { label: string; value: number; color: [number,number,number] }[] };
-  comparison?: { title: string; rows: { label: string; values: number[]; format?: "money" | "days" | "kg" }[]; columns: string[] };
-};
-```
-
-Render order on page 1: header → KPI grid (if present) → inputs table → per-line breakdown → results table → analytics breakdown bar → existing snapshots/load report. Page-break checks already in place.
-
-**B. Per-tool analytics payload (built in each calculator component, passed via `resolveExtras` / new direct `extras` prop)**
-
-Promote `inputsTable` prop on `ResultsCard` to also accept an inline `extras.analytics`. Each calculator builds the payload from its own state — pure additive change, no calculator math touched.
-
-| Tool | KPIs (4 tiles) | Analytics chart |
-|---|---|---|
-| **CBM / Load** | Total CBM · Total weight · Avg density (kg/m³) · Container utilization % | Already has snapshots + load report (no extra chart needed) |
-| **Air Volume** | Actual kg · Volumetric kg · Chargeable kg · Volumetric premium % | Stacked bar: actual vs volumetric weight with chargeable line |
-| **Landed Cost** | Goods value · Total duty · GST/VAT · Total landed | Stacked bar: Goods / Freight+Ins / Duty / GST share of total |
-| **Export Price** | Total cost · Total CIF · Total selling · Blended margin % | Stacked bar: Cost / F+I / Margin share of selling price |
-| **Air vs Sea** | Sea total · Air total · Days saved · Cheaper option | Side-by-side bars: freight + interest + handling for each mode |
-| **Risk / Demurrage** | Free days · Chargeable days · Demurrage · Risk level (tone-coloured) | Horizontal "risk thermometer" bar 0–100 with marker at exposure% |
-
-KPI tones use the existing traffic-light convention (e.g. risk High = bad, Low = good; export margin <10% = warn).
-
-**C. Wiring**
-- `src/components/freight/results-card.tsx` — accept optional `extras` prop and merge with `resolveExtras()` result before calling `downloadResultPdf`.
-- `src/components/freight/mobile-result-bar.tsx` — same `extras` pass-through.
-- Each of the 6 calculator components — build a small `pdfExtras` object and pass it through. Keeps calculator math files (`calculators.ts`, `packing-advanced.ts`) untouched.
-
-### Compact-layout discipline
-- KPI grid: 4 tiles per row, max 8 KPIs per page (2 rows). Tile font sizes: value 12pt bold, label 7pt grey.
-- Analytics chart height: 60pt max so KPI grid + chart together stay under ~150pt vertical budget.
-- All new sections respect the existing `y > 600` page-break checks; nothing pushes the snapshots off page 1 for typical CBM payloads.
+**4. Mini-strip visual polish (since it's now inline).**
+- Drop the dashed border and background — it becomes a borderless inline group: `History icon · "Recent:"` label + chips + "See all" link, sized to match the heading row's right side.
+- On screens <640px it wraps below the heading instead of squeezing.
 
 ### Files touched
-- `src/routes/__root.tsx`, `src/routes/freight-intelligence.tsx`, `src/components/freight/history-panel.tsx` — brand strings.
-- `src/lib/freight/pdf.ts` — KPI grid + analytics renderers, expanded `PdfExtras`.
-- `src/components/freight/results-card.tsx`, `src/components/freight/mobile-result-bar.tsx` — accept `extras` prop.
-- `src/components/freight/{cbm,air,landed,export,compare,risk}-calculator.tsx` — build & pass per-tool analytics payload.
+- `src/routes/freight-intelligence.tsx` — restructure the heading row (lines 576-599), trim hero padding/typography (lines 483-530), tighten breadcrumb spacing.
+- `src/components/freight/mini-history-strip.tsx` — add a `variant?: "block" | "inline"` prop; inline variant drops the dashed wrapper, uses smaller chips, no "RECENT SAVES" uppercase label (just a history icon + chips).
+
+### Result
+At 920×502 (current viewport), the calculator inputs move up roughly 110-130px — the "Load Optimizer Calculator" heading and inputs become visible without scrolling, and "History" appears in exactly one obvious place per context (global = header button, current-tool quick recall = inline chips next to the title).
 
 ### Out of scope
-- localStorage key rename (would erase users' saved history).
-- Calculator math (`calculators.ts`, `packing-advanced.ts`) — purely a presentation enhancement.
-- The `loading-rows` PDF page (already heavily detailed; no analytics needed there).
-
-### Risks
-- Bigger PDF first page — KPI grid + chart + existing tables. Mitigated by tight 60pt chart height and page-break guards.
-- Calculator components grow ~25 lines each for the analytics payload. Acceptable; pure data shaping, no logic change.
-- Brand keeps two names side-by-side (product = "Smart Tools Everywhere", company in footer = "Astromar Logistics Pvt Ltd"). I'll surface this for user confirmation post-approval.
+- The header History button itself (that's the global archive, kept as-is).
+- The hero's collapse-on-scroll behavior (kept, just with smaller starting size).
+- Mobile bottom result bar.
 
