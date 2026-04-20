@@ -474,88 +474,102 @@ function FreightIntelligencePage() {
             />
           ) : (
             <>
-              <div className="mb-3 flex flex-wrap items-center gap-3">
-                <div
-                  aria-hidden
-                  className="h-8 w-1.5 shrink-0 rounded-full"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))",
-                  }}
-                />
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold text-brand-navy md:text-xl">
-                    {meta.label} Calculator
-                  </h2>
-                  <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
-                </div>
-                {bannerOpen ? (
+              {/* Heading row: title on left, action cluster on right. Stacks on mobile. */}
+              <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+                {/* Title block */}
+                <div className="flex min-w-0 items-center gap-3">
                   <div
-                    className="no-print order-3 flex w-full min-w-0 max-w-full items-start gap-2 rounded-lg border-l-4 p-2 text-xs sm:order-none sm:max-w-[360px]"
-                    style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
-                    title={meta.tip}
-                  >
-                    <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-brand-orange" />
-                    <p className="min-w-0 flex-1 truncate text-foreground/90">
-                      <span className="font-semibold text-brand-navy">Pro tip · </span>
-                      {meta.tip}
-                    </p>
-                    <button
-                      onClick={dismissBanner}
-                      aria-label="Dismiss tip"
-                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-background hover:text-brand-navy"
-                    >
-                      <X className="size-3" />
-                    </button>
+                    aria-hidden
+                    className="h-10 w-1.5 shrink-0 rounded-full"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))",
+                    }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate text-lg font-bold text-brand-navy md:text-xl">
+                      {meta.label} Calculator
+                    </h2>
+                    <p className="truncate text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
                   </div>
-                ) : (
+                </div>
+
+                {/* Action cluster: Compare/History segmented control. Always visible, right-aligned on desktop. */}
+                <div className="flex items-center gap-2 lg:ml-auto">
+                  <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
+                    <CompareDialog
+                      active={active}
+                      onConfirm={(left, right) => setCompareMode({ left, right })}
+                      trigger={
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                        >
+                          <GitCompareArrows className="size-3.5" />
+                          <span>Compare</span>
+                        </Button>
+                      }
+                    />
+                    <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
+                    <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+                      <SheetTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                        >
+                          <HistoryIcon className="size-3.5" />
+                          <span>History</span>
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
+                        <SheetTitle className="sr-only">Calculation History</SheetTitle>
+                        <HistoryPanel />
+                      </SheetContent>
+                    </Sheet>
+                  </div>
+                  {!bannerOpen && (
+                    <button
+                      onClick={reopenBanner}
+                      className="no-print inline-flex shrink-0 items-center gap-1 rounded-md border border-brand-navy/20 bg-background px-2 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-brand-orange hover:text-brand-orange"
+                      aria-label="Show pro tip"
+                    >
+                      <Lightbulb className="size-3.5" />
+                      <span className="hidden sm:inline">Tip</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Pro tip — full-width row below heading, no overlap with controls */}
+              {bannerOpen && (
+                <div
+                  className="no-print mb-3 flex items-start gap-2 rounded-lg border-l-4 bg-brand-navy-soft p-2.5 text-xs sm:text-sm"
+                  style={{ borderColor: "var(--brand-orange)" }}
+                >
+                  <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand-orange" />
+                  <p className="min-w-0 flex-1 text-foreground/90">
+                    <span className="font-semibold text-brand-navy">Pro tip · </span>
+                    {meta.tip}
+                  </p>
                   <button
-                    onClick={reopenBanner}
-                    className="no-print inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
+                    onClick={dismissBanner}
+                    aria-label="Dismiss tip"
+                    className="shrink-0 rounded p-1 text-muted-foreground hover:bg-background hover:text-brand-navy"
                   >
-                    <Lightbulb className="size-3" /> Show tip
+                    <X className="size-3.5" />
                   </button>
-                )}
-                <div className="ml-auto flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
-                  <CompareDialog
-                    active={active}
-                    onConfirm={(left, right) => setCompareMode({ left, right })}
-                    trigger={
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                      >
-                        <GitCompareArrows className="size-3.5" />
-                        <span className="hidden sm:inline">Compare</span>
-                      </Button>
-                    }
-                  />
-                  <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
-                  <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
-                    <SheetTrigger asChild>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                      >
-                        <HistoryIcon className="size-3.5" />
-                        <span className="hidden sm:inline">History</span>
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
-                      <SheetTitle className="sr-only">Calculation History</SheetTitle>
-                      <HistoryPanel />
-                    </SheetContent>
-                  </Sheet>
                 </div>
-                <div className="w-full sm:w-auto">
-                  <MiniHistoryStrip
-                    type={active}
-                    variant="inline"
-                    onOpenFullHistory={() => setHistorySheetOpen(true)}
-                  />
-                </div>
+              )}
+
+              {/* Recent calculations strip — full width, scrolls horizontally on mobile */}
+              <div className="mb-4">
+                <MiniHistoryStrip
+                  type={active}
+                  variant="inline"
+                  onOpenFullHistory={() => setHistorySheetOpen(true)}
+                />
               </div>
 
               {renderCalculator(active)}
