@@ -474,8 +474,8 @@ function FreightIntelligencePage() {
             />
           ) : (
             <>
-              {/* Heading row: title on left, action cluster on right. Stacks on mobile. */}
-              <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+              {/* Heading row: title on left, action cluster on right. Always single row — title truncates to make room. */}
+              <div className="mb-3 flex flex-row items-center gap-2 sm:gap-3">
                 {/* Title block */}
                 <div className="flex min-w-0 items-center gap-3">
                   <div
