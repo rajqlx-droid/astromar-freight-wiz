@@ -127,8 +127,6 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
           const rowTotalVol = rowVolKg * it.qty;
           const rowTotalActual = it.weight * it.qty;
           const rowChargeable = Math.max(rowTotalActual, rowTotalVol);
-          const rowCbm =
-            (it.length * it.width * it.height * it.qty) / 1_000_000;
           return (
             <Card key={it.id} className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
               <div className="mb-2 flex items-center justify-between">
