@@ -122,30 +122,66 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
           </div>
         </Card>
 
-        {items.map((it, idx) => (
-          <Card key={it.id} className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
-            <div className="mb-2 flex items-center justify-between">
-              <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
-              <div className="flex gap-1">
-                <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
-                  <Copy className="size-3.5" />
-                </Button>
-                {items.length > 1 && (
-                  <Button size="icon" variant="ghost" className="size-7 text-destructive" onClick={() => remove(it.id)} aria-label="Remove">
-                    <Trash2 className="size-3.5" />
+        {items.map((it, idx) => {
+          const rowVolKg = (it.length * it.width * it.height) / divisor; // per piece
+          const rowTotalVol = rowVolKg * it.qty;
+          const rowTotalActual = it.weight * it.qty;
+          const rowChargeable = Math.max(rowTotalActual, rowTotalVol);
+          const rowCbm =
+            (it.length * it.width * it.height * it.qty) / 1_000_000;
+          return (
+            <Card key={it.id} className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+              <div className="mb-2 flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
+                <div className="flex gap-1">
+                  <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
+                    <Copy className="size-3.5" />
                   </Button>
-                )}
+                  {items.length > 1 && (
+                    <Button size="icon" variant="ghost" className="size-7 text-destructive" onClick={() => remove(it.id)} aria-label="Remove">
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-              <NumberField compact id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
-              <NumberField compact id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
-              <NumberField compact id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
-              <NumberField compact id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
-              <NumberField compact id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
-            </div>
-          </Card>
-        ))}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                <NumberField compact id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
+                <NumberField compact id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
+                <NumberField compact id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
+                <NumberField compact id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
+                <NumberField compact id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
+              </div>
+
+              {/* Per-package summary: volume, volumetric kg, chargeable kg */}
+              <div
+                className="mt-3 grid grid-cols-2 gap-2 rounded-md border border-brand-navy/15 bg-brand-navy-soft/50 p-2 text-[11px] sm:grid-cols-4"
+                aria-label={`Item ${idx + 1} per-package metrics`}
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Volume</div>
+                  <div className="truncate font-bold text-brand-navy">{rowCbm.toFixed(4)} m³</div>
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Vol. Wt</div>
+                  <div className="truncate font-bold text-brand-navy">{rowTotalVol.toFixed(2)} kg</div>
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Actual Wt</div>
+                  <div className="truncate font-bold text-brand-navy">{rowTotalActual.toFixed(2)} kg</div>
+                </div>
+                <div className="min-w-0">
+                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Chargeable</div>
+                  <div
+                    className="truncate font-bold"
+                    style={{ color: rowTotalVol > rowTotalActual ? "var(--brand-orange)" : "var(--brand-navy)" }}
+                  >
+                    {rowChargeable.toFixed(2)} kg
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setItems([...items, emptyAirItem()])} size="sm" variant="outline" className="border-brand-navy text-brand-navy">

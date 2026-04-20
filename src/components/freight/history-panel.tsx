@@ -56,7 +56,7 @@ export function HistoryPanel() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b px-4 py-3">
+      <div className="flex items-center gap-2 border-b px-4 py-3 pr-12">
         <HistoryIcon className="size-4 text-brand-orange" />
         <h2 className="flex-1 text-sm font-bold text-brand-navy">History</h2>
         <Button size="sm" variant="ghost" onClick={exportCsv} aria-label="Export CSV">
