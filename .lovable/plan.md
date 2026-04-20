@@ -1,34 +1,32 @@
 
 
-## Root cause
+## Plan: Tighter packing — close residual gaps
 
-In `src/components/freight/loading-rows-panel.tsx` (lines 141–153), every time the 3D stepper advances (Load Row / Play All), this effect fires:
+Goal: eliminate visible gaps between boxes in the 3D view by (a) scanning candidate positions on a finer grid, then (b) snapping each chosen placement tight against its left/back neighbour (or wall).
 
-```
-const el = rowRefs.current.get(activeRowIdx);
-el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-```
+### Changes — single file: `src/lib/freight/packing-advanced.ts`
 
-The row `<li>` lives inside the right-hand panel, which is **not** itself a scroll container — it's part of the normal page flow under the 3D viewer. So `scrollIntoView` walks up the ancestor chain and ends up scrolling the **window** instead of a local pane. Result: every time you click "Load Row 2" or Play All ticks to the next row, the page yanks down to the panel and away from the 3D scene the user is actually watching.
+**1. Drop scan stride 100mm → 50mm**
+- `PLACE_STEP_MM`: `100` → `50`
+- Inside the orientation loop, the per-box adaptive stride already uses `Math.max(50, …)` so the floor stays 50mm; the cap also drops to 50mm. This roughly 4× the candidate positions evaluated — still fast for typical cargo counts (hundreds of boxes), and the `evaluatePlacement` early-exits keep the inner loop cheap.
 
-`block: "nearest"` doesn't help here because once the row is below the fold relative to the window, "nearest" is "scroll the window down".
+**2. Snap-to-neighbour after pick**
+After `bestPick` is chosen and before writing the box, slide it:
+- **−X (toward back wall)**: while `x > 0`, try `x' = max(0, x - 1mm)`; re-evaluate; if still valid (in bounds, support ratio ≥ threshold, no sealed cells, weight OK, same Z), accept and continue. Use a coarse-then-fine slide (10mm steps until invalid or hits 0, then back off and 1mm steps) so it's O(stride) not O(C.l).
+- **−Y (toward left wall)**: same idea on the Y axis.
+- This collapses any sub-stride gap left by the 50mm scan, and also closes the gap when a box's chosen XY happened to land just past a shorter neighbour.
 
-## The fix
+The snap re-uses the existing `evaluatePlacement` + the existing weight/seal/support checks — no new validation logic. Z is held fixed (we only slide horizontally on the same resting plane); if the supporter set changes during the slide we re-run the weight check against the new supporters.
 
-Two-part, both in `loading-rows-panel.tsx`:
+**3. Keep everything else unchanged**
+- Skyline grid stays at `CELL_MM = 100` (the resolution of the height-map). Snap operates in mm; the height-map update at the end already covers the footprint via `Math.floor`/`Math.ceil`, so finer XY positions are safely quantised back into the grid.
+- Scoring, sort order, support ratio, fragile/seal logic, COG calc, render cap — all untouched.
 
-1. **Suppress window scroll.** Replace the `scrollIntoView` call with a manual scroll that only adjusts the *nearest scrollable ancestor* if there is one, and otherwise does nothing. Walk parents looking for an element with `overflow: auto/scroll` and a real scrollHeight > clientHeight; if found, do `parent.scrollTop = el.offsetTop - parent.offsetTop` (clamped). If not found, **skip scrolling entirely** — the user is already looking at the 3D scene; auto-opening the row card is enough feedback.
+### Out of scope
+- The 3D render scale fix (`1.001x`) from the original Part 4 is **not** included — user only asked for the packer-side density fix.
+- The runtime hydration warning about `UnitSelector` is unrelated and will be left alone.
 
-2. **Only scroll on user-initiated row jumps, not on every stepper tick.** Add a `prevActiveRowIdx` ref. When `activeRowIdx` changes, only attempt the local-container scroll if the *row index* actually changed (not just the pallet within the same row). During Play All, this means we scroll at most once per row transition, never per pallet.
-
-Side benefit: removes the window jump entirely, so the user can keep their eyes on the 3D viewer while the panel auto-opens the matching row card in the background. If they want to see the instructions, they scroll down once — manually — and stay there.
-
-## Files to change
-
-- `src/components/freight/loading-rows-panel.tsx` — replace the effect at lines 141–153. ~15 lines changed. No API change, no other components touched.
-
-## Out of scope
-
-- Restructuring the panel to be its own scroll container (bigger layout change; ask if you want this).
-- Changing the auto-open-row behaviour (kept — it's useful feedback).
+### Risk
+- Slight perf cost from the finer grid + snap loop. Bounded: snap is O(C.l/10 + 10) ≈ ~130 evaluations max per box; scan is ~4× more candidates. Still well under a frame for typical loads.
+- Snap could theoretically push a box into a corner where stack-weight on a *different* supporter set fails — handled by re-running supporter weight check inside the slide.
 
