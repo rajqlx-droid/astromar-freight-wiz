@@ -30,16 +30,16 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Freight Intelligence Tools — Astromar Logistics" },
+      { title: "Smart Tools Everywhere — Freight Intelligence Suite" },
       {
         name: "description",
         content:
-          "Free freight calculators by Astromar Logistics: CBM, air volume weight, landed cost, export pricing, air vs sea comparison and demurrage.",
+          "Smart Tools Everywhere: free freight calculators — CBM, air volume weight, landed cost, export pricing, air vs sea comparison and demurrage.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { property: "og:title", content: "Freight Intelligence Tools — Astromar Logistics" },
-      { name: "twitter:title", content: "Freight Intelligence Tools — Astromar Logistics" },
+      { property: "og:title", content: "Smart Tools Everywhere — Freight Intelligence Suite" },
+      { name: "twitter:title", content: "Smart Tools Everywhere — Freight Intelligence Suite" },
       { name: "description", content: "Freight Navigator is a suite of online tools for calculating shipping costs and logistics metrics." },
       { property: "og:description", content: "Freight Navigator is a suite of online tools for calculating shipping costs and logistics metrics." },
       { name: "twitter:description", content: "Freight Navigator is a suite of online tools for calculating shipping costs and logistics metrics." },

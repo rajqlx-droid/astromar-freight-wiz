@@ -63,16 +63,16 @@ import {
 export const Route = createFileRoute("/freight-intelligence")({
   head: () => ({
     meta: [
-      { title: "Freight Intelligence Tools — Astromar Logistics" },
+      { title: "Smart Tools Everywhere — Freight Intelligence Suite" },
       {
         name: "description",
         content:
-          "Free freight calculators: CBM, air volume weight, landed cost, export pricing, air vs sea comparison and demurrage risk by Astromar Logistics, Chennai.",
+          "Smart Tools Everywhere — six smart freight calculators: CBM, air volume weight, landed cost, export pricing, air vs sea comparison and demurrage risk.",
       },
-      { property: "og:title", content: "Freight Intelligence Tools — Astromar Logistics" },
+      { property: "og:title", content: "Smart Tools Everywhere — Freight Intelligence Suite" },
       {
         property: "og:description",
-        content: "Six smart freight calculators for Indian importers and exporters.",
+        content: "Six smart freight calculators in one place — analytics-rich PDF exports included.",
       },
     ],
   }),
@@ -350,10 +350,10 @@ function FreightIntelligencePage() {
                 className="flex size-8 items-center justify-center rounded-md text-white"
                 style={{ background: "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))" }}
               >
-                <span className="text-sm font-bold">A</span>
+                <span className="text-sm font-bold">S</span>
               </div>
               <div className="leading-tight">
-                <div className="text-sm font-bold tracking-tight text-brand-navy md:text-base">Astromar</div>
+                <div className="text-sm font-bold tracking-tight text-brand-navy md:text-base">Smart Tools</div>
                 <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Freight Tools
                 </div>
