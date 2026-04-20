@@ -1,10 +1,11 @@
 /**
  * Results card with a single primary action: PDF download.
  */
-import { Download } from "lucide-react";
+import { Download, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { downloadResultPdf, type PdfExtras } from "@/lib/freight/pdf";
 import type { CalcResult } from "@/lib/freight/types";
 
@@ -61,34 +62,54 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
         </button>
       </div>
 
-      <div className="divide-y">
-        {result.items.map((it) => {
-          const toneClass =
-            it.tone === "good"
-              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-              : it.tone === "warn"
-                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
-                : it.tone === "bad"
-                  ? "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-200"
-                  : it.highlight
-                    ? "bg-brand-orange-soft text-brand-orange"
-                    : "text-foreground";
-          return (
-            <div
-              key={it.label}
-              className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
-            >
-              <span className="text-muted-foreground">{it.label}</span>
-              <span
-                key={it.value}
-                className={"animate-fade-in rounded-md px-3 py-1 font-semibold " + toneClass}
+      <TooltipProvider delayDuration={150}>
+        <div className="divide-y">
+          {result.items.map((it) => {
+            const toneClass =
+              it.tone === "good"
+                ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                : it.tone === "warn"
+                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                  : it.tone === "bad"
+                    ? "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-200"
+                    : it.highlight
+                      ? "bg-brand-orange-soft text-brand-orange"
+                      : "text-foreground";
+            return (
+              <div
+                key={it.label}
+                className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
               >
-                {it.value}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  {it.label}
+                  {it.hint && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label={`About ${it.label}`}
+                          className="no-print inline-flex size-4 items-center justify-center rounded-full text-muted-foreground/70 transition-colors hover:bg-muted hover:text-brand-navy"
+                        >
+                          <Info className="size-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs whitespace-pre-line text-xs">
+                        {it.hint}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </span>
+                <span
+                  key={it.value}
+                  className={"animate-fade-in rounded-md px-3 py-1 font-semibold " + toneClass}
+                >
+                  {it.value}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </TooltipProvider>
     </Card>
   );
 }

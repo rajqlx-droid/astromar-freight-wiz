@@ -70,6 +70,8 @@ export interface ResultItem {
   highlight?: boolean;
   /** Optional semantic tone for the value chip (e.g. density traffic-light). */
   tone?: "good" | "warn" | "bad";
+  /** Optional explanatory hint shown via an info icon next to the label. */
+  hint?: string;
 }
 
 export interface CalcResult {
