@@ -391,16 +391,20 @@ function FreightIntelligencePage() {
 
         {/* TAB STRIP */}
         <div
-          className="no-print sticky top-[60px] z-40 border-b"
-          style={{ background: "linear-gradient(180deg, var(--background), var(--brand-navy-soft))" }}
+          className={
+            "no-print sticky top-[60px] z-40 border-b backdrop-blur-md transition-shadow duration-200 " +
+            (scrolled ? "shadow-[0_4px_12px_-4px_rgba(15,23,42,0.18)]" : "")
+          }
+          style={{ background: "linear-gradient(180deg, color-mix(in oklab, var(--background) 88%, transparent), color-mix(in oklab, var(--brand-navy-soft) 88%, transparent))" }}
         >
-          <div
-            ref={tabsRef}
-            role="tablist"
-            aria-label="Calculator selector"
-            className="no-scrollbar mx-auto flex max-w-7xl gap-2 overflow-x-auto px-3 py-3 md:px-4"
-            style={{ scrollSnapType: "x mandatory" }}
-          >
+          <div className="relative">
+            <div
+              ref={tabsRef}
+              role="tablist"
+              aria-label="Calculator selector"
+              className="no-scrollbar mx-auto flex max-w-7xl gap-2 overflow-x-auto px-3 py-3 md:px-4"
+              style={{ scrollSnapType: "x mandatory" }}
+            >
             {CALCULATORS.map((c, idx) => {
               const isActive = c.key === active;
               return (
