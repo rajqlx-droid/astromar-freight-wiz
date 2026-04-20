@@ -83,21 +83,35 @@ export function CbmCalculator({ items, setItems }: Props) {
     import("@/lib/freight/packing-advanced").AdvancedPackResult | null
   >(null);
   const baseResult = useMemo(() => calcCbm(items), [items]);
-  // Append a Density KPI when an optimisation pack is available — placed-cargo
-  // CBM ÷ bounding-box CBM of placed boxes. Higher = tighter packing.
-  // Traffic-light tone: green ≥85, amber 70–84, red <70.
+  // Append KPIs when an optimisation pack is available.
+  // Density   = placed-cargo CBM ÷ bounding-box CBM of placed boxes (how tightly squeezed).
+  // Utilization = cargo CBM ÷ container CBM (how full the container is overall).
+  // Both use the same traffic-light: green ≥85, amber 70–84, red <70.
   const result = useMemo(() => {
     if (!activePack || activePack.placed.length === 0) return baseResult;
+    const toneFor = (n: number): "good" | "warn" | "bad" =>
+      n >= 85 ? "good" : n >= 70 ? "warn" : "bad";
     const d = activePack.densityPct;
-    const tone: "good" | "warn" | "bad" = d >= 85 ? "good" : d >= 70 ? "warn" : "bad";
+    const u = activePack.utilizationPct;
     return {
       ...baseResult,
       items: [
         ...baseResult.items,
         {
+          label: "Container Utilization",
+          value: `${u.toFixed(1)}%`,
+          tone: toneFor(u),
+          hint:
+            "Cargo CBM ÷ container CBM — how full the container is overall.\n" +
+            "Green ≥85% · Amber 70–84% · Red <70%.",
+        },
+        {
           label: "Packing Density",
           value: `${d.toFixed(1)}%`,
-          tone,
+          tone: toneFor(d),
+          hint:
+            "Placed cargo CBM ÷ bounding-box CBM of placed boxes — how tightly the cargo is squeezed inside the volume it actually occupies.\n" +
+            "Green ≥85% · Amber 70–84% · Red <70%.",
         },
       ],
     };
