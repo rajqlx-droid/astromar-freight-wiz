@@ -235,7 +235,6 @@ function FreightIntelligencePage() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-  }, []);
 
   // Auto-scroll active tab into view (covers click + keyboard nav).
   useEffect(() => {
