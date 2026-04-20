@@ -99,11 +99,14 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
                     </Tooltip>
                   )}
                 </span>
-                <span
-                  key={it.value}
-                  className={"animate-fade-in rounded-md px-3 py-1 font-semibold " + toneClass}
-                >
-                  {it.value}
+                <span className="flex items-center gap-2">
+                  {typeof it.gauge === "number" && <GaugeBar value={it.gauge} />}
+                  <span
+                    key={it.value}
+                    className={"animate-fade-in rounded-md px-3 py-1 font-semibold " + toneClass}
+                  >
+                    {it.value}
+                  </span>
                 </span>
               </div>
             );
@@ -111,5 +114,33 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
         </div>
       </TooltipProvider>
     </Card>
+  );
+}
+
+/**
+ * Compact 0–100 gauge: red 0–69, amber 70–84, green 85–100, with a marker
+ * dot at the current value. Sits beside the value chip in the results card.
+ */
+function GaugeBar({ value }: { value: number }) {
+  const clamped = Math.max(0, Math.min(100, value));
+  return (
+    <span
+      className="relative inline-block h-1.5 w-16 overflow-hidden rounded-full"
+      role="meter"
+      aria-valuenow={clamped}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label={`${clamped.toFixed(0)} percent of capacity`}
+    >
+      {/* Zone backgrounds */}
+      <span className="absolute inset-y-0 left-0 w-[70%] bg-red-200/70 dark:bg-red-900/40" />
+      <span className="absolute inset-y-0 left-[70%] w-[15%] bg-amber-200/70 dark:bg-amber-900/40" />
+      <span className="absolute inset-y-0 left-[85%] w-[15%] bg-emerald-200/70 dark:bg-emerald-900/40" />
+      {/* Marker */}
+      <span
+        className="absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white bg-foreground shadow"
+        style={{ left: `${clamped}%` }}
+      />
+    </span>
   );
 }
