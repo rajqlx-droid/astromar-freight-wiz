@@ -507,7 +507,7 @@ function FreightIntelligencePage() {
                           className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
                         >
                           <GitCompareArrows className="size-3.5" />
-                          <span>Compare</span>
+                          <span className="hidden sm:inline">Compare</span>
                         </Button>
                       }
                     />
