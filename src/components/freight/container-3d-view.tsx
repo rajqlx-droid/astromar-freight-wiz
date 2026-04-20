@@ -104,6 +104,12 @@ interface Props {
    * active pallet column. Toggleable from the HUD.
    */
   showForkliftToken?: boolean;
+  /**
+   * Optional overlay rendered inside the viewer wrapper (so it persists in
+   * fullscreen). Use to mount HUDs / control panels that should sit on top of
+   * the canvas without being clipped when the user enters fullscreen.
+   */
+  overlay?: React.ReactNode;
 }
 
 /**
