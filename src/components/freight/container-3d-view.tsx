@@ -303,6 +303,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
       <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
         Drag to rotate · Scroll to zoom · Double-click to reset
       </div>
+
+      {overlay}
     </div>
   );
 });
