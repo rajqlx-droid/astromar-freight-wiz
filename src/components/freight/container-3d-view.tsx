@@ -1161,16 +1161,23 @@ function CargoBox({
 
   return (
     <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
-      {onFloor && <WoodenPallet lm={lm} wm={wm} />}
+      {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[Math.max(lm, wm) * 0.55, Math.max(lm, wm) * 0.7, 32]} />
           <meshBasicMaterial color="#10b981" transparent opacity={0.85} />
         </mesh>
       )}
-      <mesh
-        castShadow
-        receiveShadow
+      <PackageShape
+        lm={lm}
+        hm={hm}
+        wm={wm}
+        color={box.color}
+        packageType={stat?.packageType}
+        fragile={!!fragile}
+        hovered={hovered}
+        tiltColor={tiltColor}
+        tilted={tilted}
         onPointerOver={(e) => {
           if (!tilted) return;
           e.stopPropagation();
@@ -1183,26 +1190,8 @@ function CargoBox({
           setHovered(false);
           if (typeof document !== "undefined") document.body.style.cursor = "";
         }}
-      >
-        <boxGeometry args={[lm, hm, wm]} />
-        <meshStandardMaterial
-          color={box.color}
-          roughness={0.6}
-          metalness={0.05}
-          transparent={fragile}
-          opacity={fragile ? 0.85 : 1}
-          emissive={hovered ? tiltColor : "#000000"}
-          emissiveIntensity={hovered ? 0.25 : 0}
-        />
-        <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
-          <lineBasicMaterial
-            color={hovered ? tiltColor : "#1f2937"}
-            polygonOffset
-            polygonOffsetFactor={-1}
-            polygonOffsetUnits={-1}
-          />
-        </Edges>
-      </mesh>
+      />
+
       {/* Non-stackable warning stripe on top */}
       {nonStack && (
         <mesh position={[0, hm / 2 + 0.005, 0]}>
