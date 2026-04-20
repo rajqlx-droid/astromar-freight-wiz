@@ -1,53 +1,59 @@
 
-The user uploaded a screenshot but sent no message. The screenshot shows the current state of `/freight-intelligence` after the recent layout changes. Looking at it carefully, I can see what's likely the user's concern:
+## Plan: cleanup header cluster, relocate Pro tip, remove duplicate brand chip
 
-**Observations from the screenshot:**
-1. ✅ Header: "Smart Tools / FREIGHT TOOLS" on left, theme toggle on right — clean
-2. ✅ Tab strip: Load Optimizer (active, with orange underline), Air Volume, Landed Cost, Export Price, Air vs Sea, Demurrage — looks good
-3. ⚠️ Breadcrumb row: `Home > Tools > Load Optimizer` on left, but the **Tools | Compare | History** segmented control is on the **right side of this row** — NOT in the header as planned
-4. ⚠️ The "Smart Freight Tools" brand chip that was supposed to sit on the right of the breadcrumb is **missing**
-5. ⚠️ Pro tip is at the bottom — it should be **above** the tab strip per the previous plan, but it's currently below the breadcrumb/heading area
-6. ✅ "Load Optimizer Calculator / CBM / Load Simulator" heading is present
+Three small edits to `src/routes/freight-intelligence.tsx`. No new components, no logic changes.
 
-**What appears to have happened:** The previous implementation moved the Tools|Compare|History segmented control into the breadcrumb row instead of the header, and the Pro tip ended up below the heading instead of above the tab strip. The brand chip was also dropped.
+### 1. Remove the "Tools" button from the segmented header group
 
-Since the user sent an empty message with just this screenshot, they're likely pointing out that the layout still doesn't match what was planned. I should present a corrective plan.
+**What it does today:** It's a `disabled` button with a calculator icon, styled as the active state. It doesn't do anything when clicked — it's purely a visual "you are here" marker. Compare opens a dialog, History opens a sheet, but when neither is open you're already in calculator view, so the indicator is redundant and confusing.
 
-## Plan: finish the layout cleanup that didn't fully land
+**Change:** Delete the Tools `<Button>` (lines 358–368) and the divider after it (line 369). The header right cluster becomes:
 
-Three small corrections in `src/routes/freight-intelligence.tsx` to match the previously approved layout.
-
-### 1. Move Tools | Compare | History back into the header (top right)
-
-Currently the segmented group sits inside the breadcrumb row on the right. Per the approved plan, it belongs in the **top header bar** alongside the theme toggle: `[Theme] · [Tools | Compare | History]`. Move the segmented `<div>` out of the breadcrumb row and into the header's right cluster, next to `<ThemeToggle />`.
-
-### 2. Add the "Smart Freight Tools" brand chip on the right of the breadcrumb row
-
-The breadcrumb row's right side is now empty. Add a compact chip there:
 ```
-[ S ]  Smart Freight Tools
+[ 🌙 Theme ] | [ ⇄ Compare  |  🕒 History ]
 ```
-Small "S" gradient square (mirroring the header logo at ~20px) + text label, right-aligned in the breadcrumb row.
 
-### 3. Lift the Pro tip above the tab strip
+Cleaner two-action group. Compare and History keep their existing behavior.
 
-Currently the Pro tip renders below the breadcrumb/heading. Move its JSX block up so it renders **directly above the tab strip** (the row with Load Optimizer / Air Volume / Landed Cost / etc.). Container: `mx-auto max-w-7xl px-3 md:px-4 pt-2`. Dismiss/reopen state stays identical.
+### 2. Move the Pro tip inline with the heading row (right side)
 
-### Resulting top-of-page stack at 920×502
+**Today:** Pro tip is a full-width banner above the tab strip (lines 430–458).
+
+**New position:** Convert it to a compact pill that sits on the right side of the "Load Optimizer Calculator" heading row, replacing/sharing space with the `MiniHistoryStrip` area. The `mb-3 flex flex-wrap items-center gap-3` row at line 568 already has `ml-auto` for the right slot — Pro tip becomes a small dismissible chip:
+
+```
+[▌ Load Optimizer Calculator       💡 Pro tip: For sea freight... [×]    History · chips]
+   CBM / Load Simulator
+```
+
+When dismissed, collapses to a tiny "💡 tip" link. Same `bannerOpen` / `dismissBanner` / `reopenBanner` state, just rendered in a different DOM location with tighter styling (max-width ~360px, single-line truncate with title attribute for full text on hover). The full-width banner block above the tab strip is removed.
+
+### 3. Remove the duplicate "Smart Freight Tools" chip from the breadcrumb row
+
+The header already shows `[S] Smart Tools / FREIGHT TOOLS` — the breadcrumb-row chip (lines 539–550) repeats the same brand and is the "one more" the user spotted. Delete that chip. The breadcrumb row collapses to just:
+
+```
+Home > Tools > Load Optimizer
+```
+
+Left-aligned, no right-side element. The `justify-between` wrapper becomes unnecessary; simplify to `flex items-center`.
+
+### Resulting layout at 920×502
 
 ```text
-[Header: S · Smart Tools | FREIGHT TOOLS]   [🌙  | Tools | Compare | History]
-─────────────────────────────────────────────────────────────────────────────
-[Pro tip: For sea freight, chargeable weight uses CBM × 1000 ÷ 5...]    [×]
+[S Smart Tools / FREIGHT TOOLS]                    [🌙] | [⇄ Compare | 🕒 History]
+─────────────────────────────────────────────────────────────────────────────────
 [Tabs: Load Optimizer | Air Volume | Landed Cost | Export Price | Air vs Sea | Demurrage]
-[Home > Tools > Load Optimizer                            [S] Smart Freight Tools]
-[▌ Load Optimizer Calculator                          History · Recent: chips]
-[CBM / Load Simulator]
+Home > Tools > Load Optimizer
+▌ Load Optimizer Calculator         💡 Pro tip: For sea freight, CBM × 1000 ÷ 5...  [×]
+  CBM / Load Simulator              [Recent: chip · chip · chip]
 [--- calculator inputs ---]
 ```
 
+Pro tip and MiniHistoryStrip now share the heading row's right side. The heading row may wrap on narrower viewports thanks to `flex-wrap` already in place — Pro tip wraps under the title, MiniHistoryStrip wraps under that.
+
 ### Files touched
-- `src/routes/freight-intelligence.tsx` — three reorderings, no logic changes.
+- `src/routes/freight-intelligence.tsx` — three deletions/relocations only.
 
 ### Out of scope
-- Compare dialog internals, tab strip styling, mini-history popover.
+- Compare dialog internals, tab strip styling, theme toggle, mobile bottom result bar.
