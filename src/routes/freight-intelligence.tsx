@@ -115,7 +115,10 @@ function FreightIntelligencePage() {
   const [bannerOpen, setBannerOpen] = useState(true);
   const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const [compareMode, setCompareMode] = useState<{ left: CalcKey; right: CalcKey } | null>(null);
-  const [heroCollapsed, setHeroCollapsed] = useState(false);
+  const [heroCollapsed, setHeroCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerHeight < 700;
+  });
   const tabsRef = useRef<HTMLDivElement>(null);
   const heroSentinelRef = useRef<HTMLDivElement>(null);
 
@@ -480,8 +483,8 @@ function FreightIntelligencePage() {
         </div>
 
         {/* HERO + BREADCRUMB + BANNER (collapses to a thin strip on scroll) */}
-        <section className="mx-auto max-w-7xl px-3 pb-4 pt-4 md:px-4">
-          <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1 text-xs text-muted-foreground">
+        <section className="mx-auto max-w-7xl px-3 pb-2 pt-3 md:px-4">
+          <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
             <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
             <ChevronRight className="size-3" />
             <span>Tools</span>
@@ -496,7 +499,7 @@ function FreightIntelligencePage() {
           <div
             className={
               "relative overflow-hidden rounded-xl border-2 transition-all duration-300 ease-out " +
-              (heroCollapsed ? "p-2 md:p-2" : "p-5 md:p-6")
+              (heroCollapsed ? "p-2 md:p-2" : "p-3 md:p-4")
             }
             style={{
               borderColor: "var(--brand-navy)",
@@ -515,13 +518,13 @@ function FreightIntelligencePage() {
               <h1
                 className={
                   "font-bold text-brand-navy transition-all " +
-                  (heroCollapsed ? "text-sm md:text-base" : "text-xl md:text-2xl")
+                  (heroCollapsed ? "text-sm md:text-base" : "text-base md:text-lg")
                 }
               >
                 Smart Freight Calculator
               </h1>
               {!heroCollapsed && (
-                <p className="mt-1 text-sm text-muted-foreground md:text-base">
+                <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">
                   Calculate shipping costs and logistics metrics in real-time.
                 </p>
               )}
@@ -573,27 +576,29 @@ function FreightIntelligencePage() {
             />
           ) : (
             <>
-              <div className="mb-4 flex items-center gap-3">
+              <div className="mb-3 flex flex-wrap items-center gap-3">
                 <div
                   aria-hidden
-                  className="h-8 w-1.5 rounded-full"
+                  className="h-8 w-1.5 shrink-0 rounded-full"
                   style={{
                     background:
                       "linear-gradient(180deg, var(--brand-navy), var(--brand-orange))",
                   }}
                 />
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-lg font-bold text-brand-navy md:text-xl">
                     {meta.label} Calculator
                   </h2>
                   <p className="text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
                 </div>
+                <div className="ml-auto w-full sm:w-auto">
+                  <MiniHistoryStrip
+                    type={active}
+                    variant="inline"
+                    onOpenFullHistory={() => setHistorySheetOpen(true)}
+                  />
+                </div>
               </div>
-
-              <MiniHistoryStrip
-                type={active}
-                onOpenFullHistory={() => setHistorySheetOpen(true)}
-              />
 
               {renderCalculator(active)}
             </>
