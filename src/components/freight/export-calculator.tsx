@@ -144,7 +144,7 @@ export function ExportCalculator({ state, setState }: Props) {
                   className="rounded-lg border p-2"
                   style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 15%, transparent)" }}
                 >
-                  <div className="mb-1 flex items-center justify-between">
+                  <div className="mb-1 flex min-h-7 items-center justify-between">
                     <span className="text-[11px] font-semibold text-brand-navy">Line {idx + 1}</span>
                     <div className="flex gap-1">
                       <Button size="icon" variant="ghost" className="size-7" onClick={() => dupLine(ln.id)} title="Duplicate">
@@ -185,9 +185,13 @@ export function ExportCalculator({ state, setState }: Props) {
                     <NumberField compact id={`euc-${ln.id}`} label={`Unit Cost (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
                     <NumberField compact id={`em-${ln.id}`} label="Margin %" suffix="%" value={ln.margin ?? 0} onChange={(n) => updateLine(ln.id, { margin: n })} />
                   </div>
-                  <div className="mt-1 text-right text-[11px] text-muted-foreground">
-                    Cost: <span className="font-semibold text-brand-navy">{state.currency}{fmt(lineCost)}</span>
-                    {" • "}Selling (excl. F&I share): <span className="font-semibold text-brand-orange">{state.currency}{fmt(selling)}</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
+                    <span className="rounded bg-brand-navy-soft/40 px-2 py-0.5">
+                      Cost: <span className="font-semibold text-brand-navy">{state.currency}{fmt(lineCost)}</span>
+                    </span>
+                    <span className="rounded bg-brand-navy-soft/40 px-2 py-0.5">
+                      Selling (excl. F&I share): <span className="font-semibold text-brand-orange">{state.currency}{fmt(selling)}</span>
+                    </span>
                   </div>
                 </div>
               );
