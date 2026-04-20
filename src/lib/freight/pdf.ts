@@ -6,6 +6,8 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { CalcResult } from "./types";
+import type { PackageType } from "./calculators";
+import { drawPackageGlyph } from "./pdf-icons";
 
 const NAVY: [number, number, number] = [27, 58, 107];      // #1B3A6B
 const ORANGE: [number, number, number] = [249, 115, 22];   // #F97316
