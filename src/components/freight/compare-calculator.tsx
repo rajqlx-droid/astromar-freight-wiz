@@ -28,6 +28,38 @@ export function CompareCalculator({ state, setState }: Props) {
     { label: "Handling", value: `₹${state.handling}` },
   ];
 
+  // Analytics — KPI tiles + side-by-side comparison bars.
+  const pdfExtras = useMemo<import("@/lib/freight/pdf").PdfExtras>(() => {
+    const cheaper = airTotal < seaTotal ? "Air" : "Sea";
+    const daysSaved = state.seaDays - state.airDays;
+    return {
+      analytics: {
+        kpis: [
+          { label: "Sea Total", value: `₹${seaTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` },
+          { label: "Air Total", value: `₹${airTotal.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` },
+          { label: "Days Saved by Air", value: `${daysSaved} days` },
+          { label: "Cheaper Option", value: cheaper, tone: "good" },
+        ],
+        comparison: {
+          title: "Cost composition — sea vs air (freight + working capital + handling)",
+          columns: ["Freight", "Working capital", "Handling"],
+          rows: [
+            {
+              label: "Sea",
+              values: [state.seaFreight, seaInterest, state.handling],
+              format: "money",
+            },
+            {
+              label: "Air",
+              values: [state.airFreight, airInterest, state.handling],
+              format: "money",
+            },
+          ],
+        },
+      },
+    };
+  }, [state, seaInterest, airInterest, seaTotal, airTotal]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
@@ -91,7 +123,7 @@ export function CompareCalculator({ state, setState }: Props) {
         </Card>
       </div>
       <div className="xl:sticky xl:top-[140px] xl:self-start">
-        <ResultsCard result={result} inputsTable={inputsTable} />
+        <ResultsCard result={result} inputsTable={inputsTable} extras={pdfExtras} />
       </div>
     </div>
   );

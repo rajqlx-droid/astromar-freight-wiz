@@ -50,7 +50,7 @@ export function HistoryPanel() {
       toast.error("Nothing to export");
       return;
     }
-    downloadFile(`astromar-history-${new Date().toISOString().slice(0, 10)}.csv`, exportHistoryCsv(items));
+    downloadFile(`smart-tools-history-${new Date().toISOString().slice(0, 10)}.csv`, exportHistoryCsv(items));
     toast.success("CSV downloaded");
   };
 
