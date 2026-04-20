@@ -442,6 +442,16 @@ function FreightIntelligencePage() {
                 </button>
               );
             })}
+            </div>
+            {/* Right-edge fade gradient — hints horizontal scroll on mobile */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 right-0 w-10 sm:w-12 md:hidden"
+              style={{
+                background:
+                  "linear-gradient(to left, color-mix(in oklab, var(--brand-navy-soft) 95%, transparent), transparent)",
+              }}
+            />
           </div>
           {/* Active-tab progress indicator (hidden on lg where layout is calmer) */}
           <div className="relative mx-auto max-w-7xl px-3 md:px-4" aria-hidden>
