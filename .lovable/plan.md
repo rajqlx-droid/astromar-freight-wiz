@@ -1,59 +1,53 @@
 
+The user uploaded a screenshot but sent no message. The screenshot shows the current state of `/freight-intelligence` after the recent layout changes. Looking at it carefully, I can see what's likely the user's concern:
 
-## Plan: header cleanup + relocate hero/tip + remove Smart Freight Calculator card
+**Observations from the screenshot:**
+1. ✅ Header: "Smart Tools / FREIGHT TOOLS" on left, theme toggle on right — clean
+2. ✅ Tab strip: Load Optimizer (active, with orange underline), Air Volume, Landed Cost, Export Price, Air vs Sea, Demurrage — looks good
+3. ⚠️ Breadcrumb row: `Home > Tools > Load Optimizer` on left, but the **Tools | Compare | History** segmented control is on the **right side of this row** — NOT in the header as planned
+4. ⚠️ The "Smart Freight Tools" brand chip that was supposed to sit on the right of the breadcrumb is **missing**
+5. ⚠️ Pro tip is at the bottom — it should be **above** the tab strip per the previous plan, but it's currently below the breadcrumb/heading area
+6. ✅ "Load Optimizer Calculator / CBM / Load Simulator" heading is present
 
-Four targeted edits, all in `src/routes/freight-intelligence.tsx`. No new components.
+**What appears to have happened:** The previous implementation moved the Tools|Compare|History segmented control into the breadcrumb row instead of the header, and the Pro tip ended up below the heading instead of above the tab strip. The brand chip was also dropped.
 
-### 1. Header right cluster — group Tools / Compare / History as one segmented control
+Since the user sent an empty message with just this screenshot, they're likely pointing out that the layout still doesn't match what was planned. I should present a corrective plan.
 
-Currently the right side is: `[Tools] [Theme] [Compare] [History]` — four loose buttons with mismatched styling (Tools is filled navy, Compare/History are outline, theme toggle in the middle splits the group).
+## Plan: finish the layout cleanup that didn't fully land
 
-Change to: `[Theme] · [Tools | Compare | History]`
-- Move `ThemeToggle` to the left of the cluster (separated by a thin divider), so the three navigation actions sit together on the far right as a unified segmented group.
-- Wrap Tools / Compare / History in a single rounded container (`rounded-lg border border-brand-navy/30 p-0.5 bg-background`) with each button as `variant="ghost" size="sm"` and tight internal dividers — gives them visual cohesion.
-- Refine icons for clarity: keep `Calculator` for Tools, swap `ArrowLeftRight` → `GitCompareArrows` (more recognizable as "compare"), keep `History` clock icon. Icons sized `size-3.5` with text labels at `text-xs font-medium`.
-- Tools button stays "active/current" styled (filled navy bg) since user is on the tools page; Compare and History are ghost until hovered.
+Three small corrections in `src/routes/freight-intelligence.tsx` to match the previously approved layout.
 
-For Compare: pass a custom `trigger` prop into `<CompareDialog>` (already supported per line 37 of compare-dialog.tsx) so it slots into the segmented group with matching styling.
+### 1. Move Tools | Compare | History back into the header (top right)
 
-### 2. Move "Smart Tools" brand block — use it AS the hero, drop the separate hero card
+Currently the segmented group sits inside the breadcrumb row on the right. Per the approved plan, it belongs in the **top header bar** alongside the theme toggle: `[Theme] · [Tools | Compare | History]`. Move the segmented `<div>` out of the breadcrumb row and into the header's right cluster, next to `<ThemeToggle />`.
 
-The hero card currently shows "Smart Freight Calculator" + "Calculate shipping costs..." (lines 499-532). The user wants this gone entirely, with the brand identity living near the breadcrumb instead.
+### 2. Add the "Smart Freight Tools" brand chip on the right of the breadcrumb row
 
-- **Remove** the entire hero card div (lines 499-532) and its sentinel-driven collapse logic for the title (the sentinel + IntersectionObserver still exists for the tip banner).
-- The breadcrumb row (`Home > Tools > Load Optimizer`) stays where it is, but on the **same row, right side**, render a compact brand chip: the "S" gradient square + "Smart Freight Tools" label (mirrors the header logo style at smaller scale). This puts the product identity adjacent to the breadcrumb as requested.
-- Net effect: ~80-100px of vertical space reclaimed, "Smart Freight Calculator" duplicate heading gone (we already have "Load Optimizer Calculator" right below).
+The breadcrumb row's right side is now empty. Add a compact chip there:
+```
+[ S ]  Smart Freight Tools
+```
+Small "S" gradient square (mirroring the header logo at ~20px) + text label, right-aligned in the breadcrumb row.
 
-### 3. Move the Pro tip up — directly above the active tool tile (tab strip)
+### 3. Lift the Pro tip above the tab strip
 
-Currently the yellow "Pro tip" banner sits between the hero and the calculator section. The user wants it "near above tile" — meaning above the calculator tabs.
+Currently the Pro tip renders below the breadcrumb/heading. Move its JSX block up so it renders **directly above the tab strip** (the row with Load Optimizer / Air Volume / Landed Cost / etc.). Container: `mx-auto max-w-7xl px-3 md:px-4 pt-2`. Dismiss/reopen state stays identical.
 
-- Lift the banner JSX (lines 535-558) out of the hero section and render it **just above the tab strip** (before line 421), inside its own thin container `mx-auto max-w-7xl px-3 md:px-4 pt-2`.
-- Keep the dismiss/reopen state machine identical. When dismissed, the small "Show tip" link appears in the same spot.
-- The tip now contextually precedes the tool selector, which makes more sense (read tip → pick tool → use it) than its current position (read tip → scroll past hero → use tool).
-
-### 4. Calculator section heading — keep, but lighter
-
-With the hero gone, "Load Optimizer Calculator" + sub becomes the de facto page title. No structural change needed; just verify the inline `MiniHistoryStrip` on the right still fits cleanly at 920px width (it does — wraps to its own row below 640px already).
-
-### Resulting top-of-page stack (920×502 viewport)
+### Resulting top-of-page stack at 920×502
 
 ```text
-[Header: S logo · Smart Tools | FREIGHT TOOLS]    [Theme · Tools|Compare|History]
-[Tab strip: Load Optimizer | Air Volume | Landed Cost | Export Price | Air vs Sea | Demurrage]
-[Pro tip: For sea freight, chargeable weight uses CBM × 1000 ÷ 5...]   [×]
-[Home > Tools > Load Optimizer                              S Smart Freight Tools]
-[▌ Load Optimizer Calculator                              History · Recent: chips]
-[CBM / Load Simulator subtitle]
-[--- calculator inputs visible without scrolling ---]
+[Header: S · Smart Tools | FREIGHT TOOLS]   [🌙  | Tools | Compare | History]
+─────────────────────────────────────────────────────────────────────────────
+[Pro tip: For sea freight, chargeable weight uses CBM × 1000 ÷ 5...]    [×]
+[Tabs: Load Optimizer | Air Volume | Landed Cost | Export Price | Air vs Sea | Demurrage]
+[Home > Tools > Load Optimizer                            [S] Smart Freight Tools]
+[▌ Load Optimizer Calculator                          History · Recent: chips]
+[CBM / Load Simulator]
+[--- calculator inputs ---]
 ```
 
 ### Files touched
-- `src/routes/freight-intelligence.tsx` — header right cluster restructure (366-415), lift Pro tip above tab strip, remove hero card, add brand chip into breadcrumb row, drop sentinel use for title collapse (keep for tip auto-collapse if useful, else remove).
-- `src/components/freight/compare-dialog.tsx` — no code change; we'll just pass the `trigger` prop from the route.
+- `src/routes/freight-intelligence.tsx` — three reorderings, no logic changes.
 
 ### Out of scope
-- The `MiniHistoryStrip` inline behavior beside the calculator heading (kept as-is from the previous round).
-- Icon library swap (staying on lucide-react; `GitCompareArrows` is already available there).
-- Mobile bottom result bar.
-
+- Compare dialog internals, tab strip styling, mini-history popover.
