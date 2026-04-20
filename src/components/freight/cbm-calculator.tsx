@@ -237,6 +237,38 @@ export function CbmCalculator({ items, setItems }: Props) {
     return rows;
   });
 
+  // On-screen KPI tiles (also folded into the PDF via resolveExtras).
+  // Synchronous so users see headline metrics in the Results card immediately
+  // after clicking Optimize, without waiting for snapshot capture.
+  const staticExtras = useMemo<import("@/lib/freight/pdf").PdfExtras | undefined>(() => {
+    if (!activePack || activePack.placed.length === 0) return undefined;
+    const totalCbm = items.reduce(
+      (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
+      0,
+    );
+    const totalWt = items.reduce((a, it) => a + it.qty * it.weight, 0);
+    const toneFor = (n: number): "good" | "warn" | "bad" =>
+      n >= 85 ? "good" : n >= 70 ? "warn" : "bad";
+    return {
+      analytics: {
+        kpis: [
+          { label: "Total CBM", value: `${totalCbm.toFixed(2)} m³` },
+          { label: "Total Weight", value: `${totalWt.toFixed(0)} kg` },
+          {
+            label: "Container Util.",
+            value: `${activePack.utilizationPct.toFixed(1)}%`,
+            tone: toneFor(activePack.utilizationPct),
+          },
+          {
+            label: "Packing Density",
+            value: `${activePack.densityPct.toFixed(1)}%`,
+            tone: toneFor(activePack.densityPct),
+          },
+        ],
+      },
+    };
+  }, [items, activePack]);
+
   return (
     <div className="space-y-6">
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
@@ -401,6 +433,7 @@ export function CbmCalculator({ items, setItems }: Props) {
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
+        extras={staticExtras}
         pdfDisabledReason={
           showOptimization
             ? null
