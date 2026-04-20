@@ -72,6 +72,8 @@ export interface ResultItem {
   tone?: "good" | "warn" | "bad";
   /** Optional explanatory hint shown via an info icon next to the label. */
   hint?: string;
+  /** Optional 0–100 value used to render a compact gauge bar with green/amber/red zones. */
+  gauge?: number;
 }
 
 export interface CalcResult {
