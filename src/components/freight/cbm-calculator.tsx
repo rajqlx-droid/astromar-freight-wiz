@@ -433,6 +433,7 @@ export function CbmCalculator({ items, setItems }: Props) {
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
+        extras={staticExtras}
         pdfDisabledReason={
           showOptimization
             ? null
