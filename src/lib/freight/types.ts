@@ -68,6 +68,8 @@ export interface ResultItem {
   value: string;
   /** Optional emphasis flag for the headline result. */
   highlight?: boolean;
+  /** Optional semantic tone for the value chip (e.g. density traffic-light). */
+  tone?: "good" | "warn" | "bad";
 }
 
 export interface CalcResult {

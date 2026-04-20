@@ -85,15 +85,19 @@ export function CbmCalculator({ items, setItems }: Props) {
   const baseResult = useMemo(() => calcCbm(items), [items]);
   // Append a Density KPI when an optimisation pack is available — placed-cargo
   // CBM ÷ bounding-box CBM of placed boxes. Higher = tighter packing.
+  // Traffic-light tone: green ≥85, amber 70–84, red <70.
   const result = useMemo(() => {
     if (!activePack || activePack.placed.length === 0) return baseResult;
+    const d = activePack.densityPct;
+    const tone: "good" | "warn" | "bad" = d >= 85 ? "good" : d >= 70 ? "warn" : "bad";
     return {
       ...baseResult,
       items: [
         ...baseResult.items,
         {
           label: "Packing Density",
-          value: `${activePack.densityPct.toFixed(1)}%`,
+          value: `${d.toFixed(1)}%`,
+          tone,
         },
       ],
     };
