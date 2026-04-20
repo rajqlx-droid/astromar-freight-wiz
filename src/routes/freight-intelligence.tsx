@@ -355,18 +355,6 @@ function FreightIntelligencePage() {
                 className="hidden h-6 w-px bg-brand-navy/20 md:block"
               />
               <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-white hover:opacity-90"
-                  style={{ background: "var(--brand-navy)" }}
-                  disabled
-                  aria-current="page"
-                >
-                  <Calculator className="size-3.5" />
-                  <span className="hidden sm:inline">Tools</span>
-                </Button>
-                <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
                 <CompareDialog
                   active={active}
                   onConfirm={(left, right) => setCompareMode({ left, right })}
