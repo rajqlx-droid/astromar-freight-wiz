@@ -458,23 +458,25 @@ function SinglePlanBody({
                     nextPalletIdx={nextPalletIdx}
                     followCam={isPlaying}
                     showForkliftToken={showForkliftToken && currentStep != null}
+                    overlay={
+                      stepMode ? (
+                        <LoaderHUD
+                          step={currentStep}
+                          totalSteps={palletSequence.length}
+                          currentIdx={palletIdx}
+                          isPlaying={isPlaying}
+                          speed={speed}
+                          onPlayPause={togglePlay}
+                          onPrev={goPrev}
+                          onNext={goNext}
+                          onReset={goReset}
+                          onSpeedChange={setSpeed}
+                          showForklift={showForkliftToken}
+                          onToggleForklift={() => setShowForkliftToken((v) => !v)}
+                        />
+                      ) : null
+                    }
                   />
-                  {stepMode && (
-                    <LoaderHUD
-                      step={currentStep}
-                      totalSteps={palletSequence.length}
-                      currentIdx={palletIdx}
-                      isPlaying={isPlaying}
-                      speed={speed}
-                      onPlayPause={togglePlay}
-                      onPrev={goPrev}
-                      onNext={goNext}
-                      onReset={goReset}
-                      onSpeedChange={setSpeed}
-                      showForklift={showForkliftToken}
-                      onToggleForklift={() => setShowForkliftToken((v) => !v)}
-                    />
-                  )}
                 </div>
               </Suspense>
             ) : (

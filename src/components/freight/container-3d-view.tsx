@@ -104,6 +104,12 @@ interface Props {
    * active pallet column. Toggleable from the HUD.
    */
   showForkliftToken?: boolean;
+  /**
+   * Optional overlay rendered inside the viewer wrapper (so it persists in
+   * fullscreen). Use to mount HUDs / control panels that should sit on top of
+   * the canvas without being clipped when the user enters fullscreen.
+   */
+  overlay?: React.ReactNode;
 }
 
 /**
@@ -112,7 +118,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0, activePalletIdx = null, nextPalletIdx = null, followCam = false, showForkliftToken = false },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0, activePalletIdx = null, nextPalletIdx = null, followCam = false, showForkliftToken = false, overlay = null },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -297,6 +303,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
       <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
         Drag to rotate · Scroll to zoom · Double-click to reset
       </div>
+
+      {overlay}
     </div>
   );
 });

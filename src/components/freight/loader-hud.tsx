@@ -41,7 +41,7 @@ export function LoaderHUD({
   const atLast = currentIdx >= totalSteps - 1;
 
   return (
-    <div className="pointer-events-auto absolute left-2 top-12 z-10 w-[260px] max-w-[60vw] space-y-2">
+    <div className="pointer-events-auto absolute right-2 top-44 z-10 w-[240px] max-w-[55vw] space-y-2">
       {/* Instruction card */}
       <div className="rounded-lg border-2 border-brand-navy/60 bg-background/95 p-2.5 shadow-xl backdrop-blur">
         <div className="mb-1.5 flex items-center justify-between gap-2">
