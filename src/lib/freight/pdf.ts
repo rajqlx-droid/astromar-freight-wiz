@@ -420,11 +420,20 @@ export function downloadResultPdf(
         ty += wH - 3;
       }
 
+      // Render each item as a small glyph + label, in a perRow×itemRows grid.
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(40, 40, 40);
-      doc.text(itemsLines, tx, ty);
-      ty += itemsLines.length * 10;
+      r.items.forEach((it, idx) => {
+        const col = idx % perRow;
+        const row = Math.floor(idx / perRow);
+        const cellX = tx + col * itemColW;
+        const cellY = ty + row * itemRowH;
+        doc.setDrawColor(...NAVY);
+        drawPackageGlyph(doc, it.packageType as PackageType, cellX, cellY - 7, 9);
+        doc.text(`Item ${it.itemIdx + 1} x${it.count}`, cellX + 12, cellY);
+      });
+      ty += itemRows * itemRowH;
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
