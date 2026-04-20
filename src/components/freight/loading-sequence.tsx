@@ -6,6 +6,7 @@ import { ChevronDown, ListOrdered } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
+import { PackageTypeIcon } from "./package-type-icon";
 
 interface Props {
   pack: AdvancedPackResult;
@@ -70,8 +71,13 @@ export function LoadingSequence({ pack }: Props) {
                   {idx + 1}
                 </span>
                 <div className="min-w-0 flex-1 text-xs">
-                  <div className="font-semibold text-brand-navy">
-                    Item {p.itemIdx + 1}{" "}
+                  <div className="flex items-center gap-1.5 font-semibold text-brand-navy">
+                    <PackageTypeIcon
+                      type={p.packageType}
+                      size={14}
+                      className="shrink-0 text-brand-navy"
+                    />
+                    <span>Item {p.itemIdx + 1}</span>
                     <span className="font-normal text-muted-foreground">
                       ({p.packageType}, {p.placed} units)
                     </span>

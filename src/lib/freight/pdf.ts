@@ -6,6 +6,8 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { CalcResult } from "./types";
+import type { PackageType } from "./calculators";
+import { drawPackageGlyph } from "./pdf-icons";
 
 const NAVY: [number, number, number] = [27, 58, 107];      // #1B3A6B
 const ORANGE: [number, number, number] = [249, 115, 22];   // #F97316
@@ -290,7 +292,6 @@ export function downloadResultPdf(
       if (r.needsSeparator) flags.push("MIXED PALLET");
       if (r.gapWarning) flags.push(`GAP ${Math.round(r.wallUtilizationPct)}%`);
       if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
-      const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
       const wt =
         r.weightKg > 0
           ? `~${r.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
@@ -299,10 +300,14 @@ export function downloadResultPdf(
         `Loader: ${r.instruction}`,
         cardW - svgW - cardPad * 3,
       ) as string[];
-      const itemsLines = doc.splitTextToSize(
-        itemsTxt,
-        cardW - svgW - cardPad * 3,
-      ) as string[];
+      // Items area: each item gets a small package-type glyph + label, laid
+      // out in a fixed grid so warehouse staff can scan shapes at a glance
+      // (matches the on-screen loading-rows panel chips).
+      const itemsAreaW = cardW - svgW - cardPad * 3;
+      const itemColW = 78;
+      const itemRowH = 11;
+      const perRow = Math.max(1, Math.floor(itemsAreaW / itemColW));
+      const itemRows = Math.ceil(r.items.length / perRow);
       const warnLines = r.needsSeparator
         ? (doc.splitTextToSize(
             "Mixed pallet — insert a plywood/cardboard separator board between heavy and fragile units.",
@@ -316,7 +321,7 @@ export function downloadResultPdf(
           ) as string[])
         : [];
       const textBlockH =
-        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + gapLines.length * 10 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
+        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + gapLines.length * 10 + itemRows * itemRowH + instructionLines.length * 10 + 4;
       const cardH = Math.max(imageColH + cardPad * 2, textBlockH + cardPad * 2);
 
       // Page-break check
@@ -415,11 +420,20 @@ export function downloadResultPdf(
         ty += wH - 3;
       }
 
+      // Render each item as a small glyph + label, in a perRow×itemRows grid.
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
       doc.setTextColor(40, 40, 40);
-      doc.text(itemsLines, tx, ty);
-      ty += itemsLines.length * 10;
+      r.items.forEach((it, idx) => {
+        const col = idx % perRow;
+        const row = Math.floor(idx / perRow);
+        const cellX = tx + col * itemColW;
+        const cellY = ty + row * itemRowH;
+        doc.setDrawColor(...NAVY);
+        drawPackageGlyph(doc, it.packageType as PackageType, cellX, cellY - 7, 9);
+        doc.text(`Item ${it.itemIdx + 1} x${it.count}`, cellX + 12, cellY);
+      });
+      ty += itemRows * itemRowH;
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
