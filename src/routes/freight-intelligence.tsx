@@ -495,7 +495,7 @@ function FreightIntelligencePage() {
                 </div>
 
                 {/* Action cluster: Compare/History segmented control. Always visible, right-aligned on desktop. */}
-                <div className="flex items-center gap-2 lg:ml-auto">
+                <div className="ml-auto flex shrink-0 items-center gap-2">
                   <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
                     <CompareDialog
                       active={active}
