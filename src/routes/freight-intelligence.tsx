@@ -427,6 +427,36 @@ function FreightIntelligencePage() {
           </div>
         </header>
 
+        {/* PRO TIP — sits above the tool tab strip */}
+        <div className="no-print mx-auto max-w-7xl px-3 pt-2 md:px-4">
+          {bannerOpen ? (
+            <div
+              className="flex items-start gap-2 rounded-lg border-l-4 p-2.5 text-xs md:text-sm"
+              style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
+            >
+              <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand-orange" />
+              <p className="flex-1 text-foreground/90">
+                <span className="font-semibold text-brand-navy">Pro tip · </span>
+                {meta.tip}
+              </p>
+              <button
+                onClick={dismissBanner}
+                aria-label="Dismiss tip"
+                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-brand-navy"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={reopenBanner}
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
+            >
+              <Lightbulb className="size-3" /> Show tip
+            </button>
+          )}
+        </div>
+
         {/* TAB STRIP */}
         <div
           className="no-print sticky top-[60px] z-40 border-b"
