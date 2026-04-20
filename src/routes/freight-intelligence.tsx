@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Calculator,
   ChevronRight,
+  GitCompareArrows,
   History as HistoryIcon,
   Menu,
   X,
@@ -115,12 +116,7 @@ function FreightIntelligencePage() {
   const [bannerOpen, setBannerOpen] = useState(true);
   const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const [compareMode, setCompareMode] = useState<{ left: CalcKey; right: CalcKey } | null>(null);
-  const [heroCollapsed, setHeroCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.innerHeight < 700;
-  });
   const tabsRef = useRef<HTMLDivElement>(null);
-  const heroSentinelRef = useRef<HTMLDivElement>(null);
 
   // ----- per-calculator state, lifted so values persist across tab switches -----
   const [cbmItems, setCbmItems] = useState<CbmItem[]>(() => [emptyCbmItem(0)]);
@@ -238,18 +234,7 @@ function FreightIntelligencePage() {
     btn?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [active]);
 
-  // Hero auto-collapse: watch a sentinel element placed just below the hero.
-  // When it scrolls out of view → collapse; when it returns → expand.
-  useEffect(() => {
-    const el = heroSentinelRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(
-      ([entry]) => setHeroCollapsed(!entry.isIntersecting),
-      { rootMargin: "-1px 0px 0px 0px", threshold: 0 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+
 
   const dismissBanner = () => {
     setBannerOpen(false);
@@ -363,32 +348,57 @@ function FreightIntelligencePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-1 md:gap-2">
-              <Button
-                size="sm"
-                className="hidden text-white shadow-sm hover:opacity-90 md:inline-flex"
-                style={{ background: "var(--brand-navy)" }}
-                disabled
-              >
-                <Calculator className="size-4" /> Tools
-              </Button>
+            <div className="flex items-center gap-2 md:gap-3">
               <ThemeToggle />
-              <CompareDialog
-                active={active}
-                onConfirm={(left, right) => setCompareMode({ left, right })}
+              <div
+                aria-hidden
+                className="hidden h-6 w-px bg-brand-navy/20 md:block"
               />
-              <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="sm" className="border-brand-navy text-brand-navy">
-                    <HistoryIcon className="size-4" />
-                    <span className="hidden sm:inline">History</span>
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
-                  <SheetTitle className="sr-only">Calculation History</SheetTitle>
-                  <HistoryPanel />
-                </SheetContent>
-              </Sheet>
+              <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-white hover:opacity-90"
+                  style={{ background: "var(--brand-navy)" }}
+                  disabled
+                  aria-current="page"
+                >
+                  <Calculator className="size-3.5" />
+                  <span className="hidden sm:inline">Tools</span>
+                </Button>
+                <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
+                <CompareDialog
+                  active={active}
+                  onConfirm={(left, right) => setCompareMode({ left, right })}
+                  trigger={
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                    >
+                      <GitCompareArrows className="size-3.5" />
+                      <span className="hidden sm:inline">Compare</span>
+                    </Button>
+                  }
+                />
+                <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
+                <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-8 gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                    >
+                      <HistoryIcon className="size-3.5" />
+                      <span className="hidden sm:inline">History</span>
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
+                    <SheetTitle className="sr-only">Calculation History</SheetTitle>
+                    <HistoryPanel />
+                  </SheetContent>
+                </Sheet>
+              </div>
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="ghost" size="icon" className="md:hidden text-brand-navy" aria-label="Menu">
@@ -416,6 +426,36 @@ function FreightIntelligencePage() {
             </div>
           </div>
         </header>
+
+        {/* PRO TIP — sits above the tool tab strip */}
+        <div className="no-print mx-auto max-w-7xl px-3 pt-2 md:px-4">
+          {bannerOpen ? (
+            <div
+              className="flex items-start gap-2 rounded-lg border-l-4 p-2.5 text-xs md:text-sm"
+              style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
+            >
+              <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand-orange" />
+              <p className="flex-1 text-foreground/90">
+                <span className="font-semibold text-brand-navy">Pro tip · </span>
+                {meta.tip}
+              </p>
+              <button
+                onClick={dismissBanner}
+                aria-label="Dismiss tip"
+                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-brand-navy"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={reopenBanner}
+              className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
+            >
+              <Lightbulb className="size-3" /> Show tip
+            </button>
+          )}
+        </div>
 
         {/* TAB STRIP */}
         <div
@@ -482,84 +522,33 @@ function FreightIntelligencePage() {
           </div>
         </div>
 
-        {/* HERO + BREADCRUMB + BANNER (collapses to a thin strip on scroll) */}
-        <section className="mx-auto max-w-7xl px-3 pb-2 pt-3 md:px-4">
-          <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
-            <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
-            <ChevronRight className="size-3" />
-            <span>Tools</span>
-            <ChevronRight className="size-3" />
-            <span className="font-semibold text-brand-navy">
-              {compareMode
-                ? `Compare: ${CALCULATORS.find((c) => c.key === compareMode.left)?.label} vs ${CALCULATORS.find((c) => c.key === compareMode.right)?.label}`
-                : meta.label}
-            </span>
-          </nav>
-
-          <div
-            className={
-              "relative overflow-hidden rounded-xl border-2 transition-all duration-300 ease-out " +
-              (heroCollapsed ? "p-2 md:p-2" : "p-3 md:p-4")
-            }
-            style={{
-              borderColor: "var(--brand-navy)",
-              background:
-                "linear-gradient(135deg, var(--brand-navy-soft) 0%, var(--brand-orange-soft) 100%)",
-            }}
-          >
-            {!heroCollapsed && (
+        {/* BREADCRUMB + brand chip */}
+        <section className="mx-auto max-w-7xl px-3 pb-1 pt-2 md:px-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
+              <ChevronRight className="size-3" />
+              <span>Tools</span>
+              <ChevronRight className="size-3" />
+              <span className="font-semibold text-brand-navy">
+                {compareMode
+                  ? `Compare: ${CALCULATORS.find((c) => c.key === compareMode.left)?.label} vs ${CALCULATORS.find((c) => c.key === compareMode.right)?.label}`
+                  : meta.label}
+              </span>
+            </nav>
+            <div className="flex items-center gap-1.5">
               <div
+                className="flex size-5 items-center justify-center rounded text-white"
+                style={{ background: "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))" }}
                 aria-hidden
-                className="absolute -right-10 -top-10 size-40 rounded-full opacity-10"
-                style={{ background: "var(--brand-orange)" }}
-              />
-            )}
-            <div className="relative text-center">
-              <h1
-                className={
-                  "font-bold text-brand-navy transition-all " +
-                  (heroCollapsed ? "text-sm md:text-base" : "text-base md:text-lg")
-                }
               >
-                Smart Freight Calculator
-              </h1>
-              {!heroCollapsed && (
-                <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">
-                  Calculate shipping costs and logistics metrics in real-time.
-                </p>
-              )}
+                <span className="text-[10px] font-bold">S</span>
+              </div>
+              <span className="text-[11px] font-semibold tracking-tight text-brand-navy">
+                Smart Freight Tools
+              </span>
             </div>
           </div>
-
-          {!heroCollapsed && (
-            bannerOpen ? (
-              <div
-                className="mt-3 flex items-start gap-2 rounded-lg border-l-4 p-3 text-xs md:text-sm"
-                style={{ borderColor: "var(--brand-orange)", background: "var(--brand-navy-soft)" }}
-              >
-                <Lightbulb className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-                <p className="flex-1 text-foreground/90">{meta.tip}</p>
-                <button
-                  onClick={dismissBanner}
-                  aria-label="Dismiss tip"
-                  className="rounded p-1 text-muted-foreground hover:bg-background hover:text-brand-navy"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={reopenBanner}
-                className="mt-3 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-brand-orange"
-              >
-                <Lightbulb className="size-3" /> Show tip
-              </button>
-            )
-          )}
-
-          {/* Sentinel just below the hero — when it leaves the viewport,
-              the IntersectionObserver collapses the hero. */}
-          <div ref={heroSentinelRef} aria-hidden className="h-px w-full" />
         </section>
 
         {/* CALCULATOR — single tool OR split compare view */}
