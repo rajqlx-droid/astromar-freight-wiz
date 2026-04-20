@@ -59,6 +59,42 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
     { label: `Item ${idx + 1} Qty / Actual Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
   ]);
 
+  // Tool analytics — KPI tiles + actual vs volumetric stacked bar.
+  const pdfExtras = useMemo<import("@/lib/freight/pdf").PdfExtras>(() => {
+    let actual = 0;
+    let volumetric = 0;
+    let totalQty = 0;
+    for (const it of items) {
+      const v = (it.length * it.width * it.height) / divisor;
+      volumetric += v * it.qty;
+      actual += it.weight * it.qty;
+      totalQty += it.qty;
+    }
+    const chargeable = Math.max(actual, volumetric);
+    const premiumPct = actual > 0 ? ((chargeable - actual) / actual) * 100 : 0;
+    return {
+      analytics: {
+        kpis: [
+          { label: "Total Pieces", value: totalQty.toLocaleString("en-IN") },
+          { label: "Actual Weight", value: `${actual.toFixed(1)} kg` },
+          { label: "Volumetric Weight", value: `${volumetric.toFixed(1)} kg` },
+          {
+            label: "Chargeable Weight",
+            value: `${chargeable.toFixed(1)} kg`,
+            tone: premiumPct > 20 ? "bad" : premiumPct > 5 ? "warn" : "good",
+          },
+        ],
+        breakdown: {
+          title: `Weight comparison · chargeable bills the higher of actual vs volumetric (÷${divisor})`,
+          segments: [
+            { label: "Actual", value: actual, color: [27, 58, 107] },
+            { label: "Volumetric", value: volumetric, color: [249, 115, 22] },
+          ],
+        },
+      },
+    };
+  }, [items, divisor]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
