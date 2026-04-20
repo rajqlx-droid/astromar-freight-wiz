@@ -62,25 +62,32 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
       </div>
 
       <div className="divide-y">
-        {result.items.map((it) => (
-          <div
-            key={it.label}
-            className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
-          >
-            <span className="text-muted-foreground">{it.label}</span>
-            <span
-              key={it.value}
-              className={
-                "animate-fade-in rounded-md px-3 py-1 font-semibold " +
-                (it.highlight
-                  ? "bg-brand-orange-soft text-brand-orange"
-                  : "text-foreground")
-              }
+        {result.items.map((it) => {
+          const toneClass =
+            it.tone === "good"
+              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+              : it.tone === "warn"
+                ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                : it.tone === "bad"
+                  ? "bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-200"
+                  : it.highlight
+                    ? "bg-brand-orange-soft text-brand-orange"
+                    : "text-foreground";
+          return (
+            <div
+              key={it.label}
+              className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
             >
-              {it.value}
-            </span>
-          </div>
-        ))}
+              <span className="text-muted-foreground">{it.label}</span>
+              <span
+                key={it.value}
+                className={"animate-fade-in rounded-md px-3 py-1 font-semibold " + toneClass}
+              >
+                {it.value}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </Card>
   );

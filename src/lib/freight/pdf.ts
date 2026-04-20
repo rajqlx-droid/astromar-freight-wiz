@@ -167,6 +167,25 @@ export function downloadResultPdf(
     alternateRowStyles: { fillColor: [255, 247, 237] },
     styles: { fontSize: 11, cellPadding: 7 },
     margin: { left: 40, right: 40 },
+    // Traffic-light fill for tone-tagged value cells (e.g. Packing Density).
+    didParseCell: (data) => {
+      if (data.section !== "body" || data.column.index !== 1) return;
+      const item = result.items[data.row.index];
+      if (!item?.tone) return;
+      const fill: Record<"good" | "warn" | "bad", [number, number, number]> = {
+        good: [220, 252, 231], // emerald-100
+        warn: [254, 243, 199], // amber-100
+        bad: [254, 226, 226], // red-100
+      };
+      const text: Record<"good" | "warn" | "bad", [number, number, number]> = {
+        good: [22, 101, 52], // emerald-800
+        warn: [146, 64, 14], // amber-800
+        bad: [153, 27, 27], // red-800
+      };
+      data.cell.styles.fillColor = fill[item.tone];
+      data.cell.styles.textColor = text[item.tone];
+      data.cell.styles.fontStyle = "bold";
+    },
   });
   // @ts-expect-error autotable injects lastAutoTable
   y = (doc.lastAutoTable?.finalY ?? y) + 20;
