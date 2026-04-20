@@ -86,6 +86,39 @@ export function ResultsCard({ result, inputsTable, resolveExtras, extras, pdfDis
         </div>
       )}
 
+      {extras?.analytics?.kpis && extras.analytics.kpis.length > 0 && (
+        <div
+          className="print-area grid grid-cols-2 gap-2 border-b px-5 py-3 sm:grid-cols-4"
+          aria-label="Key metrics"
+        >
+          {extras.analytics.kpis.map((kpi) => {
+            const toneStyle =
+              kpi.tone === "good"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100"
+                : kpi.tone === "warn"
+                  ? "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                  : kpi.tone === "bad"
+                    ? "border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-100"
+                    : "border-brand-navy/20 bg-background text-foreground";
+            return (
+              <div
+                key={kpi.label}
+                className={
+                  "flex flex-col justify-between rounded-lg border px-2.5 py-2 " + toneStyle
+                }
+              >
+                <div className="text-[10px] font-medium uppercase tracking-wide opacity-70">
+                  {kpi.label}
+                </div>
+                <div className="mt-1 text-sm font-bold leading-tight sm:text-base">
+                  {kpi.value}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <TooltipProvider delayDuration={150}>
         <div className="divide-y">
           {result.items.map((it) => {
