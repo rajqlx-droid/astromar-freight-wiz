@@ -276,6 +276,35 @@ export function downloadResultPdf(
       ry += bannerH + 10;
     }
 
+    // Glyph legend — show every package type that appears in the rows so
+    // first-time loaders can map shape → cargo type at a glance.
+    const usedTypes = Array.from(
+      new Set(extras.loadingRows.flatMap((r) => r.items.map((i) => i.packageType))),
+    ) as PackageType[];
+    if (usedTypes.length > 0) {
+      const legendH = 28;
+      const legendW = pageWidth - 80;
+      doc.setFillColor(247, 250, 255);
+      doc.setDrawColor(214, 221, 232);
+      doc.setLineWidth(0.5);
+      doc.roundedRect(40, ry, legendW, legendH, 3, 3, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7);
+      doc.setTextColor(...NAVY);
+      doc.text("LEGEND", 48, ry + 9);
+      const slotW = (legendW - 60) / usedTypes.length;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.setDrawColor(...NAVY);
+      usedTypes.forEach((t, i) => {
+        const slotX = 48 + 30 + i * slotW;
+        drawPackageGlyph(doc, t, slotX, ry + 13, 11);
+        doc.text(t.charAt(0).toUpperCase() + t.slice(1), slotX + 14, ry + 21);
+      });
+      ry += legendH + 10;
+    }
+
     const cardX = 40;
     const cardW = pageWidth - 80;
     const svgW = 130;
