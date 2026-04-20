@@ -476,6 +476,27 @@ export function packContainerAdvanced(
     };
   });
 
+  // Density: cargo CBM (placed boxes only) ÷ axis-aligned bounding-box CBM.
+  // Tells the user how tightly the placed cargo is squeezed inside the
+  // volume it actually occupies — independent of total container size.
+  let placedCargoCbm = 0;
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+  for (const p of placed) {
+    placedCargoCbm += (p.l * p.w * p.h) / 1_000_000_000;
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.z < minZ) minZ = p.z;
+    if (p.x + p.l > maxX) maxX = p.x + p.l;
+    if (p.y + p.w > maxY) maxY = p.y + p.w;
+    if (p.z + p.h > maxZ) maxZ = p.z + p.h;
+  }
+  const usedCbm =
+    placed.length > 0
+      ? ((maxX - minX) * (maxY - minY) * (maxZ - minZ)) / 1_000_000_000
+      : 0;
+  const densityPct = usedCbm > 0 ? (placedCargoCbm / usedCbm) * 100 : 0;
+
   return {
     container,
     placed,
@@ -489,6 +510,8 @@ export function packContainerAdvanced(
       container.maxPayloadKg > 0 ? (totalWeight / container.maxPayloadKg) * 100 : 0,
     perItem,
     cogOffsetPct,
+    usedCbm,
+    densityPct,
   };
 }
 
