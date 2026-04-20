@@ -84,15 +84,19 @@ export function CbmCalculator({ items, setItems }: Props) {
   >(null);
   const baseResult = useMemo(() => calcCbm(items), [items]);
   // Append KPIs when an optimisation pack is available.
-  // Density   = placed-cargo CBM ÷ bounding-box CBM of placed boxes (how tightly squeezed).
-  // Utilization = cargo CBM ÷ container CBM (how full the container is overall).
-  // Both use the same traffic-light: green ≥85, amber 70–84, red <70.
+  // Utilization (volume) = cargo CBM ÷ container CBM (how full the container is).
+  // Weight Utilization   = used weight ÷ container max payload (catches dense cargo
+  //                        that hits the weight limit before the volume limit).
+  // Density              = placed-cargo CBM ÷ bounding-box CBM of placed boxes
+  //                        (how tightly the cargo is squeezed inside the volume it occupies).
+  // All three use the same traffic-light: green ≥85, amber 70–84, red <70.
   const result = useMemo(() => {
     if (!activePack || activePack.placed.length === 0) return baseResult;
     const toneFor = (n: number): "good" | "warn" | "bad" =>
       n >= 85 ? "good" : n >= 70 ? "warn" : "bad";
-    const d = activePack.densityPct;
     const u = activePack.utilizationPct;
+    const wu = activePack.weightUtilizationPct;
+    const d = activePack.densityPct;
     return {
       ...baseResult,
       items: [
@@ -101,14 +105,25 @@ export function CbmCalculator({ items, setItems }: Props) {
           label: "Container Utilization",
           value: `${u.toFixed(1)}%`,
           tone: toneFor(u),
+          gauge: u,
           hint:
             "Cargo CBM ÷ container CBM — how full the container is overall.\n" +
+            "Green ≥85% · Amber 70–84% · Red <70%.",
+        },
+        {
+          label: "Weight Utilization",
+          value: `${wu.toFixed(1)}%`,
+          tone: toneFor(wu),
+          gauge: wu,
+          hint:
+            "Used weight ÷ container max payload — catches dense cargo that hits the weight limit before the volume limit.\n" +
             "Green ≥85% · Amber 70–84% · Red <70%.",
         },
         {
           label: "Packing Density",
           value: `${d.toFixed(1)}%`,
           tone: toneFor(d),
+          gauge: d,
           hint:
             "Placed cargo CBM ÷ bounding-box CBM of placed boxes — how tightly the cargo is squeezed inside the volume it actually occupies.\n" +
             "Green ≥85% · Amber 70–84% · Red <70%.",
