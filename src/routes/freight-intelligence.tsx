@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Calculator,
   ChevronRight,
+  GitCompareArrows,
   History as HistoryIcon,
   Menu,
   X,
