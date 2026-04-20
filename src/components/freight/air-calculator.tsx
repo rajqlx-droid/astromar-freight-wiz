@@ -152,22 +152,14 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
                 <NumberField compact id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
               </div>
 
-              {/* Per-package summary: volume, volumetric kg, chargeable kg */}
+              {/* Per-package summary: volumetric weight + chargeable */}
               <div
-                className="mt-3 grid grid-cols-2 gap-2 rounded-md border border-brand-navy/15 bg-brand-navy-soft/50 p-2 text-[11px] sm:grid-cols-4"
+                className="mt-3 grid grid-cols-2 gap-2 rounded-md border border-brand-navy/15 bg-brand-navy-soft/50 p-2 text-[11px]"
                 aria-label={`Item ${idx + 1} per-package metrics`}
               >
                 <div className="min-w-0">
-                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Volume</div>
-                  <div className="truncate font-bold text-brand-navy">{rowCbm.toFixed(4)} m³</div>
-                </div>
-                <div className="min-w-0">
                   <div className="font-semibold uppercase tracking-wider text-muted-foreground">Vol. Wt</div>
                   <div className="truncate font-bold text-brand-navy">{rowTotalVol.toFixed(2)} kg</div>
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Actual Wt</div>
-                  <div className="truncate font-bold text-brand-navy">{rowTotalActual.toFixed(2)} kg</div>
                 </div>
                 <div className="min-w-0">
                   <div className="font-semibold uppercase tracking-wider text-muted-foreground">Chargeable</div>
