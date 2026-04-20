@@ -49,6 +49,41 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
     { label: "GST / VAT Rate", value: `${state.gstRate}%` },
   ];
 
+  // Analytics — KPI tiles + landed cost composition stacked bar.
+  const pdfExtras = useMemo<import("@/lib/freight/pdf").PdfExtras>(() => {
+    const goodsValue = state.lines.reduce((a, l) => a + l.qty * l.unitValue, 0);
+    const totalDuty = state.lines.reduce(
+      (a, l) => a + l.qty * l.unitValue * ((l.dutyRate ?? 0) / 100),
+      0,
+    );
+    const fAndI = state.freight + state.insurance + state.additional;
+    const cif = goodsValue + fAndI;
+    const gst = (cif + totalDuty) * (state.gstRate / 100);
+    const total = cif + totalDuty + gst;
+    const cur = state.currency;
+    const fmtMoney = (n: number) =>
+      `${cur}${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    return {
+      analytics: {
+        kpis: [
+          { label: "Goods Value", value: fmtMoney(goodsValue) },
+          { label: "Total Duty", value: fmtMoney(totalDuty) },
+          { label: `${state.gstRate}% GST/VAT`, value: fmtMoney(gst) },
+          { label: "Total Landed", value: fmtMoney(total), tone: "warn" },
+        ],
+        breakdown: {
+          title: `Landed cost composition (${cur}) — share of ${fmtMoney(total)}`,
+          segments: [
+            { label: "Goods", value: goodsValue, color: [27, 58, 107] },
+            { label: "Freight + Ins + Other", value: fAndI, color: [56, 142, 200] },
+            { label: "Duty", value: totalDuty, color: [249, 115, 22] },
+            { label: "GST / VAT", value: gst, color: [217, 70, 70] },
+          ],
+        },
+      },
+    };
+  }, [state]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
@@ -176,7 +211,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
         </Card>
       </div>
       <div className="xl:sticky xl:top-[140px] xl:self-start">
-        <ResultsCard result={result} inputsTable={inputsTable} />
+        <ResultsCard result={result} inputsTable={inputsTable} extras={pdfExtras} />
       </div>
     </div>
   );

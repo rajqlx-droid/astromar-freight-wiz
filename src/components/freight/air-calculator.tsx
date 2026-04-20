@@ -170,7 +170,7 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
       </div>
 
       <div className="xl:sticky xl:top-[140px] xl:self-start">
-        <ResultsCard result={result} inputsTable={inputsTable} />
+        <ResultsCard result={result} inputsTable={inputsTable} extras={pdfExtras} />
       </div>
     </div>
   );

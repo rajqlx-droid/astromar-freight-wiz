@@ -34,6 +34,34 @@ export function RiskCalculator({ state, setState }: Props) {
     { label: "Insurance Coverage", value: `₹${state.insurance}` },
   ];
 
+  // Analytics — KPI tiles + risk thermometer (0-100 scale, value at exposure %).
+  const pdfExtras = useMemo<import("@/lib/freight/pdf").PdfExtras>(() => {
+    const chargeableDays = Math.max(0, state.daysAtPort - state.freeDays);
+    const demurrage = chargeableDays * state.dailyRate;
+    const exposure = Math.max(0, state.goodsValue - state.insurance);
+    const exposurePct = state.goodsValue > 0 ? (exposure / state.goodsValue) * 100 : 0;
+    const riskTone: "good" | "warn" | "bad" =
+      risk === "High" ? "bad" : risk === "Medium" ? "warn" : "good";
+    const safe = Math.max(0, 100 - exposurePct);
+    return {
+      analytics: {
+        kpis: [
+          { label: "Free Days", value: `${state.freeDays} days` },
+          { label: "Chargeable Days", value: `${chargeableDays} days`, tone: chargeableDays > 5 ? "bad" : chargeableDays > 0 ? "warn" : "good" },
+          { label: "Demurrage", value: `₹${demurrage.toLocaleString("en-IN", { maximumFractionDigits: 0 })}` },
+          { label: "Risk Level", value: risk, tone: riskTone },
+        ],
+        breakdown: {
+          title: `Insurance exposure thermometer · ${exposurePct.toFixed(0)}% of goods value uncovered`,
+          segments: [
+            { label: "Insured", value: safe, color: [16, 185, 129] },
+            { label: "Uninsured exposure", value: exposurePct, color: [225, 29, 72] },
+          ],
+        },
+      },
+    };
+  }, [state, risk]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
@@ -91,7 +119,7 @@ export function RiskCalculator({ state, setState }: Props) {
         </div>
       </div>
       <div className="xl:sticky xl:top-[140px] xl:self-start">
-        <ResultsCard result={result} inputsTable={inputsTable} />
+        <ResultsCard result={result} inputsTable={inputsTable} extras={pdfExtras} />
       </div>
     </div>
   );

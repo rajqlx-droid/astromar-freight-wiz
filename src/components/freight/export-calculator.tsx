@@ -46,6 +46,47 @@ export function ExportCalculator({ state, setState }: Props) {
     { label: "Other Charges", value: `${state.currency}${state.additional}` },
   ];
 
+  // Analytics — KPI tiles + selling-price composition stacked bar.
+  const pdfExtras = useMemo<import("@/lib/freight/pdf").PdfExtras>(() => {
+    const totalCost = state.lines.reduce((a, l) => a + l.qty * l.unitValue, 0);
+    const fAndI = state.freight + state.insurance + state.additional;
+    const totalCif = totalCost + fAndI;
+    let totalSelling = 0;
+    state.lines.forEach((l) => {
+      const lineCost = l.qty * l.unitValue;
+      const share = totalCost > 0 ? lineCost / totalCost : 0;
+      const lineCif = lineCost + fAndI * share;
+      totalSelling += lineCif * (1 + (l.margin ?? 0) / 100);
+    });
+    const margin = totalSelling - totalCif;
+    const blendedPct = totalCost > 0 ? ((totalSelling - totalCost) / totalCost) * 100 : 0;
+    const cur = state.currency;
+    const fmtMoney = (n: number) =>
+      `${cur}${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+    return {
+      analytics: {
+        kpis: [
+          { label: "Total Cost", value: fmtMoney(totalCost) },
+          { label: "Total CIF", value: fmtMoney(totalCif) },
+          { label: "Total Selling", value: fmtMoney(totalSelling), tone: "good" },
+          {
+            label: "Blended Margin",
+            value: `${blendedPct.toFixed(1)}%`,
+            tone: blendedPct < 10 ? "warn" : blendedPct < 0 ? "bad" : "good",
+          },
+        ],
+        breakdown: {
+          title: `Selling price composition (${cur}) — share of ${fmtMoney(totalSelling)}`,
+          segments: [
+            { label: "Cost", value: totalCost, color: [27, 58, 107] },
+            { label: "Freight + Ins + Other", value: fAndI, color: [56, 142, 200] },
+            { label: "Margin", value: Math.max(0, margin), color: [16, 185, 129] },
+          ],
+        },
+      },
+    };
+  }, [state]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
@@ -166,7 +207,7 @@ export function ExportCalculator({ state, setState }: Props) {
         </Card>
       </div>
       <div className="xl:sticky xl:top-[140px] xl:self-start">
-        <ResultsCard result={result} inputsTable={inputsTable} />
+        <ResultsCard result={result} inputsTable={inputsTable} extras={pdfExtras} />
       </div>
     </div>
   );
