@@ -5,19 +5,21 @@
  */
 import { Download } from "lucide-react";
 import { toast } from "sonner";
-import { downloadResultPdf } from "@/lib/freight/pdf";
+import { downloadResultPdf, type PdfExtras } from "@/lib/freight/pdf";
 import type { CalcResult } from "@/lib/freight/types";
 
 interface Props {
   result: CalcResult | null;
   inputsTable?: { label: string; value: string }[];
+  /** Optional inline extras (e.g. tool-specific KPI grid + analytics chart). */
+  extras?: PdfExtras;
 }
 
-export function MobileResultBar({ result, inputsTable }: Props) {
+export function MobileResultBar({ result, inputsTable, extras }: Props) {
   if (!result) return null;
 
   const handlePdf = () => {
-    downloadResultPdf(result, inputsTable);
+    downloadResultPdf(result, inputsTable, extras);
     toast.success("PDF downloaded");
   };
 
