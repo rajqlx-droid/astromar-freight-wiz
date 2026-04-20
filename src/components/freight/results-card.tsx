@@ -216,3 +216,124 @@ function GaugeBar({ value }: { value: number }) {
     </span>
   );
 }
+
+/** Convert PDF rgb tuple to a CSS rgb() string. */
+function rgbCss(c: [number, number, number]) {
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+}
+
+/**
+ * Stacked horizontal composition bar with inline legend chips.
+ * Mirrors the PDF `drawHBar` output for on-screen parity.
+ */
+function BreakdownBar({
+  title,
+  segments,
+}: {
+  title: string;
+  segments: { label: string; value: number; color: [number, number, number] }[];
+}) {
+  const total = segments.reduce((a, s) => a + Math.max(0, s.value), 0);
+  if (total <= 0) return null;
+  return (
+    <div className="print-area border-b px-5 py-3">
+      <div className="mb-2 text-xs font-semibold text-brand-navy">{title}</div>
+      <div
+        className="flex h-3 w-full overflow-hidden rounded-md border border-border"
+        role="img"
+        aria-label={title}
+      >
+        {segments.map((s) => {
+          const w = (Math.max(0, s.value) / total) * 100;
+          if (w <= 0) return null;
+          return (
+            <span
+              key={s.label}
+              style={{ width: `${w}%`, background: rgbCss(s.color) }}
+              title={`${s.label}: ${w.toFixed(1)}%`}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+        {segments.map((s) => {
+          const pct = (Math.max(0, s.value) / total) * 100;
+          return (
+            <span key={s.label} className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block size-2 rounded-sm"
+                style={{ background: rgbCss(s.color) }}
+                aria-hidden
+              />
+              <span className="font-medium text-foreground">{s.label}</span>
+              <span>{pct.toFixed(0)}%</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Side-by-side comparison bars (one bar per value per row, sharing a common
+ * scale). Mirrors the PDF `drawComparison` output. Used by Air vs Sea.
+ */
+function ComparisonBars({
+  title,
+  columns,
+  rows,
+}: {
+  title: string;
+  columns: string[];
+  rows: { label: string; values: number[]; format?: "money" | "days" | "kg" }[];
+}) {
+  const colors: [number, number, number][] = [
+    [27, 58, 107],
+    [249, 115, 22],
+    [16, 185, 129],
+    [225, 29, 72],
+  ];
+  const allVals = rows.flatMap((r) => r.values.map((v) => Math.max(0, v)));
+  const max = Math.max(1, ...allVals);
+  const fmt = (n: number, f?: "money" | "days" | "kg") => {
+    if (f === "days") return `${Math.round(n)} d`;
+    if (f === "kg") return `${n.toFixed(0)} kg`;
+    return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  };
+  return (
+    <div className="print-area border-b px-5 py-3">
+      <div className="mb-2 text-xs font-semibold text-brand-navy">{title}</div>
+      <div className="space-y-2">
+        {rows.map((r) => (
+          <div key={r.label}>
+            <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {r.label}
+            </div>
+            <div className="space-y-1">
+              {r.values.map((v, i) => {
+                const w = (Math.max(0, v) / max) * 100;
+                return (
+                  <div key={`${r.label}-${i}`} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-14 shrink-0 text-muted-foreground">
+                      {columns[i] ?? ""}
+                    </span>
+                    <span className="relative h-3 flex-1 overflow-hidden rounded-sm bg-muted">
+                      <span
+                        className="absolute inset-y-0 left-0"
+                        style={{ width: `${w}%`, background: rgbCss(colors[i % colors.length]) }}
+                      />
+                    </span>
+                    <span className="w-20 shrink-0 text-right font-medium text-foreground">
+                      {fmt(v, r.format)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
