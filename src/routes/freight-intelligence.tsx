@@ -474,8 +474,8 @@ function FreightIntelligencePage() {
             />
           ) : (
             <>
-              {/* Heading row: title on left, action cluster on right. Stacks on mobile. */}
-              <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+              {/* Heading row: title on left, action cluster on right. Always single row — title truncates to make room. */}
+              <div className="mb-3 flex flex-row items-center gap-2 sm:gap-3">
                 {/* Title block */}
                 <div className="flex min-w-0 items-center gap-3">
                   <div
@@ -495,7 +495,7 @@ function FreightIntelligencePage() {
                 </div>
 
                 {/* Action cluster: Compare/History segmented control. Always visible, right-aligned on desktop. */}
-                <div className="flex items-center gap-2 lg:ml-auto">
+                <div className="ml-auto flex shrink-0 items-center gap-2">
                   <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
                     <CompareDialog
                       active={active}
@@ -507,7 +507,7 @@ function FreightIntelligencePage() {
                           className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
                         >
                           <GitCompareArrows className="size-3.5" />
-                          <span>Compare</span>
+                          <span className="hidden sm:inline">Compare</span>
                         </Button>
                       }
                     />
@@ -520,7 +520,7 @@ function FreightIntelligencePage() {
                           className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
                         >
                           <HistoryIcon className="size-3.5" />
-                          <span>History</span>
+                          <span className="hidden sm:inline">History</span>
                         </Button>
                       </SheetTrigger>
                       <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
