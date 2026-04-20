@@ -149,7 +149,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
                 className="rounded-lg border p-2"
                 style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 15%, transparent)" }}
               >
-                <div className="mb-1 flex items-center justify-between">
+                <div className="mb-1 flex min-h-7 items-center justify-between">
                   <span className="text-[11px] font-semibold text-brand-navy">Line {idx + 1}</span>
                   <div className="flex gap-1">
                     <Button size="icon" variant="ghost" className="size-7" onClick={() => dupLine(ln.id)} title="Duplicate">
@@ -190,9 +190,13 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
                   <NumberField compact id={`luv-${ln.id}`} label={`Unit Value (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
                   <NumberField compact id={`ldr-${ln.id}`} label="Duty %" suffix="%" value={ln.dutyRate ?? 0} onChange={(n) => updateLine(ln.id, { dutyRate: n })} />
                 </div>
-                <div className="mt-1 text-right text-[11px] text-muted-foreground">
-                  Subtotal: <span className="font-semibold text-brand-navy">{state.currency}{fmt(ln.qty * ln.unitValue)}</span>
-                  {" • "}Duty: <span className="font-semibold text-brand-orange">{state.currency}{fmt(ln.qty * ln.unitValue * ((ln.dutyRate ?? 0) / 100))}</span>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
+                  <span className="rounded bg-brand-navy-soft/40 px-2 py-0.5">
+                    Subtotal: <span className="font-semibold text-brand-navy">{state.currency}{fmt(ln.qty * ln.unitValue)}</span>
+                  </span>
+                  <span className="rounded bg-brand-navy-soft/40 px-2 py-0.5">
+                    Duty: <span className="font-semibold text-brand-orange">{state.currency}{fmt(ln.qty * ln.unitValue * ((ln.dutyRate ?? 0) / 100))}</span>
+                  </span>
                 </div>
               </div>
             ))}
