@@ -49,7 +49,7 @@ export interface AdvancedPackResult {
 const RENDER_CAP = 500;
 const CELL_MM = 100; // 10cm grid — good resolution vs. perf
 const SUPPORT_MIN_RATIO = 0.9; // ≥ 90% footprint must rest on something solid
-const PLACE_STEP_MM = 100; // candidate XY scan stride
+const PLACE_STEP_MM = 50; // candidate XY scan stride (finer = tighter packing)
 
 interface ExpandedCarton {
   /** Original (un-rotated) dimensions in mm. */
@@ -317,6 +317,63 @@ export function packContainerAdvanced(
       perItemReason[c.itemIdx] ||= lastReason || "Container full";
       continue;
     }
+
+    // Snap-to-neighbour: slide the chosen placement toward -X (back wall) then
+    // -Y (left wall) to close any sub-stride gap left by the 50mm scan.
+    const snapAxis = (axis: "x" | "y") => {
+      const tryAt = (nx: number, ny: number) => {
+        const ev = evaluatePlacement(nx, ny, bestPick!.orient.l, bestPick!.orient.w, {
+          ...c,
+          origL: bestPick!.orient.l,
+          origW: bestPick!.orient.w,
+          origH: bestPick!.orient.h,
+        });
+        if (!ev) return null;
+        if (Math.abs(ev.z - bestPick!.z) > 0.5) return null; // resting plane must match
+        if (ev.anySealed) return null;
+        if (ev.z + bestPick!.orient.h > C.h) return null;
+        if (!c.stackable && ev.z > 0) return null;
+        if (ev.z > 0 && ev.supportRatio < SUPPORT_MIN_RATIO) return null;
+        for (const sIdx of ev.supporters) {
+          const s = placedInternal[sIdx];
+          if (!s) continue;
+          if (s.maxStackWeightKg > 0 && s.loadKg + c.weight > s.maxStackWeightKg) {
+            return null;
+          }
+        }
+        return ev;
+      };
+
+      // Coarse 10mm slide.
+      const COARSE = 10;
+      while (true) {
+        const cur = axis === "x" ? bestPick!.x : bestPick!.y;
+        if (cur <= 0) break;
+        const next = Math.max(0, cur - COARSE);
+        const nx = axis === "x" ? next : bestPick!.x;
+        const ny = axis === "y" ? next : bestPick!.y;
+        const ev = tryAt(nx, ny);
+        if (!ev) break;
+        bestPick!.x = nx;
+        bestPick!.y = ny;
+        bestPick!.supporters = ev.supporters;
+      }
+      // Fine 1mm slide for the last sub-coarse gap.
+      for (let i = 0; i < COARSE; i++) {
+        const cur = axis === "x" ? bestPick!.x : bestPick!.y;
+        if (cur <= 0) break;
+        const next = cur - 1;
+        const nx = axis === "x" ? next : bestPick!.x;
+        const ny = axis === "y" ? next : bestPick!.y;
+        const ev = tryAt(nx, ny);
+        if (!ev) break;
+        bestPick!.x = nx;
+        bestPick!.y = ny;
+        bestPick!.supporters = ev.supporters;
+      }
+    };
+    snapAxis("x");
+    snapAxis("y");
 
     const { x, y, z, orient, supporters } = bestPick;
     const internalIdx = placedInternal.length;
