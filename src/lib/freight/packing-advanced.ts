@@ -49,7 +49,7 @@ export interface AdvancedPackResult {
 const RENDER_CAP = 500;
 const CELL_MM = 100; // 10cm grid — good resolution vs. perf
 const SUPPORT_MIN_RATIO = 0.9; // ≥ 90% footprint must rest on something solid
-const PLACE_STEP_MM = 100; // candidate XY scan stride
+const PLACE_STEP_MM = 50; // candidate XY scan stride (finer = tighter packing)
 
 interface ExpandedCarton {
   /** Original (un-rotated) dimensions in mm. */
