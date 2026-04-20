@@ -11,7 +11,7 @@
  * Lazy-loaded by container-load-view.tsx (client-only).
  */
 import { Suspense, forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Edges, Grid, Html } from "@react-three/drei";
 import { Maximize2, Minimize2 } from "lucide-react";
 import * as THREE from "three";
@@ -1243,6 +1243,206 @@ function CargoBox({
           </div>
         </Html>
       )}
+    </group>
+  );
+}
+
+/* --------------- PackageShape — per-type 3D mesh dispatcher --------------- */
+
+interface PackageShapeProps {
+  lm: number;
+  hm: number;
+  wm: number;
+  color: string;
+  packageType?: string;
+  fragile: boolean;
+  hovered: boolean;
+  tilted: boolean;
+  tiltColor: string;
+  onPointerOver: (e: ThreeEvent<PointerEvent>) => void;
+  onPointerOut: (e: ThreeEvent<PointerEvent>) => void;
+}
+
+function PackageShape(props: PackageShapeProps) {
+  const t = props.packageType ?? "carton";
+  if (t === "drum") return <DrumShape {...props} />;
+  if (t === "bale") return <BaleShape {...props} />;
+  if (t === "crate") return <CrateShape {...props} />;
+  if (t === "pallet") return <PalletShape {...props} />;
+  if (t === "bag") return <BagShape {...props} />;
+  return <CartonShape {...props} />;
+}
+
+function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+  return (
+    <mesh castShadow receiveShadow onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <boxGeometry args={[lm, hm, wm]} />
+      <meshStandardMaterial
+        color={color}
+        roughness={0.6}
+        metalness={0.05}
+        transparent={fragile}
+        opacity={fragile ? 0.85 : 1}
+        emissive={hovered ? tiltColor : "#000000"}
+        emissiveIntensity={hovered ? 0.25 : 0}
+      />
+      <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
+        <lineBasicMaterial
+          color={hovered ? tiltColor : "#1f2937"}
+          polygonOffset
+          polygonOffsetFactor={-1}
+          polygonOffsetUnits={-1}
+        />
+      </Edges>
+    </mesh>
+  );
+}
+
+function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+  const radius = Math.min(lm, wm) / 2;
+  const drumColor = color || "#2c5282";
+  return (
+    <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[radius, radius, hm, 20]} />
+        <meshStandardMaterial
+          color={drumColor}
+          roughness={0.45}
+          metalness={0.55}
+          emissive={hovered ? tiltColor : "#000000"}
+          emissiveIntensity={hovered ? 0.25 : 0}
+        />
+      </mesh>
+      <mesh position={[0, hm / 2 - 0.005, 0]}>
+        <cylinderGeometry args={[radius * 1.02, radius * 1.02, 0.025, 20]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.4} metalness={0.7} />
+      </mesh>
+      <mesh position={[0, -hm / 2 + 0.005, 0]}>
+        <cylinderGeometry args={[radius * 1.02, radius * 1.02, 0.025, 20]} />
+        <meshStandardMaterial color="#1a1a1a" roughness={0.4} metalness={0.7} />
+      </mesh>
+      <mesh position={[0, hm / 6, 0]}>
+        <cylinderGeometry args={[radius * 1.015, radius * 1.015, 0.018, 20]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.5} metalness={0.65} />
+      </mesh>
+      <mesh position={[0, -hm / 6, 0]}>
+        <cylinderGeometry args={[radius * 1.015, radius * 1.015, 0.018, 20]} />
+        <meshStandardMaterial color="#2a2a2a" roughness={0.5} metalness={0.65} />
+      </mesh>
+    </group>
+  );
+}
+
+function BaleShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+  const baleColor = color || "#d4c5a3";
+  const bandColor = "#3a2818";
+  return (
+    <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[lm * 0.96, hm * 0.96, wm * 0.96]} />
+        <meshStandardMaterial
+          color={baleColor}
+          roughness={0.95}
+          metalness={0}
+          emissive={hovered ? tiltColor : "#000000"}
+          emissiveIntensity={hovered ? 0.25 : 0}
+        />
+      </mesh>
+      {[-hm * 0.18, hm * 0.18].map((y, i) => (
+        <mesh key={`bh-${i}`} position={[0, y, 0]}>
+          <boxGeometry args={[lm * 0.99, hm * 0.04, wm * 0.99]} />
+          <meshStandardMaterial color={bandColor} roughness={0.7} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[lm * 0.04, hm * 0.99, wm * 0.99]} />
+        <meshStandardMaterial color={bandColor} roughness={0.7} />
+      </mesh>
+    </group>
+  );
+}
+
+function CrateShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+  const crateColor = color || "#a07a4e";
+  const slatColor = "#5a3d20";
+  const slatThk = Math.min(lm, wm) * 0.06;
+  return (
+    <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <mesh castShadow receiveShadow>
+        <boxGeometry args={[lm, hm, wm]} />
+        <meshStandardMaterial
+          color={crateColor}
+          roughness={0.85}
+          metalness={0}
+          emissive={hovered ? tiltColor : "#000000"}
+          emissiveIntensity={hovered ? 0.25 : 0}
+        />
+        <Edges scale={0.999} color="#3a2818">
+          <lineBasicMaterial color="#3a2818" />
+        </Edges>
+      </mesh>
+      {[
+        [-lm / 2 + slatThk / 2, -wm / 2 + slatThk / 2],
+        [lm / 2 - slatThk / 2, -wm / 2 + slatThk / 2],
+        [-lm / 2 + slatThk / 2, wm / 2 - slatThk / 2],
+        [lm / 2 - slatThk / 2, wm / 2 - slatThk / 2],
+      ].map(([x, z], i) => (
+        <mesh key={`s-${i}`} position={[x, 0, z]}>
+          <boxGeometry args={[slatThk, hm * 1.005, slatThk]} />
+          <meshStandardMaterial color={slatColor} roughness={0.85} />
+        </mesh>
+      ))}
+      {[wm / 2 + 0.001, -wm / 2 - 0.001].map((z, i) => (
+        <mesh key={`hb-${i}`} position={[0, 0, z]}>
+          <boxGeometry args={[lm * 0.95, hm * 0.08, 0.005]} />
+          <meshStandardMaterial color={slatColor} roughness={0.85} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function PalletShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+  const PALLET_H = 0.12;
+  const loadH = Math.max(0.05, hm - PALLET_H);
+  const wrapColor = "#a8c5d8";
+  return (
+    <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <group position={[0, -hm / 2 + PALLET_H / 2, 0]}>
+        <WoodenPallet lm={lm} wm={wm} />
+      </group>
+      <mesh castShadow receiveShadow position={[0, -hm / 2 + PALLET_H + loadH / 2, 0]}>
+        <boxGeometry args={[lm * 0.96, loadH, wm * 0.96]} />
+        <meshStandardMaterial
+          color={color || "#bcd"}
+          roughness={0.4}
+          metalness={0.1}
+          transparent
+          opacity={0.55}
+          emissive={hovered ? tiltColor : wrapColor}
+          emissiveIntensity={hovered ? 0.25 : 0.05}
+        />
+        <Edges scale={0.999} color="#5a7a90">
+          <lineBasicMaterial color="#5a7a90" />
+        </Edges>
+      </mesh>
+    </group>
+  );
+}
+
+function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+  return (
+    <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
+      <mesh castShadow receiveShadow scale={[lm / 2, hm / 2, wm / 2]}>
+        <sphereGeometry args={[1, 14, 10]} />
+        <meshStandardMaterial
+          color={color || "#c4a574"}
+          roughness={0.95}
+          metalness={0}
+          emissive={hovered ? tiltColor : "#000000"}
+          emissiveIntensity={hovered ? 0.25 : 0}
+        />
+      </mesh>
     </group>
   );
 }
