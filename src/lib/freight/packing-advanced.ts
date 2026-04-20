@@ -44,6 +44,10 @@ export interface AdvancedPackResult {
   perItem: ItemPlacementStat[];
   /** -1..1 along container length. 0 = centered, +ve = forward (door side). */
   cogOffsetPct: number;
+  /** CBM of the axis-aligned bounding box of all placed boxes (m³). */
+  usedCbm: number;
+  /** placedCargoCbm / usedCbm × 100 — packing density inside the occupied volume. */
+  densityPct: number;
 }
 
 const RENDER_CAP = 500;
