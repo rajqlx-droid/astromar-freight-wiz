@@ -28,7 +28,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/site/theme-toggle";
 import { HistoryPanel } from "@/components/freight/history-panel";
 import { CbmCalculator } from "@/components/freight/cbm-calculator";
@@ -497,32 +497,44 @@ function FreightIntelligencePage() {
                 {/* Action cluster: Compare/History segmented control. Always visible, right-aligned on desktop. */}
                 <div className="ml-auto flex shrink-0 items-center gap-2">
                   <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
-                    <CompareDialog
-                      active={active}
-                      onConfirm={(left, right) => setCompareMode({ left, right })}
-                      trigger={
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                        >
-                          <GitCompareArrows className="size-3.5" />
-                          <span className="hidden sm:inline">Compare</span>
-                        </Button>
-                      }
-                    />
+                    <Tooltip>
+                      <CompareDialog
+                        active={active}
+                        onConfirm={(left, right) => setCompareMode({ left, right })}
+                        trigger={
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-label="Compare calculators"
+                              className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                            >
+                              <GitCompareArrows className="size-3.5" />
+                              <span className="hidden sm:inline">Compare</span>
+                            </Button>
+                          </TooltipTrigger>
+                        }
+                      />
+                      <TooltipContent side="bottom" className="sm:hidden">Compare calculators</TooltipContent>
+                    </Tooltip>
                     <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
                     <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
-                      <SheetTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                        >
-                          <HistoryIcon className="size-3.5" />
-                          <span className="hidden sm:inline">History</span>
-                        </Button>
-                      </SheetTrigger>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <SheetTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              aria-label="View history"
+                              className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                            >
+                              <HistoryIcon className="size-3.5" />
+                              <span className="hidden sm:inline">History</span>
+                            </Button>
+                          </SheetTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="sm:hidden">View history</TooltipContent>
+                      </Tooltip>
                       <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
                         <SheetTitle className="sr-only">Calculation History</SheetTitle>
                         <HistoryPanel />
