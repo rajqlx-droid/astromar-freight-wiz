@@ -15,6 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
+import type { PackageType } from "@/lib/freight/calculators";
+import { PackageTypeIcon } from "./package-type-icon";
 import {
   buildRowFrontViewSvg,
   buildRowSideViewSvg,
@@ -696,6 +698,11 @@ export function LoadingRowsPanel({
                           className="size-2.5 rounded-sm"
                           style={{ background: c.color }}
                           aria-hidden
+                        />
+                        <PackageTypeIcon
+                          type={c.packageType as PackageType}
+                          className="text-brand-navy"
+                          size={13}
                         />
                         <span className="font-medium text-brand-navy">
                           Item {c.itemIdx + 1}
