@@ -292,7 +292,6 @@ export function downloadResultPdf(
       if (r.needsSeparator) flags.push("MIXED PALLET");
       if (r.gapWarning) flags.push(`GAP ${Math.round(r.wallUtilizationPct)}%`);
       if (r.rotatedCount > 0) flags.push(`TILT x${r.rotatedCount}`);
-      const itemsTxt = r.items.map((i) => `Item ${i.itemIdx + 1} x${i.count}`).join(", ");
       const wt =
         r.weightKg > 0
           ? `~${r.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`
@@ -301,14 +300,14 @@ export function downloadResultPdf(
         `Loader: ${r.instruction}`,
         cardW - svgW - cardPad * 3,
       ) as string[];
-      // Items row is rendered with one glyph + label per item, wrapped onto
-      // multiple visual lines. Estimate row count from average label width.
+      // Items area: each item gets a small package-type glyph + label, laid
+      // out in a fixed grid so warehouse staff can scan shapes at a glance
+      // (matches the on-screen loading-rows panel chips).
       const itemsAreaW = cardW - svgW - cardPad * 3;
+      const itemColW = 78;
       const itemRowH = 11;
-      const itemColW = 78; // glyph (10) + gap + "Item N xNN" (~60px @ 8pt)
       const perRow = Math.max(1, Math.floor(itemsAreaW / itemColW));
       const itemRows = Math.ceil(r.items.length / perRow);
-      const itemsLines = new Array(itemRows).fill("") as string[]; // placeholder for height calc
       const warnLines = r.needsSeparator
         ? (doc.splitTextToSize(
             "Mixed pallet — insert a plywood/cardboard separator board between heavy and fragile units.",
@@ -322,7 +321,7 @@ export function downloadResultPdf(
           ) as string[])
         : [];
       const textBlockH =
-        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + gapLines.length * 10 + itemsLines.length * 10 + instructionLines.length * 10 + 4;
+        14 + 12 + (flags.length ? 9 : 0) + warnLines.length * 10 + gapLines.length * 10 + itemRows * itemRowH + instructionLines.length * 10 + 4;
       const cardH = Math.max(imageColH + cardPad * 2, textBlockH + cardPad * 2);
 
       // Page-break check
