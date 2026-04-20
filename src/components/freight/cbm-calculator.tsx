@@ -79,7 +79,25 @@ export function CbmCalculator({ items, setItems }: Props) {
   } | null>(null);
   const [optimizationRequested, setOptimizationRequested] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const result = useMemo(() => calcCbm(items), [items]);
+  const [activePack, setActivePack] = useState<
+    import("@/lib/freight/packing-advanced").AdvancedPackResult | null
+  >(null);
+  const baseResult = useMemo(() => calcCbm(items), [items]);
+  // Append a Density KPI when an optimisation pack is available — placed-cargo
+  // CBM ÷ bounding-box CBM of placed boxes. Higher = tighter packing.
+  const result = useMemo(() => {
+    if (!activePack || activePack.placed.length === 0) return baseResult;
+    return {
+      ...baseResult,
+      items: [
+        ...baseResult.items,
+        {
+          label: "Packing Density",
+          value: `${activePack.densityPct.toFixed(1)}%`,
+        },
+      ],
+    };
+  }, [baseResult, activePack]);
   const recommendation = useMemo(
     () => recommendContainers(sumCbm(items), sumWeight(items)),
     [items],
