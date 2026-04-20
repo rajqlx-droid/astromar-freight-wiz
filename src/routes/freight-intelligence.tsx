@@ -482,33 +482,19 @@ function FreightIntelligencePage() {
           </div>
         </div>
 
-        {/* BREADCRUMB + brand chip */}
+        {/* BREADCRUMB */}
         <section className="mx-auto max-w-7xl px-3 pb-1 pt-2 md:px-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
-              <ChevronRight className="size-3" />
-              <span>Tools</span>
-              <ChevronRight className="size-3" />
-              <span className="font-semibold text-brand-navy">
-                {compareMode
-                  ? `Compare: ${CALCULATORS.find((c) => c.key === compareMode.left)?.label} vs ${CALCULATORS.find((c) => c.key === compareMode.right)?.label}`
-                  : meta.label}
-              </span>
-            </nav>
-            <div className="flex items-center gap-1.5">
-              <div
-                className="flex size-5 items-center justify-center rounded text-white"
-                style={{ background: "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))" }}
-                aria-hidden
-              >
-                <span className="text-[10px] font-bold">S</span>
-              </div>
-              <span className="text-[11px] font-semibold tracking-tight text-brand-navy">
-                Smart Freight Tools
-              </span>
-            </div>
-          </div>
+          <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Link to="/freight-intelligence" className="hover:text-brand-orange">Home</Link>
+            <ChevronRight className="size-3" />
+            <span>Tools</span>
+            <ChevronRight className="size-3" />
+            <span className="font-semibold text-brand-navy">
+              {compareMode
+                ? `Compare: ${CALCULATORS.find((c) => c.key === compareMode.left)?.label} vs ${CALCULATORS.find((c) => c.key === compareMode.right)?.label}`
+                : meta.label}
+            </span>
+          </nav>
         </section>
 
         {/* CALCULATOR — single tool OR split compare view */}
