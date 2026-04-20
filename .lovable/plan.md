@@ -1,59 +1,46 @@
 
-## Plan: cleanup header cluster, relocate Pro tip, remove duplicate brand chip
 
-Three small edits to `src/routes/freight-intelligence.tsx`. No new components, no logic changes.
+User wants the `[Compare | History]` segmented group (currently in the top header right cluster) moved down next to the Pro tip pill in the heading row.
 
-### 1. Remove the "Tools" button from the segmented header group
+Quick code check needed: confirm current location of Compare/History buttons and the Pro tip pill in `src/routes/freight-intelligence.tsx`.
 
-**What it does today:** It's a `disabled` button with a calculator icon, styled as the active state. It doesn't do anything when clicked — it's purely a visual "you are here" marker. Compare opens a dialog, History opens a sheet, but when neither is open you're already in calculator view, so the indicator is redundant and confusing.
+Based on prior edits:
+- Header right cluster: `[🌙 Theme] | [⇄ Compare | 🕒 History]`
+- Heading row: `[▌ Load Optimizer Calculator / subtitle]  [💡 Pro tip pill]  [MiniHistoryStrip]`
 
-**Change:** Delete the Tools `<Button>` (lines 358–368) and the divider after it (line 369). The header right cluster becomes:
+## Plan
 
-```
-[ 🌙 Theme ] | [ ⇄ Compare  |  🕒 History ]
-```
+One edit to `src/routes/freight-intelligence.tsx`.
 
-Cleaner two-action group. Compare and History keep their existing behavior.
+### Move Compare + History segmented group from the header into the heading row, beside the Pro tip pill
 
-### 2. Move the Pro tip inline with the heading row (right side)
+**Remove from header right cluster:**
+- The segmented `[Compare | History]` button group and the `|` divider that separates it from the theme toggle.
+- Header right cluster collapses to just `[🌙 Theme]`.
 
-**Today:** Pro tip is a full-width banner above the tab strip (lines 430–458).
+**Add into the heading row (right side, next to Pro tip):**
+- Render the same two-button segmented control (`Compare` button + divider + `History` button, same styling as before) inside the heading row's right cluster.
+- New heading-row right slot order (left → right): `[💡 Pro tip pill]  [⇄ Compare | 🕒 History]  [MiniHistoryStrip]`
+- Wraps gracefully on narrow viewports thanks to existing `flex-wrap` on the heading row.
 
-**New position:** Convert it to a compact pill that sits on the right side of the "Load Optimizer Calculator" heading row, replacing/sharing space with the `MiniHistoryStrip` area. The `mb-3 flex flex-wrap items-center gap-3` row at line 568 already has `ml-auto` for the right slot — Pro tip becomes a small dismissible chip:
-
-```
-[▌ Load Optimizer Calculator       💡 Pro tip: For sea freight... [×]    History · chips]
-   CBM / Load Simulator
-```
-
-When dismissed, collapses to a tiny "💡 tip" link. Same `bannerOpen` / `dismissBanner` / `reopenBanner` state, just rendered in a different DOM location with tighter styling (max-width ~360px, single-line truncate with title attribute for full text on hover). The full-width banner block above the tab strip is removed.
-
-### 3. Remove the duplicate "Smart Freight Tools" chip from the breadcrumb row
-
-The header already shows `[S] Smart Tools / FREIGHT TOOLS` — the breadcrumb-row chip (lines 539–550) repeats the same brand and is the "one more" the user spotted. Delete that chip. The breadcrumb row collapses to just:
-
-```
-Home > Tools > Load Optimizer
-```
-
-Left-aligned, no right-side element. The `justify-between` wrapper becomes unnecessary; simplify to `flex items-center`.
+All click handlers (`setCompareOpen(true)`, `setHistoryOpen(true)`) and state stay identical — pure DOM relocation.
 
 ### Resulting layout at 920×502
 
 ```text
-[S Smart Tools / FREIGHT TOOLS]                    [🌙] | [⇄ Compare | 🕒 History]
-─────────────────────────────────────────────────────────────────────────────────
-[Tabs: Load Optimizer | Air Volume | Landed Cost | Export Price | Air vs Sea | Demurrage]
+[S Smart Tools / FREIGHT TOOLS]                                          [🌙]
+─────────────────────────────────────────────────────────────────────────────
+[Load Optimizer | Air Volume | Landed Cost | Export Price | Air vs Sea | Demurrage]
 Home > Tools > Load Optimizer
-▌ Load Optimizer Calculator         💡 Pro tip: For sea freight, CBM × 1000 ÷ 5...  [×]
-  CBM / Load Simulator              [Recent: chip · chip · chip]
+▌ Load Optimizer Calculator   💡 Pro tip: For sea freight... [×]  [⇄ Compare | 🕒 History]  [Recent chips]
+  CBM / Load Simulator
 [--- calculator inputs ---]
 ```
 
-Pro tip and MiniHistoryStrip now share the heading row's right side. The heading row may wrap on narrower viewports thanks to `flex-wrap` already in place — Pro tip wraps under the title, MiniHistoryStrip wraps under that.
-
 ### Files touched
-- `src/routes/freight-intelligence.tsx` — three deletions/relocations only.
+- `src/routes/freight-intelligence.tsx` — relocate one JSX block, no logic changes.
 
 ### Out of scope
-- Compare dialog internals, tab strip styling, theme toggle, mobile bottom result bar.
+- Theme toggle stays in header.
+- Pro tip behavior, MiniHistoryStrip, tab strip, calculator internals unchanged.
+
