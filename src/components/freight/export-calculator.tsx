@@ -162,7 +162,7 @@ export function ExportCalculator({ state, setState }: Props) {
                       </Button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
                     <div className="col-span-2 space-y-1 md:col-span-2">
                       <Label className="text-[11px] text-muted-foreground">Description</Label>
                       <Input
@@ -182,7 +182,9 @@ export function ExportCalculator({ state, setState }: Props) {
                       />
                     </div>
                     <NumberField compact id={`eq-${ln.id}`} label="Qty" step={1} value={ln.qty} onChange={(n) => updateLine(ln.id, { qty: Math.max(0, Math.round(n)) })} />
-                    <NumberField compact id={`euc-${ln.id}`} label={`Unit Cost (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
+                    <div className="md:col-span-2">
+                      <NumberField compact id={`euc-${ln.id}`} label={`Unit Cost (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
+                    </div>
                     <NumberField compact id={`em-${ln.id}`} label="Margin %" suffix="%" value={ln.margin ?? 0} onChange={(n) => updateLine(ln.id, { margin: n })} />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
