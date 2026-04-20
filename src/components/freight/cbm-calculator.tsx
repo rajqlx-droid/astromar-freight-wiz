@@ -97,8 +97,16 @@ export function CbmCalculator({ items, setItems }: Props) {
     const u = activePack.utilizationPct;
     const wu = activePack.weightUtilizationPct;
     const d = activePack.densityPct;
+    const weightLimited = wu - u > 15;
     return {
       ...baseResult,
+      notice: weightLimited
+        ? {
+            tone: "warn" as const,
+            title: "Weight-limited cargo",
+            body: "Adding more boxes won't help — this load hits the container's weight cap before it fills the volume. Consider a higher-payload container (e.g. 40HC heavy-duty) or split across two shipments.",
+          }
+        : undefined,
       items: [
         ...baseResult.items,
         {

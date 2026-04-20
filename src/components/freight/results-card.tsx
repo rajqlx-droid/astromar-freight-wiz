@@ -1,7 +1,7 @@
 /**
  * Results card with a single primary action: PDF download.
  */
-import { Download, Info } from "lucide-react";
+import { Download, Info, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Card } from "@/components/ui/card";
@@ -61,6 +61,26 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
           <Download className="size-4" />
         </button>
       </div>
+
+      {result.notice && (
+        <div
+          className={
+            "print-area flex items-start gap-2.5 border-b px-5 py-2.5 text-xs " +
+            (result.notice.tone === "bad"
+              ? "border-red-300 bg-red-50 text-red-900 dark:bg-red-950/40 dark:text-red-100"
+              : result.notice.tone === "info"
+                ? "border-sky-300 bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+                : "border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-100")
+          }
+          role="status"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <div className="min-w-0">
+            <div className="font-semibold leading-snug">{result.notice.title}</div>
+            <div className="leading-snug opacity-90">{result.notice.body}</div>
+          </div>
+        </div>
+      )}
 
       <TooltipProvider delayDuration={150}>
         <div className="divide-y">

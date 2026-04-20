@@ -84,6 +84,8 @@ export interface CalcResult {
   text: string;
   /** Optional per-line breakdown (rendered into PDF, not the on-screen results card). */
   lines?: { headers: string[]; rows: string[][] };
+  /** Optional alert banner rendered above the KPI list (e.g. weight-limited cargo). */
+  notice?: { tone: "warn" | "bad" | "info"; title: string; body: string };
 }
 
 export interface SavedCalculation {
