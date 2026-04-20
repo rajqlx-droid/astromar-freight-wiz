@@ -15,11 +15,13 @@ interface Props {
   onLoadSaved?: () => void;
   /** Optional async resolver for extras (e.g. 3D snapshots). Called at PDF time. */
   resolveExtras?: () => Promise<PdfExtras | undefined> | PdfExtras | undefined;
+  /** Optional inline extras (e.g. tool-specific KPI grid + analytics chart). Merged with resolveExtras output. */
+  extras?: PdfExtras;
   /** When set, disables PDF export and shows the reason on hover. CBM calc uses this when packing options aren't confirmed. */
   pdfDisabledReason?: string | null;
 }
 
-export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledReason }: Props) {
+export function ResultsCard({ result, inputsTable, resolveExtras, extras, pdfDisabledReason }: Props) {
   if (!result) {
     return (
       <Card
@@ -32,8 +34,10 @@ export function ResultsCard({ result, inputsTable, resolveExtras, pdfDisabledRea
   }
 
   const handlePdf = async () => {
-    const extras = resolveExtras ? await resolveExtras() : undefined;
-    downloadResultPdf(result, inputsTable, extras);
+    const resolved = resolveExtras ? await resolveExtras() : undefined;
+    const merged: PdfExtras | undefined =
+      resolved || extras ? { ...(resolved ?? {}), ...(extras ?? {}) } : undefined;
+    downloadResultPdf(result, inputsTable, merged);
     toast.success("PDF downloaded");
   };
 
