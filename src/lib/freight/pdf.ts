@@ -416,7 +416,38 @@ export function downloadResultPdf(
     },
   });
   // @ts-expect-error autotable injects lastAutoTable
-  y = (doc.lastAutoTable?.finalY ?? y) + 20;
+  y = (doc.lastAutoTable?.finalY ?? y) + 16;
+
+  // Analytics — stacked bar breakdown and/or grouped comparison.
+  if (extras?.analytics?.breakdown && extras.analytics.breakdown.segments.length) {
+    if (y > 680) {
+      doc.addPage();
+      y = 60;
+    }
+    y = drawHBar(
+      doc,
+      y,
+      pageWidth,
+      extras.analytics.breakdown.title,
+      extras.analytics.breakdown.segments,
+    );
+    y += 6;
+  }
+  if (extras?.analytics?.comparison && extras.analytics.comparison.rows.length) {
+    if (y > 660) {
+      doc.addPage();
+      y = 60;
+    }
+    y = drawComparison(
+      doc,
+      y,
+      pageWidth,
+      extras.analytics.comparison.title,
+      extras.analytics.comparison.columns,
+      extras.analytics.comparison.rows,
+    );
+    y += 6;
+  }
 
   // Optional: 3D snapshots (multi-angle) and load report.
   if (extras?.snapshots && (extras.snapshots.iso || extras.snapshots.front || extras.snapshots.side)) {
