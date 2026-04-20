@@ -301,10 +301,14 @@ export function downloadResultPdf(
         `Loader: ${r.instruction}`,
         cardW - svgW - cardPad * 3,
       ) as string[];
-      const itemsLines = doc.splitTextToSize(
-        itemsTxt,
-        cardW - svgW - cardPad * 3,
-      ) as string[];
+      // Items row is rendered with one glyph + label per item, wrapped onto
+      // multiple visual lines. Estimate row count from average label width.
+      const itemsAreaW = cardW - svgW - cardPad * 3;
+      const itemRowH = 11;
+      const itemColW = 78; // glyph (10) + gap + "Item N xNN" (~60px @ 8pt)
+      const perRow = Math.max(1, Math.floor(itemsAreaW / itemColW));
+      const itemRows = Math.ceil(r.items.length / perRow);
+      const itemsLines = new Array(itemRows).fill("") as string[]; // placeholder for height calc
       const warnLines = r.needsSeparator
         ? (doc.splitTextToSize(
             "Mixed pallet — insert a plywood/cardboard separator board between heavy and fragile units.",
