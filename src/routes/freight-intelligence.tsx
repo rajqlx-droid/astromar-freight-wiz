@@ -28,7 +28,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/site/theme-toggle";
 import { HistoryPanel } from "@/components/freight/history-panel";
 import { CbmCalculator } from "@/components/freight/cbm-calculator";
