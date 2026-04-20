@@ -116,12 +116,7 @@ function FreightIntelligencePage() {
   const [bannerOpen, setBannerOpen] = useState(true);
   const [historySheetOpen, setHistorySheetOpen] = useState(false);
   const [compareMode, setCompareMode] = useState<{ left: CalcKey; right: CalcKey } | null>(null);
-  const [heroCollapsed, setHeroCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.innerHeight < 700;
-  });
   const tabsRef = useRef<HTMLDivElement>(null);
-  const heroSentinelRef = useRef<HTMLDivElement>(null);
 
   // ----- per-calculator state, lifted so values persist across tab switches -----
   const [cbmItems, setCbmItems] = useState<CbmItem[]>(() => [emptyCbmItem(0)]);
