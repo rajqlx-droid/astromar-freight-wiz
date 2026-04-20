@@ -520,7 +520,7 @@ function FreightIntelligencePage() {
                           className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
                         >
                           <HistoryIcon className="size-3.5" />
-                          <span>History</span>
+                          <span className="hidden sm:inline">History</span>
                         </Button>
                       </SheetTrigger>
                       <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
