@@ -486,6 +486,32 @@ export function CbmCalculator({ items, setItems }: Props) {
               }),
             );
           }
+          // KPI tiles for PDF cover.
+          if (pack && pack.placed.length > 0) {
+            const totalCbm = items.reduce(
+              (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
+              0,
+            );
+            const totalWt = items.reduce((a, it) => a + it.qty * it.weight, 0);
+            const toneFor = (n: number): "good" | "warn" | "bad" =>
+              n >= 85 ? "good" : n >= 70 ? "warn" : "bad";
+            extras.analytics = {
+              kpis: [
+                { label: "Total CBM", value: `${totalCbm.toFixed(2)} m³` },
+                { label: "Total Weight", value: `${totalWt.toFixed(0)} kg` },
+                {
+                  label: "Container Util.",
+                  value: `${pack.utilizationPct.toFixed(1)}%`,
+                  tone: toneFor(pack.utilizationPct),
+                },
+                {
+                  label: "Packing Density",
+                  value: `${pack.densityPct.toFixed(1)}%`,
+                  tone: toneFor(pack.densityPct),
+                },
+              ],
+            };
+          }
           return Object.keys(extras).length ? extras : undefined;
         }}
       />
