@@ -1,37 +1,59 @@
 
 
-## Plan: tighten the layout, remove duplicate "History" surface
+## Plan: header cleanup + relocate hero/tip + remove Smart Freight Calculator card
 
-The screenshot shows two history entry points stacked above the calculator: the **History button** in the top-right header *and* the **"Recent saves" strip** just above the calculator inputs. Combined with the big hero block and the section heading, the actual calculator is pushed roughly 600px down the page on a 502px-tall viewport — users have to scroll before they can do anything.
+Four targeted edits, all in `src/routes/freight-intelligence.tsx`. No new components.
 
-### What I'll change
+### 1. Header right cluster — group Tools / Compare / History as one segmented control
 
-**1. Kill the duplication — fold "Recent saves" into the section heading row.**
-The `MiniHistoryStrip` (lines 593-596 in `src/routes/freight-intelligence.tsx`) currently renders as a full-width dashed banner of its own. I'll move it *inline* into the calculator section header (the row with the gradient bar + "Load Optimizer Calculator" title), right-aligned. Same chips, same popover, same "See all" button — just no longer a separate stacked block. Saves ~56px of vertical space and visually groups the two history surfaces (header button = full archive, inline chips = quick recall for *this* tool) instead of competing.
+Currently the right side is: `[Tools] [Theme] [Compare] [History]` — four loose buttons with mismatched styling (Tools is filled navy, Compare/History are outline, theme toggle in the middle splits the group).
 
-**2. Slim the hero.**
-The hero card (lines 496-529) eats ~150px when expanded. Two small fixes:
-- Drop default padding from `p-5 md:p-6` to `p-3 md:p-4`, and title from `text-xl md:text-2xl` to `text-base md:text-lg`.
-- Make the hero start *already collapsed* on viewports shorter than 700px (the IntersectionObserver still expands/collapses on scroll, just with a smaller starting footprint).
+Change to: `[Theme] · [Tools | Compare | History]`
+- Move `ThemeToggle` to the left of the cluster (separated by a thin divider), so the three navigation actions sit together on the far right as a unified segmented group.
+- Wrap Tools / Compare / History in a single rounded container (`rounded-lg border border-brand-navy/30 p-0.5 bg-background`) with each button as `variant="ghost" size="sm"` and tight internal dividers — gives them visual cohesion.
+- Refine icons for clarity: keep `Calculator` for Tools, swap `ArrowLeftRight` → `GitCompareArrows` (more recognizable as "compare"), keep `History` clock icon. Icons sized `size-3.5` with text labels at `text-xs font-medium`.
+- Tools button stays "active/current" styled (filled navy bg) since user is on the tools page; Compare and History are ghost until hovered.
 
-**3. Tighten section spacing.**
-- Hero section padding `pt-4 pb-4` → `pt-3 pb-2`.
-- Calculator section `pb-10` stays, but the top `mb-4` on the heading row → `mb-3`.
-- Breadcrumb `mb-3` → `mb-2`.
+For Compare: pass a custom `trigger` prop into `<CompareDialog>` (already supported per line 37 of compare-dialog.tsx) so it slots into the segmented group with matching styling.
 
-**4. Mini-strip visual polish (since it's now inline).**
-- Drop the dashed border and background — it becomes a borderless inline group: `History icon · "Recent:"` label + chips + "See all" link, sized to match the heading row's right side.
-- On screens <640px it wraps below the heading instead of squeezing.
+### 2. Move "Smart Tools" brand block — use it AS the hero, drop the separate hero card
+
+The hero card currently shows "Smart Freight Calculator" + "Calculate shipping costs..." (lines 499-532). The user wants this gone entirely, with the brand identity living near the breadcrumb instead.
+
+- **Remove** the entire hero card div (lines 499-532) and its sentinel-driven collapse logic for the title (the sentinel + IntersectionObserver still exists for the tip banner).
+- The breadcrumb row (`Home > Tools > Load Optimizer`) stays where it is, but on the **same row, right side**, render a compact brand chip: the "S" gradient square + "Smart Freight Tools" label (mirrors the header logo style at smaller scale). This puts the product identity adjacent to the breadcrumb as requested.
+- Net effect: ~80-100px of vertical space reclaimed, "Smart Freight Calculator" duplicate heading gone (we already have "Load Optimizer Calculator" right below).
+
+### 3. Move the Pro tip up — directly above the active tool tile (tab strip)
+
+Currently the yellow "Pro tip" banner sits between the hero and the calculator section. The user wants it "near above tile" — meaning above the calculator tabs.
+
+- Lift the banner JSX (lines 535-558) out of the hero section and render it **just above the tab strip** (before line 421), inside its own thin container `mx-auto max-w-7xl px-3 md:px-4 pt-2`.
+- Keep the dismiss/reopen state machine identical. When dismissed, the small "Show tip" link appears in the same spot.
+- The tip now contextually precedes the tool selector, which makes more sense (read tip → pick tool → use it) than its current position (read tip → scroll past hero → use tool).
+
+### 4. Calculator section heading — keep, but lighter
+
+With the hero gone, "Load Optimizer Calculator" + sub becomes the de facto page title. No structural change needed; just verify the inline `MiniHistoryStrip` on the right still fits cleanly at 920px width (it does — wraps to its own row below 640px already).
+
+### Resulting top-of-page stack (920×502 viewport)
+
+```text
+[Header: S logo · Smart Tools | FREIGHT TOOLS]    [Theme · Tools|Compare|History]
+[Tab strip: Load Optimizer | Air Volume | Landed Cost | Export Price | Air vs Sea | Demurrage]
+[Pro tip: For sea freight, chargeable weight uses CBM × 1000 ÷ 5...]   [×]
+[Home > Tools > Load Optimizer                              S Smart Freight Tools]
+[▌ Load Optimizer Calculator                              History · Recent: chips]
+[CBM / Load Simulator subtitle]
+[--- calculator inputs visible without scrolling ---]
+```
 
 ### Files touched
-- `src/routes/freight-intelligence.tsx` — restructure the heading row (lines 576-599), trim hero padding/typography (lines 483-530), tighten breadcrumb spacing.
-- `src/components/freight/mini-history-strip.tsx` — add a `variant?: "block" | "inline"` prop; inline variant drops the dashed wrapper, uses smaller chips, no "RECENT SAVES" uppercase label (just a history icon + chips).
-
-### Result
-At 920×502 (current viewport), the calculator inputs move up roughly 110-130px — the "Load Optimizer Calculator" heading and inputs become visible without scrolling, and "History" appears in exactly one obvious place per context (global = header button, current-tool quick recall = inline chips next to the title).
+- `src/routes/freight-intelligence.tsx` — header right cluster restructure (366-415), lift Pro tip above tab strip, remove hero card, add brand chip into breadcrumb row, drop sentinel use for title collapse (keep for tip auto-collapse if useful, else remove).
+- `src/components/freight/compare-dialog.tsx` — no code change; we'll just pass the `trigger` prop from the route.
 
 ### Out of scope
-- The header History button itself (that's the global archive, kept as-is).
-- The hero's collapse-on-scroll behavior (kept, just with smaller starting size).
+- The `MiniHistoryStrip` inline behavior beside the calculator heading (kept as-is from the previous round).
+- Icon library swap (staying on lucide-react; `GitCompareArrows` is already available there).
 - Mobile bottom result bar.
 
