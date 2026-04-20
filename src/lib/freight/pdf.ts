@@ -69,7 +69,7 @@ export function downloadResultPdf(
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text("Smart Tool", 40, 32);
+  doc.text("Smart Tools Everywhere", 40, 32);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text("Freight Intelligence Suite", 40, 50);
@@ -528,7 +528,7 @@ export function downloadResultPdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(80, 80, 80);
-  doc.text("Smart Tool — Freight Intelligence", 40, ph - 38);
+  doc.text("Smart Tools Everywhere — Freight Intelligence Suite", 40, ph - 38);
   doc.setTextColor(150, 150, 150);
   doc.setFontSize(7);
   doc.text(
