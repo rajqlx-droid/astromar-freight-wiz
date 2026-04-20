@@ -144,30 +144,23 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
                 <NumberField compact id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
                 <NumberField compact id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
                 <NumberField compact id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
                 <NumberField compact id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
                 <NumberField compact id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
-              </div>
-
-              {/* Per-package summary: volumetric weight + chargeable */}
-              <div
-                className="mt-3 grid grid-cols-2 gap-2 rounded-md border border-brand-navy/15 bg-brand-navy-soft/50 p-2 text-[11px]"
-                aria-label={`Item ${idx + 1} per-package metrics`}
-              >
-                <div className="min-w-0">
-                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Vol. Wt</div>
-                  <div className="truncate font-bold text-brand-navy">{rowTotalVol.toFixed(2)} kg</div>
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold uppercase tracking-wider text-muted-foreground">Chargeable</div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-brand-navy">
+                    Chargeable <span className="font-normal text-muted-foreground">({wtUnit})</span>
+                  </label>
                   <div
-                    className="truncate font-bold"
+                    className="flex h-9 items-center rounded-md border border-brand-navy/20 bg-brand-navy-soft/40 px-3 text-sm font-bold tabular-nums"
                     style={{ color: rowTotalVol > rowTotalActual ? "var(--brand-orange)" : "var(--brand-navy)" }}
+                    aria-label={`Item ${idx + 1} chargeable weight`}
+                    title={rowTotalVol > rowTotalActual ? `Volumetric (${rowTotalVol.toFixed(2)} kg) exceeds actual` : "Billed on actual weight"}
                   >
-                    {rowChargeable.toFixed(2)} kg
+                    {rowChargeable.toFixed(2)}
                   </div>
                 </div>
               </div>
