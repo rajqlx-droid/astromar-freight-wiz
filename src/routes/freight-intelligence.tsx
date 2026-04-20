@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  Calculator,
+  
   ChevronRight,
   GitCompareArrows,
   History as HistoryIcon,
