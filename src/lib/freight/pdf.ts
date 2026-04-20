@@ -52,6 +52,195 @@ export interface PdfExtras {
     rowCount: number;
     gapRowCount: number;
   };
+  /** Tool-specific analytics: 4-tile KPI grid + optional stacked-bar breakdown / comparison. */
+  analytics?: {
+    kpis?: { label: string; value: string; tone?: "good" | "warn" | "bad" }[];
+    breakdown?: {
+      title: string;
+      segments: { label: string; value: number; color: [number, number, number] }[];
+    };
+    comparison?: {
+      title: string;
+      columns: string[];
+      rows: { label: string; values: number[]; format?: "money" | "days" | "kg" }[];
+    };
+  };
+}
+
+/** Render a 4-column grid of KPI tiles. Returns the new y after the grid. */
+function drawKpiGrid(
+  doc: jsPDF,
+  startY: number,
+  pageWidth: number,
+  kpis: { label: string; value: string; tone?: "good" | "warn" | "bad" }[],
+): number {
+  if (!kpis.length) return startY;
+  const margin = 40;
+  const cols = 4;
+  const gap = 8;
+  const tileW = (pageWidth - margin * 2 - gap * (cols - 1)) / cols;
+  const tileH = 42;
+  const tones: Record<"good" | "warn" | "bad", { bg: [number, number, number]; bd: [number, number, number]; fg: [number, number, number] }> = {
+    good: { bg: [220, 252, 231], bd: [110, 200, 150], fg: [22, 101, 52] },
+    warn: { bg: [254, 243, 199], bd: [217, 174, 70], fg: [146, 64, 14] },
+    bad: { bg: [254, 226, 226], bd: [225, 130, 130], fg: [153, 27, 27] },
+  };
+  let y = startY;
+  kpis.forEach((kpi, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    if (col === 0 && i > 0) y += tileH + gap;
+    const x = margin + col * (tileW + gap);
+    const tileY = y;
+    if (kpi.tone) {
+      const t = tones[kpi.tone];
+      doc.setFillColor(...t.bg);
+      doc.setDrawColor(...t.bd);
+    } else {
+      doc.setFillColor(247, 250, 255);
+      doc.setDrawColor(214, 221, 232);
+    }
+    doc.setLineWidth(0.6);
+    doc.roundedRect(x, tileY, tileW, tileH, 3, 3, "FD");
+    // Label
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(110, 110, 110);
+    doc.text(kpi.label.toUpperCase(), x + 8, tileY + 12, { maxWidth: tileW - 16 });
+    // Value
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    if (kpi.tone) {
+      doc.setTextColor(...tones[kpi.tone].fg);
+    } else {
+      doc.setTextColor(...NAVY);
+    }
+    doc.text(kpi.value, x + 8, tileY + 30, { maxWidth: tileW - 16 });
+  });
+  return y + tileH + 4;
+}
+
+/** Render a stacked horizontal bar with inline legend below. Returns new y. */
+function drawHBar(
+  doc: jsPDF,
+  startY: number,
+  pageWidth: number,
+  title: string,
+  segments: { label: string; value: number; color: [number, number, number] }[],
+): number {
+  const margin = 40;
+  const barW = pageWidth - margin * 2;
+  const barH = 14;
+  const total = segments.reduce((a, b) => a + Math.max(0, b.value), 0);
+  if (total <= 0) return startY;
+  let y = startY;
+  // Title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...NAVY);
+  doc.text(title, margin, y);
+  y += 8;
+  // Bar
+  let cx = margin;
+  segments.forEach((s) => {
+    const w = (Math.max(0, s.value) / total) * barW;
+    doc.setFillColor(...s.color);
+    doc.rect(cx, y, w, barH, "F");
+    cx += w;
+  });
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.4);
+  doc.rect(margin, y, barW, barH, "S");
+  y += barH + 8;
+  // Inline legend (chips on a single wrapping row)
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  let lx = margin;
+  segments.forEach((s) => {
+    const pct = total > 0 ? (Math.max(0, s.value) / total) * 100 : 0;
+    const txt = `${s.label}  ${pct.toFixed(0)}%`;
+    const tw = doc.getTextWidth(txt) + 16;
+    if (lx + tw > pageWidth - margin) {
+      lx = margin;
+      y += 12;
+    }
+    doc.setFillColor(...s.color);
+    doc.rect(lx, y - 6, 6, 6, "F");
+    doc.setTextColor(60, 60, 60);
+    doc.text(txt, lx + 9, y);
+    lx += tw;
+  });
+  return y + 14;
+}
+
+/** Render a side-by-side comparison bar group (e.g. Sea vs Air segments). Returns new y. */
+function drawComparison(
+  doc: jsPDF,
+  startY: number,
+  pageWidth: number,
+  title: string,
+  columns: string[],
+  rows: { label: string; values: number[]; format?: "money" | "days" | "kg" }[],
+): number {
+  const margin = 40;
+  const usable = pageWidth - margin * 2;
+  let y = startY;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...NAVY);
+  doc.text(title, margin, y);
+  y += 10;
+  // Find global max for shared scale
+  const allVals = rows.flatMap((r) => r.values.map((v) => Math.max(0, v)));
+  const max = Math.max(1, ...allVals);
+  const fmtVal = (n: number, f?: "money" | "days" | "kg") => {
+    if (f === "days") return `${Math.round(n)} d`;
+    if (f === "kg") return `${n.toFixed(0)} kg`;
+    return `₹${n.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+  };
+  const colors: [number, number, number][] = [
+    [27, 58, 107], // navy
+    [249, 115, 22], // orange
+    [16, 185, 129], // emerald
+    [225, 29, 72], // rose
+  ];
+  const labelW = 90;
+  const barAreaW = usable - labelW - 8;
+  const rowH = 14;
+  const groupGap = 4;
+  rows.forEach((r) => {
+    // Row label
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(...NAVY);
+    doc.text(r.label, margin, y + rowH / 2 + 2);
+    // Each value in the row stacks vertically inside a single horizontal slot
+    r.values.forEach((v, i) => {
+      const w = (Math.max(0, v) / max) * barAreaW;
+      const yy = y + i * (rowH + groupGap) - (i > 0 ? 0 : 0);
+      doc.setFillColor(...colors[i % colors.length]);
+      doc.rect(margin + labelW, yy, w, rowH, "F");
+      // Inline value label to right of bar
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(40, 40, 40);
+      doc.text(fmtVal(v, r.format), margin + labelW + w + 4, yy + rowH / 2 + 2);
+      // Column legend above first row
+    });
+    y += r.values.length * (rowH + groupGap) + 6;
+  });
+  // Column legend
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  let lx = margin + labelW;
+  columns.forEach((c, i) => {
+    doc.setFillColor(...colors[i % colors.length]);
+    doc.rect(lx, y - 6, 6, 6, "F");
+    doc.setTextColor(80, 80, 80);
+    doc.text(c, lx + 9, y);
+    lx += doc.getTextWidth(c) + 22;
+  });
+  return y + 10;
 }
 
 
