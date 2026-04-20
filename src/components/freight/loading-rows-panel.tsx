@@ -15,6 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
+import type { PackageType } from "@/lib/freight/calculators";
+import { PackageTypeIcon } from "./package-type-icon";
 import {
   buildRowFrontViewSvg,
   buildRowSideViewSvg,
