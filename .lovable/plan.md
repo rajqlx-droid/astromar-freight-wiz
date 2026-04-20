@@ -1,32 +1,42 @@
 
 
-## Issue
+## Goal
 
-In the **Export Price** and **Landed Cost** calculators, the per-line summary footer (`Cost: ... • Selling: ...` / `Subtotal · Duty`) is positioned below the input grid with `text-right` and tight `mt-1` spacing. On narrow viewports (~947px preview), it visually crowds the action icons (Copy/Trash) at the top-right of the card and the `+` stepper button of the Margin column, creating overlap appearance. The footer text also wraps into a single tight line with `•` separator that gets cramped.
+In the **Air Volume Weight** PDF, collapse each item's two-row "Inputs" entry into a **single row** so 4 items produce 4 rows instead of 8.
 
-Additionally, the `NumberField` stepper buttons (`-` / `+`) plus the value can clip in narrow grid cells when the column hits its minimum width.
+## Current behavior
 
-## Fix
+In `src/components/freight/air-calculator.tsx` (lines 55–59), `inputsTable` emits **two rows per item**:
 
-**File: `src/components/freight/export-calculator.tsx` and `src/components/freight/landed-calculator.tsx`**
+```
+Item 1 L×W×H (cm)              | 51 × 34 × 26
+Item 1 Qty / Actual Weight     | 6 pcs / 18.83 kg
+Item 2 L×W×H (cm)              | 47 × 35 × 27
+Item 2 Qty / Actual Weight     | 12 pcs / 9.36 kg
+...
+```
 
-1. **Promote the per-line summary to a clear, separated footer**:
-   - Move from `text-right text-[11px]` to a left-aligned `flex flex-wrap items-center gap-x-3 gap-y-1` row.
-   - Add `mt-2 border-t pt-2` so it visually separates from the input grid (no more apparent overlap).
-   - Use small pill-style chips (`rounded bg-brand-navy-soft/40 px-2 py-0.5`) for `Cost` / `Selling` (export) and `Subtotal` / `Duty` (landed) so they don't run into each other on wrap.
+## New behavior
 
-2. **Prevent stepper crowding**: ensure `NumberField` cells have `min-w-0` so the input + stepper buttons size correctly inside the grid (verify the current implementation if needed, otherwise add `min-w-0` to the wrapping div in the line-item grid).
+One row per item, with all dims + qty + actual weight + per-unit volumetric weight in a single value cell:
 
-3. **Header row**: keep `Line N` and the icon buttons but add `min-h-7` so the row reserves consistent height regardless of the summary below.
+```
+Item 1   | 51×34×26 cm · 6 pcs · 18.83 kg actual · 7.51 kg vol/pc
+Item 2   | 47×35×27 cm · 12 pcs · 9.36 kg actual · 7.40 kg vol/pc
+Item 3   | 61×40×31 cm · 16 pcs · 7.00 kg actual · 12.61 kg vol/pc
+Item 4   | 66×40×31 cm · 16 pcs · 7.00 kg actual · 13.64 kg vol/pc
+```
 
-## Slow preview note
-
-The "loading very long in preview" observation is most likely Vite HMR rebuilding after recent edits to `air-calculator.tsx` and `freight-intelligence.tsx` route, plus the heavy `routeTree.gen.ts` regeneration. No code change is needed; once the layout fix lands and HMR settles, the preview should respond normally. If it persists, a hard reload of the preview tab clears stale module graph.
+This keeps every input piece visible while halving the table height. The label column becomes simply `Item N`, and the value column packs L×W×H, qty, actual weight, and the per-piece volumetric weight (computed as `L×W×H / divisor`) separated by middle-dot dividers.
 
 ## Files touched
 
-- `src/components/freight/export-calculator.tsx` — footer layout
-- `src/components/freight/landed-calculator.tsx` — footer layout
+- `src/components/freight/air-calculator.tsx` — rewrite the `inputsTable = items.flatMap(...)` block to produce one row per item with combined value string.
 
-No new dependencies, no schema changes, no logic changes — purely visual reorganization.
+No changes needed in `pdf.ts` (autoTable already renders whatever rows it gets), no changes in `results-card.tsx`, no logic/calculation changes — purely a row-formatting refactor in the air calculator's input summary.
+
+## Notes
+
+- Other calculators (Sea, Export, Landed, CBM, Risk) are untouched — only the Air calculator's PDF input table changes.
+- Heading rows of the auto-table (`Input | Value`) and all KPI tiles, results, and analytics charts remain identical.
 
