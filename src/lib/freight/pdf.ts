@@ -326,7 +326,7 @@ export function downloadResultPdf(
     y += 10;
   }
 
-
+  if (inputsTable && inputsTable.length) {
     autoTable(doc, {
       startY: y,
       head: [["Input", "Value"]],
