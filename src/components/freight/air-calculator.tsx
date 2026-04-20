@@ -54,10 +54,13 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
 
   const warn = result.items.find((i) => i.label === "Cost Impact" && i.value.startsWith("+"));
 
-  const inputsTable = items.flatMap((it, idx) => [
-    { label: `Item ${idx + 1} L×W×H (cm)`, value: `${it.length} × ${it.width} × ${it.height}` },
-    { label: `Item ${idx + 1} Qty / Actual Weight`, value: `${it.qty} pcs / ${it.weight} kg` },
-  ]);
+  const inputsTable = items.map((it, idx) => {
+    const volPerPc = (it.length * it.width * it.height) / divisor;
+    return {
+      label: `Item ${idx + 1}`,
+      value: `${it.length}×${it.width}×${it.height} cm · ${it.qty} pcs · ${it.weight.toFixed(2)} kg actual · ${volPerPc.toFixed(2)} kg vol/pc`,
+    };
+  });
 
   // Tool analytics — KPI tiles + actual vs volumetric stacked bar.
   const pdfExtras = useMemo<import("@/lib/freight/pdf").PdfExtras>(() => {
