@@ -227,6 +227,16 @@ function FreightIntelligencePage() {
     setBannerOpen(stored !== "0");
   }, []);
 
+  // Track page scroll to add a subtle shadow under the sticky tab strip.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  }, []);
+
   // Auto-scroll active tab into view (covers click + keyboard nav).
   useEffect(() => {
     const idx = CALCULATORS.findIndex((c) => c.key === active);
