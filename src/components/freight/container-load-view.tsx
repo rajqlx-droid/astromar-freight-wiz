@@ -655,6 +655,14 @@ function SinglePlanBody({
                           showForklift={showForkliftToken}
                           onToggleForklift={() => setShowForkliftToken((v) => !v)}
                           pack={pack}
+                          rows={rows}
+                          onJumpToRow={(rowIdx1Based) => {
+                            // Jump the stepper to the first pallet of that row.
+                            const target = palletSequence.findIndex(
+                              (p) => p.rowIdx === rowIdx1Based - 1,
+                            );
+                            if (target >= 0) setPalletIdx(target);
+                          }}
                         />
                       ) : null
                     }
