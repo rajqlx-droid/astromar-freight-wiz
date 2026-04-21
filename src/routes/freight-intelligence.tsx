@@ -517,22 +517,6 @@ function FreightIntelligencePage() {
                       <h2 className="truncate text-lg font-bold text-brand-navy md:text-xl">
                         {meta.label} Calculator
                       </h2>
-                      {active === "cbm" && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            document
-                              .getElementById("cbm-optimize-cta")
-                              ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                          }
-                          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-brand-orange/10 px-2.5 text-[11px] font-medium text-brand-orange transition-colors hover:bg-brand-orange/20 sm:px-3 sm:text-xs"
-                          aria-label="Jump to 3D Loading Plan"
-                        >
-                          <Sparkles className="size-3.5" />
-                          <span className="hidden sm:inline">3D Loading Plan</span>
-                          <ChevronDown className="size-3.5" />
-                        </button>
-                      )}
                     </div>
                     <p className="truncate text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
                   </div>
