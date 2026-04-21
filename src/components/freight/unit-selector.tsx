@@ -4,6 +4,25 @@
  */
 import { useEffect, useState, type ChangeEvent } from "react";
 
+/**
+ * Tracks whether we've mounted on the client. Used to defer rendering native
+ * `<select>` elements that are otherwise mutated by form-styling browser
+ * extensions (BetterCheckout `bb-*`, Honey, Bitwarden, etc.). Those
+ * extensions wrap selects in custom DOM BEFORE React hydrates, which
+ * triggers a fatal hydration mismatch and disables every event handler in
+ * the calculator (PDF export, optimize, etc.).
+ *
+ * By rendering an inert placeholder shell on SSR + first client render, then
+ * swapping to the real <select> after mount, we ensure SSR HTML matches
+ * client HTML exactly and extensions can only mutate AFTER hydration is
+ * complete (where their changes are harmless).
+ */
+function useHasMounted(): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
+}
+
 /* -------- Length -------- */
 export type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
 
@@ -123,18 +142,30 @@ export function UnitSelector({
 }: LenProps) {
   const handle = (e: ChangeEvent<HTMLSelectElement>) =>
     onChange(e.target.value as LengthUnit);
+  const mounted = useHasMounted();
 
   if (compact) {
+    // Pre-mount: render a static, extension-proof placeholder that exactly
+    // matches the post-mount markup minus interactive children. Crucially we
+    // do NOT render a <select> server-side, so form-styling extensions can't
+    // wrap it in `bb-custom-select-container` divs before hydration.
+    if (!mounted) {
+      return (
+        <div className="inline-flex h-8 items-center overflow-hidden rounded-full border-2 border-brand-navy/30 bg-background">
+          <span className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Len
+          </span>
+          <span className="h-full border-l border-brand-navy/20 bg-background pl-2 pr-6 text-xs font-semibold text-brand-navy leading-8">
+            {value}
+          </span>
+        </div>
+      );
+    }
     return (
       <div className="inline-flex h-8 items-center overflow-hidden rounded-full border-2 border-brand-navy/30 bg-background transition-colors hover:border-brand-orange focus-within:border-brand-orange">
-        {/* suppressHydrationWarning: form-autofill browser extensions (Bitwarden,
-            1Password, LastPass) inject `id` attributes on labels and wrap selects
-            in custom containers, which would otherwise crash hydration and
-            disable every event handler in the calculator (including PDF). */}
         <label
           htmlFor={id}
           className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-          suppressHydrationWarning
         >
           Len
         </label>
@@ -144,7 +175,6 @@ export function UnitSelector({
           onChange={handle}
           aria-label={label}
           className="h-full cursor-pointer appearance-none border-l border-brand-navy/20 bg-background pl-2 pr-6 text-xs font-semibold text-brand-navy focus:outline-none"
-          suppressHydrationWarning
         >
           {LENGTH_UNITS.map((u) => (
             <option key={u.value} value={u.value}>
@@ -156,13 +186,20 @@ export function UnitSelector({
     );
   }
 
+  if (!mounted) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-brand-navy">{label}</span>
+        <span className="h-9 rounded-md border-2 border-brand-navy/30 bg-background px-2 text-sm font-semibold text-brand-navy leading-9">
+          {value}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
-      <label
-        htmlFor={id}
-        className="text-xs font-semibold text-brand-navy"
-        suppressHydrationWarning
-      >
+      <label htmlFor={id} className="text-xs font-semibold text-brand-navy">
         {label}
       </label>
       <select
@@ -170,7 +207,6 @@ export function UnitSelector({
         value={value}
         onChange={handle}
         className="h-9 rounded-md border-2 border-brand-navy/30 bg-background px-2 text-sm font-semibold text-brand-navy transition-colors hover:border-brand-orange focus:border-brand-orange focus:outline-none"
-        suppressHydrationWarning
       >
         {LENGTH_UNITS.map((u) => (
           <option key={u.value} value={u.value}>
@@ -181,6 +217,7 @@ export function UnitSelector({
     </div>
   );
 }
+
 
 interface WtProps {
   value: WeightUnit;
@@ -199,14 +236,26 @@ export function WeightUnitSelector({
 }: WtProps) {
   const handle = (e: ChangeEvent<HTMLSelectElement>) =>
     onChange(e.target.value as WeightUnit);
+  const mounted = useHasMounted();
 
   if (compact) {
+    if (!mounted) {
+      return (
+        <div className="inline-flex h-8 items-center overflow-hidden rounded-full border-2 border-brand-navy/30 bg-background">
+          <span className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            Wt
+          </span>
+          <span className="h-full border-l border-brand-navy/20 bg-background pl-2 pr-6 text-xs font-semibold text-brand-navy leading-8">
+            {value}
+          </span>
+        </div>
+      );
+    }
     return (
       <div className="inline-flex h-8 items-center overflow-hidden rounded-full border-2 border-brand-navy/30 bg-background transition-colors hover:border-brand-orange focus-within:border-brand-orange">
         <label
           htmlFor={id}
           className="px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
-          suppressHydrationWarning
         >
           Wt
         </label>
@@ -216,7 +265,6 @@ export function WeightUnitSelector({
           onChange={handle}
           aria-label={label}
           className="h-full cursor-pointer appearance-none border-l border-brand-navy/20 bg-background pl-2 pr-6 text-xs font-semibold text-brand-navy focus:outline-none"
-          suppressHydrationWarning
         >
           {WEIGHT_UNITS.map((u) => (
             <option key={u.value} value={u.value}>
@@ -228,13 +276,20 @@ export function WeightUnitSelector({
     );
   }
 
+  if (!mounted) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-brand-navy">{label}</span>
+        <span className="h-9 rounded-md border-2 border-brand-navy/30 bg-background px-2 text-sm font-semibold text-brand-navy leading-9">
+          {value}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-2">
-      <label
-        htmlFor={id}
-        className="text-xs font-semibold text-brand-navy"
-        suppressHydrationWarning
-      >
+      <label htmlFor={id} className="text-xs font-semibold text-brand-navy">
         {label}
       </label>
       <select
@@ -242,7 +297,6 @@ export function WeightUnitSelector({
         value={value}
         onChange={handle}
         className="h-9 rounded-md border-2 border-brand-navy/30 bg-background px-2 text-sm font-semibold text-brand-navy transition-colors hover:border-brand-orange focus:border-brand-orange focus:outline-none"
-        suppressHydrationWarning
       >
         {WEIGHT_UNITS.map((u) => (
           <option key={u.value} value={u.value}>
