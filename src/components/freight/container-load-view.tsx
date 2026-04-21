@@ -584,6 +584,7 @@ function SinglePlanBody({
                     <th className="py-1.5 pr-2 font-medium">Void</th>
                     <th className="py-1.5 pr-2 font-medium">CoG</th>
                     <th className="py-1.5 pr-2 font-medium">Score</th>
+                    <th className="py-1.5 pr-2 font-medium"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -607,6 +608,25 @@ function SinglePlanBody({
                       <td className="py-1.5 pr-2">{sc.cogOk ? "✓" : "⚠"}</td>
                       <td className={cn("py-1.5 pr-2 font-bold", sc.compliance.score >= 80 ? "text-emerald-600" : sc.compliance.score >= 60 ? "text-amber-600" : "text-red-600")}>
                         {sc.compliance.score}
+                      </td>
+                      <td className="py-1.5 pr-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedStrategyId(
+                              selectedStrategyId === sc.strategyId ? null : sc.strategyId
+                            );
+                          }}
+                          className={cn(
+                            "rounded px-2 py-0.5 text-[10px] font-semibold transition-colors",
+                            selectedStrategyId === sc.strategyId
+                              ? "bg-emerald-600 text-white"
+                              : "bg-brand-navy text-white hover:bg-brand-navy/90"
+                          )}
+                        >
+                          Load
+                        </button>
                       </td>
                     </tr>
                   ))}
