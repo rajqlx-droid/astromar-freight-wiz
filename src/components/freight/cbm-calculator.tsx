@@ -87,8 +87,25 @@ export function CbmCalculator({ items, setItems }: Props) {
   // echo back through props (which would otherwise cause an infinite
   // setDraftItems → setItems → setDraftItems loop — React error #185).
   const lastPushedRef = useRef<CbmItem[]>(items);
+  // Always-fresh ref to the parent setter so `pushItems` can stay stable
+  // across renders (callers like buttons / modals don't re-bind every render).
+  const setItemsRef = useRef(setItems);
+  useEffect(() => {
+    setItemsRef.current = setItems;
+  }, [setItems]);
+  /**
+   * Single funnel for pushing items to the parent. ALWAYS use this (never call
+   * `setItems` directly) so `lastPushedRef` stays in sync and the
+   * items↔draftItems sync effects below don't ping-pong forever (#185).
+   */
+  const pushItems = useCallback((next: CbmItem[]) => {
+    lastPushedRef.current = next;
+    setDraftItems(next);
+    setItemsRef.current(next);
+  }, []);
   useEffect(() => {
     if (items === lastPushedRef.current) return;
+    lastPushedRef.current = items;
     setDraftItems(items);
   }, [items]);
   useEffect(() => {
@@ -100,10 +117,10 @@ export function CbmCalculator({ items, setItems }: Props) {
     const delay = draftItems.length > 10 ? 600 : 250;
     const t = setTimeout(() => {
       lastPushedRef.current = draftItems;
-      setItems(draftItems);
+      setItemsRef.current(draftItems);
     }, delay);
     return () => clearTimeout(t);
-  }, [draftItems, setItems]);
+  }, [draftItems]);
   const [forcedChoice, setForcedChoice] = useState<import("@/lib/freight/container-ids").ContainerId | null>(null);
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
