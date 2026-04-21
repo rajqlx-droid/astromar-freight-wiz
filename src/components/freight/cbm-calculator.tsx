@@ -418,8 +418,11 @@ export function CbmCalculator({ items, setItems }: Props) {
         </div>
 
         {/* Optimize-container CTA — CBM math is never gated, only this section is */}
-        {hasAnyDims && !showOptimization && (
-          <Card className="border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-4 sm:p-5">
+        {!showOptimization && (
+          <Card
+            id="cbm-optimize-cta"
+            className="border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-4 sm:p-5 scroll-mt-24"
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-start gap-2.5">
                 <div className="rounded-full bg-brand-orange/10 p-2 text-brand-orange">
@@ -435,20 +438,38 @@ export function CbmCalculator({ items, setItems }: Props) {
                   </p>
                 </div>
               </div>
-              <Button
-                size="sm"
-                className="text-white shadow-sm hover:opacity-90"
-                style={{ background: "var(--brand-orange)" }}
-                onClick={() => {
-                  if (allConfirmed) {
-                    setOptimizationRequested(true);
-                  } else {
-                    setConfirmModalOpen(true);
-                  }
-                }}
-              >
-                <Sparkles className="size-3.5" /> Optimize loading
-              </Button>
+              {hasAnyDims ? (
+                <Button
+                  size="sm"
+                  className="text-white shadow-sm hover:opacity-90"
+                  style={{ background: "var(--brand-orange)" }}
+                  onClick={() => {
+                    if (allConfirmed) {
+                      setOptimizationRequested(true);
+                    } else {
+                      setConfirmModalOpen(true);
+                    }
+                  }}
+                >
+                  <Sparkles className="size-3.5" /> Optimize loading
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
+                      <Button
+                        size="sm"
+                        disabled
+                        className="text-white shadow-sm opacity-60"
+                        style={{ background: "var(--brand-orange)" }}
+                      >
+                        <Sparkles className="size-3.5" /> Optimize loading
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Enter cargo dimensions first</TooltipContent>
+                </Tooltip>
+              )}
             </div>
           </Card>
         )}
