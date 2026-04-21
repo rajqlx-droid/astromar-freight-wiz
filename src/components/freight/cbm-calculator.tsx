@@ -690,7 +690,7 @@ export function CbmCalculator({ items, setItems }: Props) {
         }
         resolveExtras={async () => {
           const h = loadHandleRef.current;
-          const extras: PdfExtras = {};
+          const extras: import("@/lib/freight/pdf").PdfExtras = {};
           if (h) {
             const snaps = await h.capture();
             if (snaps) extras.containerSnapshots = snaps;
@@ -706,6 +706,7 @@ export function CbmCalculator({ items, setItems }: Props) {
               buildRowFrontViewSvg,
               buildRowTopViewSvg,
             } = await import("@/lib/freight/loading-rows");
+            const { readHeavyThreshold } = await import("@/components/freight/loading-rows-panel");
             const rows = buildRows(pack, readHeavyThreshold());
             extras.wallEfficiency = computeWallEfficiency(rows);
             // Rasterise each side-view SVG to a PNG dataURL for jsPDF.
