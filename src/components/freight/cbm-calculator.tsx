@@ -840,6 +840,29 @@ export function CbmCalculator({ items, setItems }: Props) {
           onUnitSelect={handleUnitSelect}
           unitStats={unitStats}
         />
+        {ceilingReport.headline && (
+          <div className="rounded-lg border-2 border-amber-400/60 bg-amber-50 p-3 text-sm dark:bg-amber-950/20 sm:p-4">
+            <div className="mb-1.5 flex flex-wrap items-center gap-2 font-semibold text-amber-900 dark:text-amber-200">
+              <AlertTriangle className="size-4" />
+              <span>{ceilingReport.headline}</span>
+              {ceilingReport.suggestHc && forcedChoice !== "40hc" && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="ml-auto h-7 bg-brand-navy px-2.5 text-[11px] text-white hover:bg-brand-navy/90"
+                  onClick={() => setForcedChoice("40hc")}
+                >
+                  Switch to 40ft HC
+                </Button>
+              )}
+            </div>
+            <ul className="ml-6 list-disc space-y-1 text-[12px] text-amber-900/90 dark:text-amber-200/90">
+              {ceilingReport.items.map((g) => (
+                <li key={g.itemId}>{g.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <ContainerLoadView
           items={items}
           recommendation={recommendation}
