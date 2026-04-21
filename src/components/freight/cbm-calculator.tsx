@@ -703,24 +703,6 @@ function renderPackingPopoverContent({
       </div>
 
       <div className="space-y-3">
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-brand-navy">Package type</Label>
-          <Select
-            value={it.packageType ?? "carton"}
-            onValueChange={(v) => updatePacking(it.id, { packageType: v as PackageType })}
-          >
-            <SelectTrigger className="h-9 border-brand-navy/30">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PACKAGE_TYPES.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
 
         <NumberField
           compact
