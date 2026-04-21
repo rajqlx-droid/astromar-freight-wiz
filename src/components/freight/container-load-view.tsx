@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { LoaderHUD } from "./loader-hud";
 import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
@@ -77,6 +77,7 @@ export function ContainerLoadView({
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
   const [selectedStrategyId, setSelectedStrategyId] = useState<import("@/lib/freight/scenario-runner").StrategyId | null>(null);
+  const [compareStrategies, setCompareStrategies] = useState(false);
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
   const setChoice = (c: ContainerChoice) => {
     setInternalChoice(c);
@@ -115,29 +116,37 @@ export function ContainerLoadView({
       ? autoContainer
       : CONTAINERS.find((c) => c.id === choice) ?? autoContainer;
 
+  // Defer heavy packing inputs so React can interrupt long calculations and
+  // keep the event loop responsive (avoids "Page Unresponsive" dialog).
+  const deferredItems = useDeferredValue(items);
+  const deferredContainer = useDeferredValue(activeContainer);
+
   // Multi-container packs (one per recommended unit).
   const multiPacks = useMemo<AdvancedPackResult[]>(() => {
     if (!isMulti || !recommendation) return [];
-    const buckets = splitItemsAcrossContainers(items, recommendation);
+    const buckets = splitItemsAcrossContainers(deferredItems, recommendation);
     return recommendation.units.map((u, i) =>
       packContainerAdvanced(buckets[i] ?? [], u.container),
     );
-  }, [items, isMulti, recommendation]);
+  }, [deferredItems, isMulti, recommendation]);
 
   const scenarios = useMemo<ScenarioResult[]>(
     () => {
       if (!hasCargo) return [];
       const packItems = isMulti
-        ? (splitItemsAcrossContainers(items, recommendation!)[Number(activeTab)] ?? items)
-        : items;
-      return runAllScenarios(packItems, activeContainer);
+        ? (splitItemsAcrossContainers(deferredItems, recommendation!)[Number(activeTab)] ?? deferredItems)
+        : deferredItems;
+      const strategies: import("@/lib/freight/scenario-runner").StrategyId[] = compareStrategies
+        ? ["row-back", "weight-first", "floor-first", "mixed"]
+        : ["row-back"];
+      return runAllScenarios(packItems, deferredContainer, strategies);
     },
-    [hasCargo, isMulti, items, recommendation, activeTab, activeContainer],
+    [hasCargo, isMulti, deferredItems, recommendation, activeTab, deferredContainer, compareStrategies],
   );
 
   const singlePack = useMemo(
-    () => scenarios[0]?.pack ?? packContainerAdvanced(items, activeContainer),
-    [scenarios, items, activeContainer],
+    () => scenarios[0]?.pack ?? packContainerAdvanced(deferredItems, deferredContainer),
+    [scenarios, deferredItems, deferredContainer],
   );
 
   const activePack: AdvancedPackResult = selectedStrategyId
