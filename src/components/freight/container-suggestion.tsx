@@ -40,7 +40,10 @@ export function ContainerSuggestion({ recommendation, currentChoice, onApply }: 
       ? `Your ${totalCbm.toFixed(1)} m³ shipment exceeds the largest single container (40ft HC ≈ 70 m³ usable).`
       : reason === "exceeds-single-weight"
         ? `Your ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg payload exceeds a single container's limit.`
-        : `Optimal fit for ${totalCbm.toFixed(1)} m³ / ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg.`;
+        : reason === "exceeds-single-geometry"
+          ? recommendation.reasonDetail ??
+            `Cargo volume fits on paper, but height/footprint geometry prevents a single smaller container from physically holding every piece — escalating size.`
+          : `Optimal fit for ${totalCbm.toFixed(1)} m³ / ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg.`;
 
   return (
     <div className={cn("rounded-lg border-2 p-3 sm:p-4", tone)}>

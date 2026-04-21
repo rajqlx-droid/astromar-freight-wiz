@@ -90,7 +90,10 @@ export function ContainerLoadView({
   const hasCargo = cargoCbm > 0 && cargoQty > 0;
   const isMulti = recommendation?.isMulti === true;
 
-  const autoContainer = useMemo(() => pickOptimalContainer(cargoCbm), [cargoCbm]);
+  // Geometry-aware auto-pick: smallest container the 3D packer can actually
+  // place every piece in (not just one where CBM math fits). For 16 tall
+  // pallets this correctly escalates from 20ft GP → 40ft HC.
+  const autoContainer = useMemo(() => pickOptimalContainer(items), [items]);
   const activeContainer: ContainerPreset =
     choice === "auto"
       ? autoContainer
