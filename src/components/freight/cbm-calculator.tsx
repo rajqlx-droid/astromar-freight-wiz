@@ -388,11 +388,13 @@ export function CbmCalculator({ items, setItems }: Props) {
   // after clicking Optimize, without waiting for snapshot capture.
   const staticExtras = useMemo<import("@/lib/freight/pdf").PdfExtras | undefined>(() => {
     if (!activePack || activePack.placed.length === 0) return undefined;
-    const totalCbm = items.reduce(
+    // Derive totals from draftItems so the KPI tile values match the live
+    // per-row CBM tiles even mid-typing (parent `items` lags behind by debounce).
+    const totalCbm = draftItems.reduce(
       (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
       0,
     );
-    const totalWt = items.reduce((a, it) => a + it.qty * it.weight, 0);
+    const totalWt = draftItems.reduce((a, it) => a + it.qty * it.weight, 0);
     const toneFor = (n: number): "good" | "warn" | "bad" =>
       n >= 85 ? "good" : n >= 70 ? "warn" : "bad";
     return {
@@ -413,7 +415,7 @@ export function CbmCalculator({ items, setItems }: Props) {
         ],
       },
     };
-  }, [items, activePack]);
+  }, [draftItems, activePack]);
 
   return (
     <div className="space-y-6">
