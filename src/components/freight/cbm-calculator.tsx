@@ -47,7 +47,7 @@ import {
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
 import { ITEM_COLORS, totalCbm as sumCbm, totalWeight as sumWeight } from "@/lib/freight/packing";
 import { recommendContainers, splitItemsAcrossContainers } from "@/lib/freight/container-recommender";
-import { packContainerAdvanced } from "@/lib/freight/packing-advanced";
+
 import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
