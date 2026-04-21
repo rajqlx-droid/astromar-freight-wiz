@@ -521,6 +521,11 @@ export function packContainerAdvanced(
       : 0;
   const densityPct = usedCbm > 0 ? (placedCargoCbm / usedCbm) * 100 : 0;
 
+  const nearCeilingPlacedIdxs = new Set<number>();
+  placed.forEach((p, i) => { if (p.z + p.h > C.h - CEILING_RESERVE_MM) nearCeilingPlacedIdxs.add(i); });
+  const floorCoveredMm2 = placed.filter(p => p.z < 10).reduce((s, p) => s + p.l * p.w, 0);
+  const floorCoveragePct = C.l * C.w > 0 ? Math.min(100, (floorCoveredMm2 / (C.l * C.w)) * 100) : 0;
+
   return {
     container,
     placed,
@@ -536,6 +541,9 @@ export function packContainerAdvanced(
     cogOffsetPct,
     usedCbm,
     densityPct,
+    cogLateralOffsetPct,
+    nearCeilingPlacedIdxs,
+    floorCoveragePct,
   };
 }
 
