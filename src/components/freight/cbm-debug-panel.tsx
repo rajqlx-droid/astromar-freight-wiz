@@ -325,11 +325,18 @@ export function CbmDebugPanel({ info }: Props) {
   /**
    * Headless test runner — produces a structured pass/fail report. Exposed
    * globally as `window.__cbmHeadlessTest()` and auto-invoked when the URL
-   * has `?debug=test`. Console output is grouped and machine-readable so it
-   * can be scraped by CI / E2E tooling.
+   * has `?debug=test`.
+   *
+   * Output modes (controlled by URL flags):
+   *   - default            → grouped, human-readable console output.
+   *   - `format=json`      → single-line JSON.stringify for CI scraping.
+   *   - `trace=1`          → always include the per-keystroke trace, even on pass.
+   *
+   * On failure the trace is ALWAYS included (regardless of `trace=1`) so the
+   * exact keystroke that caused jank or input loss is visible in the log.
    */
   const runHeadless = useCallback(async (): Promise<HeadlessTestReport> => {
-    const result = await executeTest(setProgress);
+    const { result, trace } = await executeTest(setProgress);
     const failures: string[] = [];
     if (!result.matchesExpected) {
       failures.push(
@@ -351,21 +358,55 @@ export function CbmDebugPanel({ info }: Props) {
         `Average frame jank: ${result.avgFrameMs.toFixed(1)}ms exceeds 60fps budget (${AVG_FRAME_THRESHOLD_MS}ms)`,
       );
     }
+    if (result.worstRenderSpike > RENDER_SPIKE_THRESHOLD) {
+      failures.push(
+        `Render spike: ${result.worstRenderSpike} renders in one keystroke exceeds ${RENDER_SPIKE_THRESHOLD} budget`,
+      );
+    }
+
+    // Read URL flags to decide output format and whether to attach the trace.
+    let formatJson = false;
+    let alwaysTrace = false;
+    try {
+      const url = new URL(window.location.href);
+      formatJson = url.searchParams.get("format") === "json";
+      alwaysTrace = url.searchParams.get("trace") === "1";
+    } catch {
+      /* ignore */
+    }
+
+    const includeTrace = failures.length > 0 || alwaysTrace;
     const report: HeadlessTestReport = {
       pass: failures.length === 0,
       failures,
       result,
+      ...(includeTrace ? { trace } : {}),
       completedAt: new Date().toISOString(),
     };
     setResult(result);
     setProgress("");
-    // Structured console output for CI / E2E.
+
     /* eslint-disable no-console */
-    console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
-    console.log("Result:", result);
-    if (failures.length) console.warn("Failures:", failures);
-    console.log("Report:", report);
-    console.groupEnd();
+    if (formatJson) {
+      // Single-line JSON for CI parsing — no pretty printing, no group wrappers.
+      console.log(JSON.stringify(report));
+    } else {
+      console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
+      console.log("Result:", result);
+      if (failures.length) {
+        console.warn("Failures:", failures);
+        // Compact per-keystroke trace — collapsed by default to keep the log tidy.
+        console.groupCollapsed(`Trace (${trace.length} keystrokes)`);
+        console.table(trace);
+        console.groupEnd();
+      } else if (alwaysTrace) {
+        console.groupCollapsed(`Trace (${trace.length} keystrokes)`);
+        console.table(trace);
+        console.groupEnd();
+      }
+      console.log("Report:", report);
+      console.groupEnd();
+    }
     /* eslint-enable no-console */
     return report;
   }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
