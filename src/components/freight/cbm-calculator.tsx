@@ -395,7 +395,7 @@ export function CbmCalculator({ items, setItems }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [showOptimization, items, worker]);
+  }, [showOptimization, items, worker.recommend]);
 
   // When the user un-confirms or wipes the manifest, drop stale worker results
   // so the banner reverts to the cheap fast recommendation immediately.
