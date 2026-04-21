@@ -17,7 +17,7 @@
  * Hidden behind a query flag (?debug=1) and a small floating toggle so it
  * never shows up in production traffic by accident.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bug, X, Play, RotateCcw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
