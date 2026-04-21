@@ -129,9 +129,14 @@ export function ContainerLoadView({
     );
   }, [items, isMulti, recommendation]);
 
-  const activePack: AdvancedPackResult = isMulti
-    ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
-    : singlePack;
+  const scenarios = useMemo<ScenarioResult[]>(
+    () => (hasCargo ? runAllScenarios(isMulti ? (splitItemsAcrossContainers(items, recommendation!)[Number(activeTab)] ?? items) : items, activeContainer) : []),
+    [hasCargo, isMulti, items, recommendation, activeTab, activeContainer],
+  );
+
+  const activePack: AdvancedPackResult = selectedStrategyId
+    ? (scenarios.find(s => s.strategyId === selectedStrategyId)?.pack ?? (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack))
+    : (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack);
 
   // Expose snapshot capability to parent (current visible pack).
   useEffect(() => {
