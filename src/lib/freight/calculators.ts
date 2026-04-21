@@ -214,7 +214,7 @@ export function calcLanded(i: LandedInput): CalcResult {
 
   const fx = i.fxRate && i.fxRate > 0 ? i.fxRate : 0;
   const base = i.baseCurrency || "INR";
-  const fxHint = (n: number) => (fx > 0 ? ` (≈ ${base} ${fmt(n * fx, 2)})` : "");
+  const fxHint = (n: number) => (fx > 0 ? ` (~ ${base} ${fmt(n * fx, 2)})` : "");
 
   return {
     type: "landed",
@@ -300,7 +300,7 @@ export function calcExport(i: ExportInput): CalcResult {
 
   const fx = i.fxRate && i.fxRate > 0 ? i.fxRate : 0;
   const base = i.baseCurrency || "INR";
-  const fxHint = (n: number) => (fx > 0 ? ` (≈ ${base} ${fmt(n * fx, 2)})` : "");
+  const fxHint = (n: number) => (fx > 0 ? ` (~ ${base} ${fmt(n * fx, 2)})` : "");
 
   return {
     type: "export",

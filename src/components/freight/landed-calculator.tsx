@@ -41,7 +41,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
   };
 
   const inputsTable = [
-    { label: "Currency", value: `${state.currency}${state.fxRate && state.fxRate > 0 ? ` (1 ${state.currency} ≈ ${state.baseCurrency || "INR"} ${fmt(state.fxRate, 4)})` : ""}` },
+    { label: "Currency", value: `${state.currency}${state.fxRate && state.fxRate > 0 ? ` (1 ${state.currency} ~ ${state.baseCurrency || "INR"} ${fmt(state.fxRate, 4)})` : ""}` },
     { label: "Line Items", value: String(state.lines.length) },
     { label: "Freight", value: `${state.currency}${state.freight}` },
     { label: "Insurance", value: `${state.currency}${state.insurance}` },
