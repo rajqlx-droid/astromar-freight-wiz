@@ -1,52 +1,70 @@
 
 
-## Add geometry-aware fit check to container recommender
+## Combined plan: multi-container sync + 3D viewer cleanup
 
-The current recommender only does CBM math. For your 16-pallet case (29 m³ in a 30 m³ "20ft GP") it says "fits" — but the 3D packer only places 4 because tall pallets can't stack inside 2.39 m of height. We need to ask the actual 3D packer "can you physically place every piece?" before declaring a container a fit.
+Three approved-but-not-yet-implemented refinements rolled into one pass.
 
-### What "geometry skill" means here
+---
 
-Three real-world facts the recommender will now respect:
+### Part A — Sync 3D viewer tab with multi-container recommendation
 
-1. **Material nature** — stackable vs. non-stackable, max stack height, allowed rotations (already in `CbmItem` / `packing-advanced.ts`).
-2. **Container inner dimensions** — true L × W × H (not just CBM), e.g. 20ft GP ≈ 5.90 × 2.35 × 2.39 m.
-3. **Physical placement** — run `packContainerAdvanced(items, container)` and require `placedCartons === totalCartons`. CBM and weight remain as sanity gates.
+When the recommender returns a multi-container split (e.g. 1 × 40HC + 1 × 20GP), each banner card becomes a clickable bucket that drives the 3D viewer tab.
 
-### Plan
+**1. Lift `activeUnitIdx` state** (`src/components/freight/cbm-calculator.tsx`)
+- New `useState(0)` in the calculator. Compute `unitStats` (placed/total per unit) via a shared `useMemo` reusing `splitItemsAcrossContainers` + `packContainerAdvanced`.
+- Pass `activeUnitIdx` + `onActiveUnitChange` to both `ContainerSuggestion` and `ContainerLoadView`.
 
-**1. Geometry-aware single fit** (`src/lib/freight/container-recommender.ts`)
-- Rewrite `fitSingle(items, weightKg)` to iterate smallest → largest container and accept only when packer places **every** piece AND CBM ≤ usable AND weight ≤ payload.
-- Pre-filter with CBM check so we only run the packer on plausible candidates (keeps it <50ms even for 200+ items).
+**2. Clickable banner cards** (`src/components/freight/container-suggestion.tsx`)
+- New optional props: `activeUnitIdx`, `onUnitSelect`, `unitStats`.
+- Wrap each unit card in a `<button>` when `onUnitSelect` exists; active card gets `ring-2 ring-brand-navy`.
+- Append per-card pill: `{placed} / {total} placed` (emerald if equal, amber otherwise).
+- Footer hint: *"Click a container above to inspect it in the 3D viewer below."*
+- On click → `onUnitSelect(idx)` then smooth-scroll to `#container-load-viewer`.
 
-**2. Geometry-aware multi-split** (`splitMulti`)
-- Replace proportional CBM split with real simulation: pack into a 40HC, take un-placed pieces, recurse into the next container until everything is placed. Last container is the smallest preset that physically holds the leftover.
+**3. Controlled tab + badges** (`src/components/freight/container-load-view.tsx`)
+- Accept optional `activeUnitIdx` / `onActiveUnitChange` props (fall back to internal state when uncontrolled).
+- Add `id="container-load-viewer"` on the outer Card.
+- Each `TabsTrigger` gets a small placed/total pill matching the banner color logic.
 
-**3. New reason code**
-- Add `"exceeds-single-geometry"` to `ContainerRecommendation["reason"]` for the "CBM fits but geometry doesn't" case (your exact scenario).
-- `container-suggestion.tsx` shows: *"16 pallets won't physically fit in a 20ft GP — height/footprint caps real load at 4 pieces. Recommending 40ft HC."*
+---
 
-**4. Auto-pick in viewer** (`src/lib/freight/packing.ts` + `src/components/freight/container-load-view.tsx`)
-- `pickOptimalContainer` becomes geometry-aware: signature changes to accept `items`, picks smallest container where the packer places every piece.
-- `container-load-view.tsx` passes `items` when calling it (the "Auto" pill).
+### Part B — Move Loader HUD to bottom of 3D viewer
 
-**5. Wire-through** (`src/components/freight/cbm-calculator.tsx`)
-- Recommendation memo passes `items` (already available) into `recommendContainers`.
+The "READY · Container empty…" card overlaps the container interior at top-right.
 
-### Files touched
+**`src/components/freight/loader-hud.tsx`**
+- Wrapper: `absolute right-2 top-44 w-[240px]` → `absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[min(560px,90%)]`.
+- Convert vertical stack (instruction card + playback bar) into a single horizontal pill: instruction text on the left, playback controls on the right, thin divider between.
+- Empty state collapses to a one-liner ("Ready — press ▶ to load the first pallet"). Full instruction details only appear once stepping starts.
 
-- `src/lib/freight/container-recommender.ts` — rewrite `fitSingle` + `splitMulti`, add reason code
-- `src/lib/freight/packing.ts` — `pickOptimalContainer(items, weight)` geometry-aware
-- `src/components/freight/container-load-view.tsx` — pass items to picker
-- `src/components/freight/container-suggestion.tsx` — render new reason text
-- `src/components/freight/cbm-calculator.tsx` — pass items to recommender
+---
 
-### Expected result for your 16-pallet test
+### Part C — Hide doors when container is empty
 
-Recommendation flips from **"1 × 20ft GP"** → **"1 × 40ft HC"** (or 40ft GP if it geometrically fits there), the auto-selected container in the 3D viewer matches, and all 16 pallets render placed. A clear reason badge explains the escalation.
+Open swing doors render as large dark/yellow slabs blocking the camera when there's nothing inside to look at.
+
+**`src/components/freight/container-load-view.tsx`**
+- Extend `hideDoors` prop on `Container3DView` from `stepMode` only to `stepMode || pack.placedCartons === 0 || (visiblePlacedSet?.size === 0)`.
+- Net effect: empty/auto containers render as a clean open-front box; doors reappear the moment cargo is placed.
+
+No changes to door geometry, dimension labels, camera presets, or cargo rendering.
+
+---
+
+### Files touched (consolidated)
+
+- `src/components/freight/cbm-calculator.tsx` — lift `activeUnitIdx`, compute `unitStats`, scroll-to-viewer handler.
+- `src/components/freight/container-suggestion.tsx` — clickable cards, active ring, placed badges.
+- `src/components/freight/container-load-view.tsx` — controlled tab props, scroll-target id, tab placed badges, extended `hideDoors` condition.
+- `src/components/freight/loader-hud.tsx` — relocate to bottom-center, horizontal pill layout, compact empty state.
 
 ### Out of scope
 
-- No changes to packing algorithm itself (already correct — it's the recommender that was lying).
-- No UI redesign beyond the reason-text update.
+- No changes to packer, recommender, door geometry, camera, or cargo rendering.
+- 2D fallback, single-pallet stepper, recording/video pipeline untouched.
 - Air calculator and other tabs untouched.
+
+### Expected result
+
+Clicking a banner card jumps the viewer to that container with a clear active outline and placed-count badges on both card and tab. Empty 3D scenes show the full container interior unobstructed, with a slim instruction bar pinned to the bottom instead of a card overlapping the cargo area.
 
