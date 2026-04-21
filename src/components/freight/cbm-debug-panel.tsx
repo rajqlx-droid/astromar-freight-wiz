@@ -654,8 +654,10 @@ export function CbmDebugPanel({ info }: Props) {
 
           <p className="text-[10px] text-muted-foreground">
             Headless mode:{" "}
-            <code className="rounded bg-muted px-1">?debug=test</code> · or call{" "}
-            <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
+            <code className="rounded bg-muted px-1">?debug=test</code> ·{" "}
+            <code className="rounded bg-muted px-1">&amp;format=json</code> for CI ·{" "}
+            <code className="rounded bg-muted px-1">&amp;trace=1</code> to always log trace ·
+            or call <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
           </p>
           <p className="text-[10px] text-muted-foreground">
             Toggle off:{" "}
