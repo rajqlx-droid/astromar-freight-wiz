@@ -212,7 +212,7 @@ export function ContainerLoadView({
     activeTab,
     deferredContainer,
     compareStrategies,
-    worker,
+    worker.scenarios,
   ]);
 
   // singlePack falls out of scenarios[0]. While the first run is in flight,
