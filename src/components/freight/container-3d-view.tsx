@@ -110,7 +110,7 @@ interface Props {
    * the canvas without being clipped when the user enters fullscreen.
    */
   overlay?: React.ReactNode;
-  nearCeilingPlacedIdxs?: Set<number> | null;
+  nearCeilingPlacedIdxs?: number[] | null;
 }
 
 /**
@@ -456,7 +456,7 @@ function SceneContents({
   nextPalletIdx: number | null;
   followCam: boolean;
   showForkliftToken: boolean;
-  nearCeilingPlacedIdxs: Set<number> | null;
+  nearCeilingPlacedIdxs: number[] | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -603,7 +603,7 @@ function SceneContents({
             const isPreviewed = !recording && shuffleZ !== 0;
             const flyIn = !recording && !!flyInPlacedSet?.has(i);
             const isActivePallet = !recording && i === activePalletIdx;
-            const isNearCeiling = !recording && (nearCeilingPlacedIdxs?.has(i) ?? false);
+            const isNearCeiling = !recording && (nearCeilingPlacedIdxs?.includes(i) ?? false);
             return (
               <CargoBox
                 key={i}

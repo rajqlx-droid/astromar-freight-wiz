@@ -59,7 +59,7 @@ export interface AdvancedPackResult {
   /** placedCargoCbm / usedCbm × 100 — packing density inside the occupied volume. */
   densityPct: number;
   cogLateralOffsetPct: number;
-  nearCeilingPlacedIdxs: Set<number>;
+  nearCeilingPlacedIdxs: number[];
   floorCoveragePct: number;
 }
 
@@ -560,8 +560,8 @@ export function packContainerAdvanced(
       : 0;
   const densityPct = usedCbm > 0 ? (placedCargoCbm / usedCbm) * 100 : 0;
 
-  const nearCeilingPlacedIdxs = new Set<number>();
-  placed.forEach((p, i) => { if (p.z + p.h > C.h - CEILING_RESERVE_MM) nearCeilingPlacedIdxs.add(i); });
+  const nearCeilingPlacedIdxs: number[] = [];
+  placed.forEach((p, i) => { if (p.z + p.h > C.h - CEILING_RESERVE_MM) nearCeilingPlacedIdxs.push(i); });
   const floorCoveredMm2 = placed.filter(p => p.z < 10).reduce((s, p) => s + p.l * p.w, 0);
   const floorCoveragePct = C.l * C.w > 0 ? Math.min(100, (floorCoveredMm2 / (C.l * C.w)) * 100) : 0;
 
