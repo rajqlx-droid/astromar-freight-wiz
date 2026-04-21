@@ -167,7 +167,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
                     </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-7">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
                   <div className="col-span-2 space-y-1 md:col-span-2">
                     <Label className="text-[11px] text-muted-foreground">Description</Label>
                     <Input

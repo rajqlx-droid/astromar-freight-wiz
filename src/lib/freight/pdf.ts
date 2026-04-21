@@ -107,15 +107,23 @@ function drawKpiGrid(
     doc.setFontSize(7);
     doc.setTextColor(110, 110, 110);
     doc.text(kpi.label.toUpperCase(), x + 8, tileY + 12, { maxWidth: tileW - 16 });
-    // Value
+    // Value — auto-shrink font so very large numbers (e.g. multi-crore INR
+    // amounts) fit on a single line inside the tile instead of wrapping and
+    // overflowing the bottom edge.
+    const availW = tileW - 16;
+    let valueFontSize = 12;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
+    doc.setFontSize(valueFontSize);
+    while (valueFontSize > 7 && doc.getTextWidth(kpi.value) > availW) {
+      valueFontSize -= 0.5;
+      doc.setFontSize(valueFontSize);
+    }
     if (kpi.tone) {
       doc.setTextColor(...tones[kpi.tone].fg);
     } else {
       doc.setTextColor(...NAVY);
     }
-    doc.text(kpi.value, x + 8, tileY + 30, { maxWidth: tileW - 16 });
+    doc.text(kpi.value, x + 8, tileY + 30);
   });
   return y + tileH + 4;
 }
