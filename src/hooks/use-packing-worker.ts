@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PackingWorker from "@/lib/freight/packing-worker?worker";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { ScenarioResult, StrategyId } from "@/lib/freight/scenario-runner";
