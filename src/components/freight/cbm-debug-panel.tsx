@@ -258,6 +258,76 @@ export function CbmDebugPanel({ info }: Props) {
     setProgress("Cancelled");
   };
 
+  /**
+   * Headless test runner — produces a structured pass/fail report. Exposed
+   * globally as `window.__cbmHeadlessTest()` and auto-invoked when the URL
+   * has `?debug=test`. Console output is grouped and machine-readable so it
+   * can be scraped by CI / E2E tooling.
+   */
+  const runHeadless = useCallback(async (): Promise<HeadlessTestReport> => {
+    const result = await executeTest(setProgress);
+    const failures: string[] = [];
+    if (!result.matchesExpected) {
+      failures.push(
+        `Input data loss: per-row sum ${result.perRowSum.toFixed(4)} m³ ≠ expected ${result.expectedTotal.toFixed(4)} m³`,
+      );
+    }
+    if (!result.totalsMatch) {
+      failures.push(
+        `Totals mismatch: per-row sum ${result.perRowSum.toFixed(4)} m³ ≠ headline ${result.headlineTotal.toFixed(4)} m³`,
+      );
+    }
+    if (result.worstFrameMs > JANK_THRESHOLD_MS) {
+      failures.push(
+        `Worst-frame jank: ${result.worstFrameMs.toFixed(1)}ms exceeds ${JANK_THRESHOLD_MS}ms budget`,
+      );
+    }
+    if (result.avgFrameMs > AVG_FRAME_THRESHOLD_MS) {
+      failures.push(
+        `Average frame jank: ${result.avgFrameMs.toFixed(1)}ms exceeds 60fps budget (${AVG_FRAME_THRESHOLD_MS}ms)`,
+      );
+    }
+    const report: HeadlessTestReport = {
+      pass: failures.length === 0,
+      failures,
+      result,
+      completedAt: new Date().toISOString(),
+    };
+    setResult(result);
+    setProgress("");
+    // Structured console output for CI / E2E.
+    /* eslint-disable no-console */
+    console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
+    console.log("Result:", result);
+    if (failures.length) console.warn("Failures:", failures);
+    console.log("Report:", report);
+    console.groupEnd();
+    /* eslint-enable no-console */
+    return report;
+  }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Expose the headless runner globally + auto-run on ?debug=test.
+  useEffect(() => {
+    if (!enabled) return;
+    if (typeof window === "undefined") return;
+    (window as unknown as { __cbmHeadlessTest?: () => Promise<HeadlessTestReport> }).__cbmHeadlessTest =
+      runHeadless;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("debug") === "test") {
+        // Defer so the calculator has time to mount + initial render.
+        const t = setTimeout(() => {
+          setOpen(true);
+          setRunning(true);
+          runHeadless().finally(() => setRunning(false));
+        }, 600);
+        return () => clearTimeout(t);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [enabled, runHeadless]);
+
   if (!enabled) return null;
 
   return (
