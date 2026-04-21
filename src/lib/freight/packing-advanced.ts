@@ -456,6 +456,7 @@ export function packContainerAdvanced(
 
     placedCount++;
     perItemPlaced[c.itemIdx]++;
+    if (x + orient.l > frontierX) frontierX = x + orient.l;
   }
 
   // Render-cap truncation (rare with skyline since we score; just in case).
