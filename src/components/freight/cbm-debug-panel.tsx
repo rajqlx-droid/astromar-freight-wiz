@@ -960,9 +960,24 @@ export function CbmDebugPanel({ info }: Props) {
                     },
                   )}
                 </div>
+
+                {/* Heatmap — relative worst-frame magnitude per field, so it's
+                    obvious at a glance which input causes spikes. */}
+                <FieldHeatmap fieldStats={result.fieldRenderStats} worstField={result.worstFrameField} />
               </div>
             )}
           </section>
+
+          <p className="text-[10px] text-muted-foreground">
+            Headless mode:{" "}
+            <code className="rounded bg-muted px-1">?debug=test</code> ·{" "}
+            <code className="rounded bg-muted px-1">&amp;format=json</code> /{" "}
+            <code className="rounded bg-muted px-1">&amp;format=csv</code> for CI ·{" "}
+            <code className="rounded bg-muted px-1">&amp;pretty=1</code> indents JSON ·{" "}
+            <code className="rounded bg-muted px-1">&amp;trace=1</code> always log trace ·{" "}
+            <code className="rounded bg-muted px-1">&amp;download=1</code> save file on fail ·
+            or call <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
+          </p>
 
           <p className="text-[10px] text-muted-foreground">
             Headless mode:{" "}
