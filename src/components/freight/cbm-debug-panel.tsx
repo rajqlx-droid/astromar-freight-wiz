@@ -196,8 +196,10 @@ export function CbmDebugPanel({ info }: Props) {
    */
   const executeTest = async (
     onProgress?: (msg: string) => void,
-  ): Promise<TestResult> => {
+  ): Promise<{ result: TestResult; trace: KeystrokeTrace[] }> => {
     const frameCosts: number[] = [];
+    const renderCounts: number[] = [];
+    const trace: KeystrokeTrace[] = [];
     const t0 = performance.now();
 
     // Working copy. We mutate this in place between keystrokes so each new
@@ -239,15 +241,28 @@ export function CbmDebugPanel({ info }: Props) {
           // every field we've already typed across every row.
           rows[rowIdx] = { ...rows[rowIdx], [field]: partial };
 
+          // Snapshot render counter BEFORE the commit so we can measure how
+          // many React renders this single keystroke triggered.
+          const rendersBefore = renderCountRef.current;
           const before = performance.now();
           // Push a fresh array reference so React commits.
           info.setDraftItems(rows.map((r) => ({ ...r })));
           await new Promise<void>((r) => requestAnimationFrame(() => r()));
           const cost = performance.now() - before;
+          const renders = renderCountRef.current - rendersBefore;
           frameCosts.push(cost);
+          renderCounts.push(renders);
           keystrokes++;
+          trace.push({
+            step: keystrokes,
+            rowIdx,
+            field,
+            partial,
+            frameMs: cost,
+            renderCount: renders,
+          });
           onProgress?.(
-            `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms`,
+            `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms · ${renders} render(s)`,
           );
         }
       }
@@ -267,18 +282,27 @@ export function CbmDebugPanel({ info }: Props) {
     );
     const worst = frameCosts.reduce((a, b) => Math.max(a, b), 0);
     const avg = frameCosts.length ? frameCosts.reduce((a, b) => a + b, 0) / frameCosts.length : 0;
+    const worstRenderSpike = renderCounts.reduce((a, b) => Math.max(a, b), 0);
+    const totalRenders = renderCounts.reduce((a, b) => a + b, 0);
+    const avgRenders = renderCounts.length ? totalRenders / renderCounts.length : 0;
 
     return {
-      rowsFilled: TEST_ROWS.length,
-      totalKeystrokes: keystrokes,
-      worstFrameMs: worst,
-      avgFrameMs: avg,
-      perRowSum: finalSum,
-      headlineTotal: info.headlineTotalCbm,
-      expectedTotal: expected,
-      totalsMatch: Math.abs(finalSum - info.headlineTotalCbm) < 0.0001,
-      matchesExpected: Math.abs(finalSum - expected) < 0.0001,
-      totalDurationMs: performance.now() - t0,
+      result: {
+        rowsFilled: TEST_ROWS.length,
+        totalKeystrokes: keystrokes,
+        worstFrameMs: worst,
+        avgFrameMs: avg,
+        worstRenderSpike,
+        avgRendersPerKeystroke: avgRenders,
+        totalRenders,
+        perRowSum: finalSum,
+        headlineTotal: info.headlineTotalCbm,
+        expectedTotal: expected,
+        totalsMatch: Math.abs(finalSum - info.headlineTotalCbm) < 0.0001,
+        matchesExpected: Math.abs(finalSum - expected) < 0.0001,
+        totalDurationMs: performance.now() - t0,
+      },
+      trace,
     };
   };
 
@@ -286,7 +310,7 @@ export function CbmDebugPanel({ info }: Props) {
     setRunning(true);
     setResult(null);
     cancelRef.current = false;
-    const r = await executeTest(setProgress);
+    const { result: r } = await executeTest(setProgress);
     setResult(r);
     setProgress("");
     setRunning(false);
