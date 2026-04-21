@@ -312,6 +312,30 @@ export function CbmCalculator({ items, setItems }: Props) {
                             onChange={setRowWtUnit(it, idx)}
                             compact
                           />
+                          {/* Inline Package type selector — chosen per item, syncs with packing options popover */}
+                          <Select
+                            value={it.packageType ?? "carton"}
+                            onValueChange={(v) =>
+                              updatePacking(it.id, { packageType: v as PackageType })
+                            }
+                          >
+                            <SelectTrigger
+                              className="h-7 w-auto gap-1 rounded-full border-brand-navy/25 bg-muted/40 px-2.5 py-0 text-[11px] font-medium text-brand-navy shadow-none focus:ring-1"
+                              aria-label={`Item ${idx + 1} package type`}
+                            >
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Pkg
+                              </span>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PACKAGE_TYPES.map((p) => (
+                                <SelectItem key={p.value} value={p.value}>
+                                  {p.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center justify-end gap-1">
