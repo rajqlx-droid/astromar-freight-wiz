@@ -518,7 +518,22 @@ function FreightIntelligencePage() {
                         {meta.label} Calculator
                       </h2>
                     </div>
-                    <p className="truncate text-xs text-muted-foreground md:text-sm">{meta.sub}</p>
+                    <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground md:text-sm">
+                      <span className="truncate">{meta.sub}</span>
+                      {!bannerOpen && (
+                        <>
+                          <span aria-hidden className="text-muted-foreground/50">/</span>
+                          <button
+                            onClick={reopenBanner}
+                            className="no-print inline-flex shrink-0 items-center gap-1 rounded-md border border-brand-navy/20 bg-background px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-brand-orange hover:text-brand-orange"
+                            aria-label="Show pro tip"
+                          >
+                            <Lightbulb className="size-3" />
+                            <span>Tip</span>
+                          </button>
+                        </>
+                      )}
+                    </p>
                   </div>
                 </div>
 
