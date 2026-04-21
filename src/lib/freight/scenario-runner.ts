@@ -58,11 +58,13 @@ export function runAllScenarios(
 
   items: CbmItem[],
 
-  container: ContainerPreset
+  container: ContainerPreset,
+
+  strategiesToRun: StrategyId[] = ["row-back"]
 
 ): ScenarioResult[] {
 
-  const strategies: Array<{ id: StrategyId; name: string }> = [
+  const allStrategies: Array<{ id: StrategyId; name: string }> = [
 
     { id: "row-back",     name: "Row: Back → Front" },
 
@@ -73,6 +75,8 @@ export function runAllScenarios(
     { id: "mixed",        name: "Loader Natural" },
 
   ];
+
+  const strategies = allStrategies.filter((s) => strategiesToRun.includes(s.id));
 
   const totalQty = items.reduce((s, i) => s + i.qty, 0);
   const scaleFactor = totalQty > 300 ? 300 / totalQty : 1;

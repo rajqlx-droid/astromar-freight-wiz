@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp } from "lucide-react";
 import { LoaderHUD } from "./loader-hud";
 import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
@@ -77,6 +77,7 @@ export function ContainerLoadView({
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
   const [selectedStrategyId, setSelectedStrategyId] = useState<import("@/lib/freight/scenario-runner").StrategyId | null>(null);
+  const [compareStrategies, setCompareStrategies] = useState(false);
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
   const setChoice = (c: ContainerChoice) => {
     setInternalChoice(c);
@@ -115,29 +116,37 @@ export function ContainerLoadView({
       ? autoContainer
       : CONTAINERS.find((c) => c.id === choice) ?? autoContainer;
 
+  // Defer heavy packing inputs so React can interrupt long calculations and
+  // keep the event loop responsive (avoids "Page Unresponsive" dialog).
+  const deferredItems = useDeferredValue(items);
+  const deferredContainer = useDeferredValue(activeContainer);
+
   // Multi-container packs (one per recommended unit).
   const multiPacks = useMemo<AdvancedPackResult[]>(() => {
     if (!isMulti || !recommendation) return [];
-    const buckets = splitItemsAcrossContainers(items, recommendation);
+    const buckets = splitItemsAcrossContainers(deferredItems, recommendation);
     return recommendation.units.map((u, i) =>
       packContainerAdvanced(buckets[i] ?? [], u.container),
     );
-  }, [items, isMulti, recommendation]);
+  }, [deferredItems, isMulti, recommendation]);
 
   const scenarios = useMemo<ScenarioResult[]>(
     () => {
       if (!hasCargo) return [];
       const packItems = isMulti
-        ? (splitItemsAcrossContainers(items, recommendation!)[Number(activeTab)] ?? items)
-        : items;
-      return runAllScenarios(packItems, activeContainer);
+        ? (splitItemsAcrossContainers(deferredItems, recommendation!)[Number(activeTab)] ?? deferredItems)
+        : deferredItems;
+      const strategies: import("@/lib/freight/scenario-runner").StrategyId[] = compareStrategies
+        ? ["row-back", "weight-first", "floor-first", "mixed"]
+        : ["row-back"];
+      return runAllScenarios(packItems, deferredContainer, strategies);
     },
-    [hasCargo, isMulti, items, recommendation, activeTab, activeContainer],
+    [hasCargo, isMulti, deferredItems, recommendation, activeTab, deferredContainer, compareStrategies],
   );
 
   const singlePack = useMemo(
-    () => scenarios[0]?.pack ?? packContainerAdvanced(items, activeContainer),
-    [scenarios, items, activeContainer],
+    () => scenarios[0]?.pack ?? packContainerAdvanced(deferredItems, deferredContainer),
+    [scenarios, deferredItems, deferredContainer],
   );
 
   const activePack: AdvancedPackResult = selectedStrategyId
@@ -296,6 +305,8 @@ export function ContainerLoadView({
                 scenarios={scenarios}
                 selectedStrategyId={selectedStrategyId}
                 setSelectedStrategyId={setSelectedStrategyId}
+                compareStrategies={compareStrategies}
+                setCompareStrategies={setCompareStrategies}
                 rollup={{
                   totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
                   totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
@@ -321,6 +332,8 @@ export function ContainerLoadView({
           scenarios={scenarios}
           selectedStrategyId={selectedStrategyId}
           setSelectedStrategyId={setSelectedStrategyId}
+          compareStrategies={compareStrategies}
+          setCompareStrategies={setCompareStrategies}
         />
       )}
     </Card>
@@ -343,6 +356,8 @@ function SinglePlanBody({
   scenarios,
   selectedStrategyId,
   setSelectedStrategyId,
+  compareStrategies,
+  setCompareStrategies,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -357,6 +372,8 @@ function SinglePlanBody({
   scenarios: ScenarioResult[];
   selectedStrategyId: import("@/lib/freight/scenario-runner").StrategyId | null;
   setSelectedStrategyId: (id: import("@/lib/freight/scenario-runner").StrategyId | null) => void;
+  compareStrategies: boolean;
+  setCompareStrategies: (v: boolean) => void;
 }) {
   // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
   // along scene-z (container width axis). Cleared when row toggles off.
@@ -568,8 +585,18 @@ function SinglePlanBody({
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-semibold text-brand-navy">Scenario Comparison</h4>
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {scenarios.length} strategies
+                {scenarios.length} {scenarios.length === 1 ? "strategy" : "strategies"}
               </span>
+              {!compareStrategies && (
+                <button
+                  type="button"
+                  onClick={() => setCompareStrategies(true)}
+                  className="rounded-full border border-brand-navy/30 bg-brand-navy px-2.5 py-0.5 text-[10px] font-semibold text-white hover:bg-brand-navy/90"
+                  title="Run 3 additional packing strategies and compare results"
+                >
+                  + Compare strategies
+                </button>
+              )}
               <span className="ml-auto text-[11px] text-muted-foreground">
                 Best: <span className="font-semibold text-brand-navy">{scenarios[0]?.strategyName}</span>
               </span>

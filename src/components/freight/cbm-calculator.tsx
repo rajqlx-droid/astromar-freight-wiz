@@ -47,7 +47,7 @@ import {
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
 import { ITEM_COLORS, totalCbm as sumCbm, totalWeight as sumWeight } from "@/lib/freight/packing";
 import { recommendContainers, splitItemsAcrossContainers } from "@/lib/freight/container-recommender";
-import { packContainerAdvanced } from "@/lib/freight/packing-advanced";
+
 import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
@@ -77,7 +77,11 @@ export function CbmCalculator({ items, setItems }: Props) {
     setDraftItems(items);
   }, [items]);
   useEffect(() => {
-    const t = setTimeout(() => setItems(draftItems), 400);
+    // Adaptive debounce: longer wait for large manifests so a "50" keystroke
+    // doesn't trigger a pack run mid-typing.
+    const totalQty = draftItems.reduce((s, it) => s + (it.qty || 0), 0);
+    const delay = totalQty > 20 ? 800 : 400;
+    const t = setTimeout(() => setItems(draftItems), delay);
     return () => clearTimeout(t);
   }, [draftItems, setItems]);
   const [forcedChoice, setForcedChoice] = useState<import("@/lib/freight/container-ids").ContainerId | null>(null);
@@ -170,14 +174,23 @@ export function CbmCalculator({ items, setItems }: Props) {
   });
 
   // Per-unit placed/total counts — drives the "12/16 placed" badges on both
-  // the banner cards and the viewer tabs. Kept in sync by re-running the
-  // packer with the same inputs the viewer uses.
+  // the banner cards and the viewer tabs. Lightweight CBM-based estimate
+  // (the viewer tabs reconcile with exact 3D-pack counts when rendered).
   const unitStats = useMemo(() => {
     if (!recommendation.isMulti) return undefined;
     const buckets = splitItemsAcrossContainers(items, recommendation);
     return recommendation.units.map((u, i) => {
-      const pack = packContainerAdvanced(buckets[i] ?? [], u.container);
-      return { placed: pack.placedCartons, total: pack.totalCartons };
+      const bucket = buckets[i] ?? [];
+      const total = bucket.reduce((s, it) => s + (it.qty || 0), 0);
+      const cargoCbm = bucket.reduce(
+        (s, it) => s + ((it.length * it.width * it.height) / 1_000_000) * (it.qty || 0),
+        0,
+      );
+      const containerCbm = (u.container.inner.l * u.container.inner.w * u.container.inner.h) / 1_000_000_000;
+      // Assume ~85% packing efficiency for the badge estimate.
+      const fitRatio = cargoCbm > 0 ? Math.min(1, (containerCbm * 0.85) / cargoCbm) : 1;
+      const placed = Math.round(total * fitRatio);
+      return { placed, total };
     });
   }, [items, recommendation]);
 
