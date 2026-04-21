@@ -738,6 +738,10 @@ export function CbmCalculator({ items, setItems }: Props) {
         setOptimizationRequested(true);
       }}
     />
+    {/* ARIA live region — announces multi-container bucket changes to screen readers */}
+    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {liveMessage}
+    </div>
     </div>
   );
 }
