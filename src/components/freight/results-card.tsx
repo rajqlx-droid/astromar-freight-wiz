@@ -173,9 +173,21 @@ export function ResultsCard({ result, inputsTable, resolveExtras, extras, pdfDis
                 </span>
                 <span className="flex items-center gap-2">
                   {typeof it.gauge === "number" && <GaugeBar value={it.gauge} />}
+                  {/*
+                    Stable span — do NOT add `key={it.value}` here.
+                    A changing key forces React to unmount + remount this
+                    node on every value change. When this re-render also
+                    happens to be wrapped (anywhere up the tree) inside
+                    Radix's `useComposedRefs` machinery (Tooltip/Popover
+                    asChild composition), the unmount triggers
+                    `safelyDetachRef` → setState → re-render → detach loop,
+                    which surfaces as React error #185 ("Maximum update
+                    depth exceeded"). The text content updates fine without
+                    a key change; if you want a flash effect on update, use
+                    a CSS transition or animate via a stable element.
+                  */}
                   <span
-                    key={it.value}
-                    className={"animate-fade-in rounded-md px-3 py-1 font-semibold " + toneClass}
+                    className={"rounded-md px-3 py-1 font-semibold transition-colors " + toneClass}
                   >
                     {it.value}
                   </span>
