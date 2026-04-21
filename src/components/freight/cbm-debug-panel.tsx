@@ -60,6 +60,27 @@ export interface KeystrokeTrace {
   renderCount: number;
 }
 
+/** Per-field render aggregation across all rows in a single test run. */
+export type FieldRenderStats = Record<
+  "length" | "width" | "height" | "qty" | "weight",
+  {
+    keystrokes: number;
+    totalRenders: number;
+    avgRenders: number;
+    worstRenderSpike: number;
+    worstFrameMs: number;
+  }
+>;
+
+/** Per-row expected vs actual snapshot, attached on calculation mismatch. */
+export interface RowFieldDiff {
+  rowIdx: number;
+  expected: { length: number; width: number; height: number; qty: number; weight: number };
+  actual: { length: number; width: number; height: number; qty: number; weight: number };
+  /** Fields whose actual !== expected. Empty array means the row matches. */
+  mismatchedFields: string[];
+}
+
 interface TestResult {
   rowsFilled: number;
   totalKeystrokes: number;
@@ -73,6 +94,8 @@ interface TestResult {
   avgRendersPerKeystroke: number;
   /** Total React renders observed across the whole typing run. */
   totalRenders: number;
+  /** Render counts/jank broken down by which field was being typed. */
+  fieldRenderStats: FieldRenderStats;
   /** Sum of per-row CBM tiles after the test completed. */
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
@@ -98,6 +121,12 @@ export interface HeadlessTestReport {
    * pinpointing which keystroke triggered jank or input loss.
    */
   trace?: KeystrokeTrace[];
+  /**
+   * Per-row expected vs actual field values. Only attached when a calculation
+   * mismatch is detected (input loss or totals mismatch), so you can see exactly
+   * which row/field dropped data.
+   */
+  rowDiffs?: RowFieldDiff[];
   /** ISO timestamp the run completed. */
   completedAt: string;
 }
