@@ -275,6 +275,8 @@ export function packContainerAdvanced(
             lastReason ||= "Container full — exceeds height after stacking";
             continue;
           }
+          if (x + o.l > C.l - DOOR_RESERVE_MM) continue;
+          if (ev.z + o.h > C.h - CEILING_RESERVE_MM) continue;
           // Non-stackable must rest on the floor.
           if (!c.stackable && ev.z > 0) {
             lastReason ||= "Non-stackable — no floor space remaining";
@@ -302,6 +304,19 @@ export function packContainerAdvanced(
             }
           }
           if (!weightOk) continue;
+
+          const gRule = getGapRule(c.packageType);
+          if (x < gRule.wallMin) continue;
+          if (y < gRule.wallMin) continue;
+          if (y + o.w > C.w - gRule.wallMin) continue;
+          let gapViolation = false;
+          for (const pb of placedInternal) {
+            const xOv = x < pb.x + pb.l + gRule.minGap && x + o.l + gRule.minGap > pb.x;
+            const yOv = y < pb.y + pb.w + gRule.minGap && y + o.w + gRule.minGap > pb.y;
+            const zOv = ev.z < pb.z + pb.h && ev.z + o.h > pb.z;
+            if (xOv && yOv && zOv) { gapViolation = true; break; }
+          }
+          if (gapViolation) continue;
 
           // Score (back-to-front row-wise loading):
           //   1. x position has the highest weight — fully fill the row at the
