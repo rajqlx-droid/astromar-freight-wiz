@@ -4,6 +4,7 @@
  */
 
 import type { CbmItem } from "./calculators";
+import { packContainerAdvanced } from "./packing-advanced";
 
 export interface ContainerPreset {
   id: "20gp" | "40gp" | "40hc";
@@ -241,10 +242,9 @@ export function pickOptimalContainer(arg: number | CbmItem[]): ContainerPreset {
     }
     return CONTAINERS[CONTAINERS.length - 1];
   }
-  // Geometry-aware path. Lazy import to avoid a circular module load at boot.
-  // packing-advanced imports from packing, so we resolve it lazily here.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { packContainerAdvanced } = require("./packing-advanced") as typeof import("./packing-advanced");
+  // Geometry-aware path. packing-advanced is imported at module top; this is a
+  // safe ESM circular reference because packing-advanced only consumes values
+  // (CONTAINERS, ITEM_COLORS) that are defined synchronously at module init.
   const items = arg;
   let totalQty = 0;
   let cbm = 0;
