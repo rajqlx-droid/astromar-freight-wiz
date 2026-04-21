@@ -786,3 +786,215 @@ export function buildRowTopViewSvg(
     ${chrome.close}
   </svg>`;
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Isometric row view
+ *
+ * Renders the WHOLE container outline as a wireframe (so loaders can see
+ * where this row sits along the length), with previously-loaded rows drawn
+ * faintly as ghosts and the current row's boxes drawn solid. This gives the
+ * spatial context the three flat orthographic views can't.
+ *
+ * Projection: matches remotion/src/projection.ts (yaw -35°, pitch 30°).
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const ISO_YAW = -Math.PI * (35 / 180);
+const ISO_PITCH = Math.PI * (30 / 180);
+
+interface IsoPoint {
+  sx: number;
+  sy: number;
+  depth: number;
+}
+
+/** Project a (x,y,z)-mm point in container space to 2D, centred on origin. */
+function isoProject(
+  x: number,
+  y: number,
+  z: number,
+  containerL: number,
+  containerW: number,
+  scale: number,
+  cx: number,
+  cy: number,
+): IsoPoint {
+  const px = x - containerL / 2;
+  const py = y - containerW / 2;
+  const pz = z;
+  const cY = Math.cos(ISO_YAW);
+  const sY = Math.sin(ISO_YAW);
+  const rx = px * cY - py * sY;
+  const ry = px * sY + py * cY;
+  const cP = Math.cos(ISO_PITCH);
+  const sP = Math.sin(ISO_PITCH);
+  const ry2 = ry * cP - pz * sP;
+  const rz2 = ry * sP + pz * cP;
+  return {
+    sx: cx + rx * scale,
+    sy: cy - rz2 * scale,
+    depth: ry2,
+  };
+}
+
+interface IsoBox {
+  l: number;
+  w: number;
+  h: number;
+  x: number;
+  y: number;
+  z: number;
+  color: string;
+  opacity: number;
+}
+
+/** Render one box as 3 visible faces (top, front, right) using painter's depth sort. */
+function renderIsoBox(
+  b: IsoBox,
+  containerL: number,
+  containerW: number,
+  scale: number,
+  cx: number,
+  cy: number,
+): { svg: string; depth: number } {
+  const corners: IsoPoint[] = [];
+  for (let i = 0; i < 8; i++) {
+    const dx = i & 1 ? b.l : 0;
+    const dy = i & 2 ? b.w : 0;
+    const dz = i & 4 ? b.h : 0;
+    corners.push(
+      isoProject(b.x + dx, b.y + dy, b.z + dz, containerL, containerW, scale, cx, cy),
+    );
+  }
+  const top = [corners[4], corners[5], corners[7], corners[6]];
+  const front = [corners[2], corners[3], corners[7], corners[6]];
+  const right = [corners[1], corners[3], corners[7], corners[5]];
+  const avgDepth = corners.reduce((s, c) => s + c.depth, 0) / 8;
+
+  const poly = (pts: IsoPoint[], shade: number) => {
+    const d = pts.map((p) => `${p.sx.toFixed(1)},${p.sy.toFixed(1)}`).join(" ");
+    return `<polygon points="${d}" fill="${b.color}" fill-opacity="${(b.opacity * shade).toFixed(2)}" stroke="rgba(0,0,0,0.45)" stroke-width="0.4"/>`;
+  };
+
+  return {
+    svg: `${poly(right, 0.7)}${poly(front, 0.85)}${poly(top, 1.0)}`,
+    depth: avgDepth,
+  };
+}
+
+/** Container wireframe (12 edges of the outer box). */
+function isoContainerWireframe(
+  containerL: number,
+  containerW: number,
+  containerH: number,
+  scale: number,
+  cx: number,
+  cy: number,
+  theme: string,
+): string {
+  const c: IsoPoint[] = [];
+  for (let i = 0; i < 8; i++) {
+    const dx = i & 1 ? containerL : 0;
+    const dy = i & 2 ? containerW : 0;
+    const dz = i & 4 ? containerH : 0;
+    c.push(isoProject(dx, dy, dz, containerL, containerW, scale, cx, cy));
+  }
+  const edges: [number, number][] = [
+    [0, 1], [1, 3], [3, 2], [2, 0],
+    [4, 5], [5, 7], [7, 6], [6, 4],
+    [0, 4], [1, 5], [2, 6], [3, 7],
+  ];
+  return edges
+    .map(
+      ([a, b]) =>
+        `<line x1="${c[a].sx.toFixed(1)}" y1="${c[a].sy.toFixed(1)}" x2="${c[b].sx.toFixed(1)}" y2="${c[b].sy.toFixed(1)}" stroke="${theme}" stroke-opacity="0.55" stroke-width="0.7" stroke-dasharray="2 2"/>`,
+    )
+    .join("");
+}
+
+/**
+ * Iso view (3D wireframe) — shows the whole container outline with the row's
+ * boxes solid and previously-loaded rows ghosted in for spatial context.
+ */
+export function buildRowIsoViewSvg(
+  row: RowGroup,
+  pack: AdvancedPackResult,
+  allRows: RowGroup[],
+  opts: { width?: number; height?: number; themeColor?: string } = {},
+): string {
+  const VIEW_W = opts.width ?? 220;
+  const VIEW_H = opts.height ?? 90;
+  const theme = opts.themeColor ?? VIEW_THEME_DEFAULT;
+  const containerL = pack.container.inner.l;
+  const containerW = pack.container.inner.w;
+  const containerH = pack.container.inner.h;
+
+  // Auto-fit scale: project the 8 container corners with scale=1, find the
+  // bounding box, then scale to fill the view with a margin.
+  const probeCorners: IsoPoint[] = [];
+  for (let i = 0; i < 8; i++) {
+    const dx = i & 1 ? containerL : 0;
+    const dy = i & 2 ? containerW : 0;
+    const dz = i & 4 ? containerH : 0;
+    probeCorners.push(isoProject(dx, dy, dz, containerL, containerW, 1, 0, 0));
+  }
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of probeCorners) {
+    if (p.sx < minX) minX = p.sx;
+    if (p.sx > maxX) maxX = p.sx;
+    if (p.sy < minY) minY = p.sy;
+    if (p.sy > maxY) maxY = p.sy;
+  }
+  const margin = 8;
+  const scale = Math.min(
+    (VIEW_W - margin * 2) / Math.max(maxX - minX, 1),
+    (VIEW_H - margin * 2) / Math.max(maxY - minY, 1),
+  );
+  const cx = VIEW_W / 2 - ((minX + maxX) / 2) * scale;
+  const cy = VIEW_H / 2 + ((minY + maxY) / 2) * scale;
+
+  // Earlier rows ghosted; current row solid; later rows omitted.
+  const earlierBoxes: IsoBox[] = [];
+  for (const r of allRows) {
+    if (r.rowIdx >= row.rowIdx) break;
+    for (const b of r.boxes) {
+      earlierBoxes.push({
+        l: b.l, w: b.w, h: b.h, x: b.x, y: b.y, z: b.z,
+        color: pack.perItem[b.itemIdx]?.color ?? "#888",
+        opacity: 0.18,
+      });
+    }
+  }
+  const currentBoxes: IsoBox[] = row.boxes.map((b) => ({
+    l: b.l, w: b.w, h: b.h, x: b.x, y: b.y, z: b.z,
+    color: pack.perItem[b.itemIdx]?.color ?? "#888",
+    opacity: 0.92,
+  }));
+
+  // Painter's algorithm: render back-most first.
+  const renderable = [...earlierBoxes, ...currentBoxes].map((b) =>
+    renderIsoBox(b, containerL, containerW, scale, cx, cy),
+  );
+  renderable.sort((a, b) => a.depth - b.depth);
+  const boxesSvg = renderable.map((r) => r.svg).join("");
+
+  const wireframe = isoContainerWireframe(
+    containerL, containerW, containerH, scale, cx, cy, theme,
+  );
+
+  const backLabelP = isoProject(
+    0, containerW / 2, containerH, containerL, containerW, scale, cx, cy,
+  );
+  const doorLabelP = isoProject(
+    containerL, containerW / 2, containerH, containerL, containerW, scale, cx, cy,
+  );
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${VIEW_W} ${VIEW_H}" width="${VIEW_W}" height="${VIEW_H}" role="img" aria-label="Iso 3D view of row ${row.rowIdx + 1}">
+    <rect x="0" y="0" width="${VIEW_W}" height="${VIEW_H}" fill="#ffffff"/>
+    ${wireframe}
+    ${boxesSvg}
+    <text x="${backLabelP.sx.toFixed(1)}" y="${(backLabelP.sy - 2).toFixed(1)}" font-size="5" font-weight="700" text-anchor="middle" fill="${theme}" fill-opacity="0.75">BACK</text>
+    <text x="${doorLabelP.sx.toFixed(1)}" y="${(doorLabelP.sy - 2).toFixed(1)}" font-size="5" font-weight="700" text-anchor="middle" fill="${theme}" fill-opacity="0.75">DOOR</text>
+    <text x="${(VIEW_W - 3).toFixed(1)}" y="${(VIEW_H - 3).toFixed(1)}" font-size="5" font-weight="700" text-anchor="end" fill="${theme}" fill-opacity="0.7">ROW ${row.rowIdx + 1} · ISO</text>
+  </svg>`;
+}
+
