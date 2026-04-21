@@ -717,6 +717,7 @@ export function CbmCalculator({ items, setItems }: Props) {
               buildRowSideViewSvg,
               buildRowFrontViewSvg,
               buildRowTopViewSvg,
+              buildRowIsoViewSvg,
             } = await import("@/lib/freight/loading-rows");
             const { readHeavyThreshold } = await import("@/components/freight/loading-rows-panel");
             const rows = buildRows(pack, readHeavyThreshold());
@@ -760,10 +761,12 @@ export function CbmCalculator({ items, setItems }: Props) {
                 const doorSvg = buildRowSideViewSvg(r, pack, { width: 260, height: 104 });
                 const sideSvg = buildRowFrontViewSvg(r, pack, { width: 260, height: 104 });
                 const topSvg = buildRowTopViewSvg(r, pack, { width: 260, height: 104 });
-                const [sideViewPng, frontViewPng, topViewPng] = await Promise.all([
+                const isoSvg = buildRowIsoViewSvg(r, pack, rows, { width: 260, height: 170 });
+                const [sideViewPng, frontViewPng, topViewPng, isoViewPng] = await Promise.all([
                   svgToPng(doorSvg),
                   svgToPng(sideSvg),
                   svgToPng(topSvg),
+                  svgToPng(isoSvg),
                 ]);
                 return {
                   rowIdx: r.rowIdx,
@@ -784,6 +787,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                   sideViewPng,
                   frontViewPng,
                   topViewPng,
+                  isoViewPng,
                 };
               }),
             );
