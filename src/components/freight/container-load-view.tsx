@@ -260,6 +260,16 @@ export function ContainerLoadView({
       <div className="mb-4 flex items-center gap-2">
         <Boxes className="size-5 text-brand-navy" />
         <h3 className="text-base font-semibold text-brand-navy">Container Load Optimizer</h3>
+        {worker.pending && (
+          <span
+            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+            role="status"
+            aria-live="polite"
+          >
+            <Loader2 className="size-3 animate-spin" />
+            Calculating…
+          </span>
+        )}
         <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
           Indicative
         </span>
