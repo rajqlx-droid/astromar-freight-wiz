@@ -258,8 +258,8 @@ export function packContainerAdvanced(
 
     for (const o of orients) {
       // Candidate XY positions on a coarse grid.
-      const stepX = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(o.l / 4)));
-      const stepY = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(o.w / 4)));
+      const stepX = Math.min(PLACE_STEP_MM, Math.max(10, Math.floor(o.l / 6)));
+      const stepY = Math.min(PLACE_STEP_MM, Math.max(10, Math.floor(o.w / 6)));
       for (let y = 0; y + o.w <= C.w; y += stepY) {
         for (let x = 0; x + o.l <= C.l; x += stepX) {
           const ev = evaluatePlacement(x, y, o.l, o.w, {
