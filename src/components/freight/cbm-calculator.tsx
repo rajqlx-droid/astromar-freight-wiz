@@ -559,7 +559,9 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Card>
         )}
       </div>
-      <div className="xl:sticky xl:top-[140px] xl:self-start">
+      <div className="space-y-6 lg:col-span-7">
+      <div className="lg:sticky lg:top-[140px] lg:self-start">
+      {/* sticky wrapper preserved for results card on desktop */}
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
