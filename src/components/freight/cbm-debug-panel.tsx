@@ -347,6 +347,7 @@ export function CbmDebugPanel({ info }: Props) {
         worstRenderSpike,
         avgRendersPerKeystroke: avgRenders,
         totalRenders,
+        fieldRenderStats,
         perRowSum: finalSum,
         headlineTotal: info.headlineTotalCbm,
         expectedTotal: expected,
@@ -355,6 +356,15 @@ export function CbmDebugPanel({ info }: Props) {
         totalDurationMs: performance.now() - t0,
       },
       trace,
+      // Snapshot of every row's final state, so the headless reporter can
+      // diff actual vs expected when there's a calculation mismatch.
+      finalRows: rows.map((r) => ({
+        length: r.length,
+        width: r.width,
+        height: r.height,
+        qty: r.qty,
+        weight: r.weight,
+      })),
     };
   };
 
