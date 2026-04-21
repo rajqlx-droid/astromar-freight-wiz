@@ -572,10 +572,8 @@ export function CbmCalculator({ items, setItems }: Props) {
             globalLenUnit={lenUnit}
             globalWtUnit={wtUnit}
             popoverOpen={openPopoverId === it.id}
-            onPopoverOpenChange={(open) => setOpenPopoverId(open ? it.id : null)}
-            registerRef={(el) => {
-              rowRefs.current[it.id] = el;
-            }}
+            onPopoverOpenChange={getPopoverOpenChange(it.id)}
+            registerRef={getRegisterRef(it.id)}
             allowRemove={items.length > 1}
             onUpdateDraft={updateDraft}
             onUpdatePacking={updatePacking}
