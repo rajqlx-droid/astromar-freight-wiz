@@ -230,6 +230,17 @@ function FreightIntelligencePage() {
     setBannerOpen(stored !== "0");
   }, []);
 
+  // Dev-only: run the CBM sync sanity checklist when ?debug=1 is in the URL.
+  // Verifies the items↔draftItems sync invariant that previously caused
+  // React error #185 ("Maximum update depth exceeded"). See
+  // src/lib/freight/__dev__/cbm-sync-check.ts for the full checklist.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (typeof window === "undefined") return;
+    if (!new URLSearchParams(window.location.search).has("debug")) return;
+    void import("@/lib/freight/__dev__/cbm-sync-check").then((m) => m.logCbmSyncChecks());
+  }, []);
+
   // Track page scroll to add a subtle shadow under the sticky tab strip.
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
