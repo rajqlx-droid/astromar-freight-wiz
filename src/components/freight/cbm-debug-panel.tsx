@@ -394,15 +394,19 @@ export function CbmDebugPanel({ info }: Props) {
    * has `?debug=test`.
    *
    * Output modes (controlled by URL flags):
-   *   - default            → grouped, human-readable console output.
-   *   - `format=json`      → single-line JSON.stringify for CI scraping.
-   *   - `trace=1`          → always include the per-keystroke trace, even on pass.
+   *   - default                       → grouped, human-readable console output.
+   *   - `format=json`                 → single-line JSON.stringify for CI scraping.
+   *   - `format=json&pretty=1`        → multi-line, indented JSON for local debugging.
+   *   - `trace=1`                     → always include the per-keystroke trace, even on pass.
+   *   - `download=1`                  → on failure, also trigger a .json file download
+   *                                      with the full report (incl. trace + rowDiffs).
    *
-   * On failure the trace is ALWAYS included (regardless of `trace=1`) so the
-   * exact keystroke that caused jank or input loss is visible in the log.
+   * On failure the trace and rowDiffs are ALWAYS included (regardless of
+   * `trace=1`) so the failing keystroke and exact field-level data loss are
+   * visible in the log and downloadable artifact.
    */
   const runHeadless = useCallback(async (): Promise<HeadlessTestReport> => {
-    const { result, trace } = await executeTest(setProgress);
+    const { result, trace, finalRows } = await executeTest(setProgress);
     const failures: string[] = [];
     if (!result.matchesExpected) {
       failures.push(
@@ -432,14 +436,38 @@ export function CbmDebugPanel({ info }: Props) {
 
     // Read URL flags to decide output format and whether to attach the trace.
     let formatJson = false;
+    let pretty = false;
     let alwaysTrace = false;
+    let download = false;
     try {
       const url = new URL(window.location.href);
       formatJson = url.searchParams.get("format") === "json";
+      pretty = url.searchParams.get("pretty") === "1";
       alwaysTrace = url.searchParams.get("trace") === "1";
+      download = url.searchParams.get("download") === "1";
     } catch {
       /* ignore */
     }
+
+    // Build per-row diffs whenever there's a calculation mismatch — pinpoints
+    // exactly which row/field dropped data.
+    const calcMismatch = !result.matchesExpected || !result.totalsMatch;
+    const rowDiffs: RowFieldDiff[] | undefined = calcMismatch
+      ? TEST_ROWS.map((expected, rowIdx) => {
+          const actual = finalRows[rowIdx] ?? {
+            length: 0,
+            width: 0,
+            height: 0,
+            qty: 0,
+            weight: 0,
+          };
+          const mismatchedFields: string[] = [];
+          (["length", "width", "height", "qty", "weight"] as const).forEach((f) => {
+            if (expected[f] !== actual[f]) mismatchedFields.push(f);
+          });
+          return { rowIdx, expected, actual, mismatchedFields };
+        })
+      : undefined;
 
     const includeTrace = failures.length > 0 || alwaysTrace;
     const report: HeadlessTestReport = {
@@ -447,6 +475,7 @@ export function CbmDebugPanel({ info }: Props) {
       failures,
       result,
       ...(includeTrace ? { trace } : {}),
+      ...(rowDiffs ? { rowDiffs } : {}),
       completedAt: new Date().toISOString(),
     };
     setResult(result);
@@ -454,14 +483,25 @@ export function CbmDebugPanel({ info }: Props) {
 
     /* eslint-disable no-console */
     if (formatJson) {
-      // Single-line JSON for CI parsing — no pretty printing, no group wrappers.
-      console.log(JSON.stringify(report));
+      // CI mode: JSON.stringify, optionally pretty-printed.
+      console.log(JSON.stringify(report, null, pretty ? 2 : 0));
     } else {
       console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
       console.log("Result:", result);
+      console.log("Per-field render stats:", result.fieldRenderStats);
+      console.table(result.fieldRenderStats);
       if (failures.length) {
         console.warn("Failures:", failures);
-        // Compact per-keystroke trace — collapsed by default to keep the log tidy.
+        if (rowDiffs) {
+          console.groupCollapsed(`Row diffs (${rowDiffs.length} rows)`);
+          console.table(rowDiffs.map((d) => ({
+            row: d.rowIdx,
+            mismatched: d.mismatchedFields.join(",") || "—",
+            expected: JSON.stringify(d.expected),
+            actual: JSON.stringify(d.actual),
+          })));
+          console.groupEnd();
+        }
         console.groupCollapsed(`Trace (${trace.length} keystrokes)`);
         console.table(trace);
         console.groupEnd();
@@ -474,6 +514,31 @@ export function CbmDebugPanel({ info }: Props) {
       console.groupEnd();
     }
     /* eslint-enable no-console */
+
+    // Optional: download the full failure report as a .json file. Triggered
+    // automatically when `download=1` is in the URL and the test failed,
+    // OR opt-in for passes by also setting `trace=1`.
+    if (download && (failures.length > 0 || alwaysTrace)) {
+      try {
+        const fullReport = { ...report, trace, rowDiffs };
+        const blob = new Blob([JSON.stringify(fullReport, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        a.href = url;
+        a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        /* eslint-disable-next-line no-console */
+        console.warn("[CBM headless test] download failed:", e);
+      }
+    }
+
     return report;
   }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
 
