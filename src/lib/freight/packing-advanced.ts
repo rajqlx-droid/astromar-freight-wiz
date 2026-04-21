@@ -15,6 +15,7 @@
 
 import type { CbmItem, PackageType } from "./calculators";
 import { CONTAINERS, ITEM_COLORS, type ContainerPreset, type PlacedBox } from "./packing";
+import { getGapRule, DOOR_RESERVE_MM, CEILING_RESERVE_MM } from "./gap-rules";
 
 export interface ItemPlacementStat {
   itemIdx: number;
@@ -48,6 +49,9 @@ export interface AdvancedPackResult {
   usedCbm: number;
   /** placedCargoCbm / usedCbm × 100 — packing density inside the occupied volume. */
   densityPct: number;
+  cogLateralOffsetPct: number;
+  nearCeilingPlacedIdxs: Set<number>;
+  floorCoveragePct: number;
 }
 
 const RENDER_CAP = 500;
@@ -254,8 +258,8 @@ export function packContainerAdvanced(
 
     for (const o of orients) {
       // Candidate XY positions on a coarse grid.
-      const stepX = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(o.l / 4)));
-      const stepY = Math.min(PLACE_STEP_MM, Math.max(50, Math.floor(o.w / 4)));
+      const stepX = Math.min(PLACE_STEP_MM, Math.max(10, Math.floor(o.l / 6)));
+      const stepY = Math.min(PLACE_STEP_MM, Math.max(10, Math.floor(o.w / 6)));
       for (let y = 0; y + o.w <= C.w; y += stepY) {
         for (let x = 0; x + o.l <= C.l; x += stepX) {
           const ev = evaluatePlacement(x, y, o.l, o.w, {
@@ -271,6 +275,8 @@ export function packContainerAdvanced(
             lastReason ||= "Container full — exceeds height after stacking";
             continue;
           }
+          if (x + o.l > C.l - DOOR_RESERVE_MM) continue;
+          if (ev.z + o.h > C.h - CEILING_RESERVE_MM) continue;
           // Non-stackable must rest on the floor.
           if (!c.stackable && ev.z > 0) {
             lastReason ||= "Non-stackable — no floor space remaining";
@@ -298,6 +304,19 @@ export function packContainerAdvanced(
             }
           }
           if (!weightOk) continue;
+
+          const gRule = getGapRule(c.packageType);
+          if (x < gRule.wallMin) continue;
+          if (y < gRule.wallMin) continue;
+          if (y + o.w > C.w - gRule.wallMin) continue;
+          let gapViolation = false;
+          for (const pb of placedInternal) {
+            const xOv = x < pb.x + pb.l + gRule.minGap && x + o.l + gRule.minGap > pb.x;
+            const yOv = y < pb.y + pb.w + gRule.minGap && y + o.w + gRule.minGap > pb.y;
+            const zOv = ev.z < pb.z + pb.h && ev.z + o.h > pb.z;
+            if (xOv && yOv && zOv) { gapViolation = true; break; }
+          }
+          if (gapViolation) continue;
 
           // Score (back-to-front row-wise loading):
           //   1. x position has the highest weight — fully fill the row at the
@@ -457,6 +476,11 @@ export function packContainerAdvanced(
   }
   const cog = totWeight > 0 ? weightedX / totWeight : C.l / 2;
   const cogOffsetPct = (cog - C.l / 2) / (C.l / 2);
+  let weightedY = 0;
+  for (const p of placed) {
+    weightedY += (p.y + p.w / 2) * (items[p.itemIdx]?.weight ?? 0);
+  }
+  const cogLateralOffsetPct = totWeight > 0 ? (weightedY / totWeight - C.w / 2) / (C.w / 2) : 0;
 
   const perItem: ItemPlacementStat[] = items.map((it, idx) => {
     const planned = perItemPlanned[idx];
@@ -497,6 +521,11 @@ export function packContainerAdvanced(
       : 0;
   const densityPct = usedCbm > 0 ? (placedCargoCbm / usedCbm) * 100 : 0;
 
+  const nearCeilingPlacedIdxs = new Set<number>();
+  placed.forEach((p, i) => { if (p.z + p.h > C.h - CEILING_RESERVE_MM) nearCeilingPlacedIdxs.add(i); });
+  const floorCoveredMm2 = placed.filter(p => p.z < 10).reduce((s, p) => s + p.l * p.w, 0);
+  const floorCoveragePct = C.l * C.w > 0 ? Math.min(100, (floorCoveredMm2 / (C.l * C.w)) * 100) : 0;
+
   return {
     container,
     placed,
@@ -512,6 +541,9 @@ export function packContainerAdvanced(
     cogOffsetPct,
     usedCbm,
     densityPct,
+    cogLateralOffsetPct,
+    nearCeilingPlacedIdxs,
+    floorCoveragePct,
   };
 }
 
