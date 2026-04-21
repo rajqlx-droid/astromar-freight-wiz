@@ -493,13 +493,10 @@ function SinglePlanBody({
     () => buildPalletSequence(pack, rows),
     [pack, rows],
   );
-  const compliance = useMemo(() => {
-    // Guard: only compute compliance when pack has placed items or zero cargo.
-    const hasCargo = pack.totalCartons > 0;
-    if (!hasCargo) return computeComplianceReport(pack);
-    if (pack.totalCartons === 0) return computeComplianceReport(pack);
-    return computeComplianceReport(pack);
-  }, [pack]);
+  const compliance = useMemo(
+    () => computeComplianceReport(pack, { rows }),
+    [pack, rows],
+  );
 
   // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
@@ -658,6 +655,14 @@ function SinglePlanBody({
                           showForklift={showForkliftToken}
                           onToggleForklift={() => setShowForkliftToken((v) => !v)}
                           pack={pack}
+                          rows={rows}
+                          onJumpToRow={(rowIdx1Based) => {
+                            // Jump the stepper to the first pallet of that row.
+                            const target = palletSequence.findIndex(
+                              (p) => p.rowIdx === rowIdx1Based - 1,
+                            );
+                            if (target >= 0) setPalletIdx(target);
+                          }}
                         />
                       ) : null
                     }

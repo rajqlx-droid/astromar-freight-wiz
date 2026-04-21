@@ -456,6 +456,36 @@ export function packContainerAdvanced(
     snapAxis("x");
     snapAxis("y");
 
+    // Z-snap: re-evaluate the resting plane after the XY snaps. If a shorter
+    // neighbour now sits under the box, drop the box onto it. Closes the
+    // sub-stride vertical gaps that produce the "floating cargo" artifact.
+    {
+      const ev = evaluatePlacement(bestPick.x, bestPick.y, bestPick.orient.l, bestPick.orient.w, {
+        ...c,
+        origL: bestPick.orient.l,
+        origW: bestPick.orient.w,
+        origH: bestPick.orient.h,
+      });
+      if (ev && ev.z < bestPick.z - 0.5 && !ev.anySealed) {
+        // Lower the box. Only allow if support, sealing and stack-weight still pass.
+        if (ev.z === 0 || (ev.supportRatio >= SUPPORT_MIN_RATIO && c.stackable)) {
+          let weightOk = true;
+          for (const sIdx of ev.supporters) {
+            const s = placedInternal[sIdx];
+            if (!s) continue;
+            if (s.maxStackWeightKg > 0 && s.loadKg + c.weight > s.maxStackWeightKg) {
+              weightOk = false;
+              break;
+            }
+          }
+          if (weightOk) {
+            bestPick.z = ev.z;
+            bestPick.supporters = ev.supporters;
+          }
+        }
+      }
+    }
+
     const { x, y, z, orient, supporters } = bestPick;
     const internalIdx = placedInternal.length;
 

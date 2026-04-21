@@ -732,7 +732,9 @@ function ContainerShell({
   return (
     <group>
       {/* Plywood floor */}
-      <mesh receiveShadow position={[0, 0.01, 0]}>
+      {/* Plywood floor — recessed slightly so box bottoms always overlap and
+          never show daylight from any camera angle (kills Z-fighting). */}
+      <mesh receiveShadow position={[0, 0.008, 0]}>
         <boxGeometry args={[Cm.l, 0.02, Cm.w]} />
         <meshStandardMaterial map={plywoodTex} roughness={0.85} />
       </mesh>
