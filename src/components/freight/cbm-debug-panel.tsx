@@ -313,11 +313,15 @@ export function CbmDebugPanel({ info }: Props) {
           // Push a fresh array reference so React commits.
           info.setDraftItems(rows.map((r) => ({ ...r })));
           await new Promise<void>((r) => requestAnimationFrame(() => r()));
-          const cost = performance.now() - before;
+          const after = performance.now();
+          const cost = after - before;
           const renders = renderCountRef.current - rendersBefore;
           frameCosts.push(cost);
           renderCounts.push(renders);
           keystrokes++;
+          const tSinceStart = after - t0;
+          const deltaSinceLast = lastKeystrokeT === 0 ? 0 : after - lastKeystrokeT;
+          lastKeystrokeT = after;
           trace.push({
             step: keystrokes,
             rowIdx,
@@ -325,6 +329,8 @@ export function CbmDebugPanel({ info }: Props) {
             partial,
             frameMs: cost,
             renderCount: renders,
+            tSinceStartMs: tSinceStart,
+            deltaSinceLastMs: deltaSinceLast,
           });
           onProgress?.(
             `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms · ${renders} render(s)`,
@@ -354,12 +360,22 @@ export function CbmDebugPanel({ info }: Props) {
     // Aggregate the trace by which field was being typed so we can pinpoint
     // which input is the heaviest re-render trigger (e.g. "qty" causing
     // worker re-runs vs "weight" being a no-op for geometry).
+    const mkFieldStat = () => ({
+      keystrokes: 0,
+      totalRenders: 0,
+      avgRenders: 0,
+      worstRenderSpike: 0,
+      worstFrameMs: 0,
+      totalFrameMs: 0,
+      avgFrameMs: 0,
+      totalWallMs: 0,
+    });
     const fieldRenderStats: FieldRenderStats = {
-      length: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      width: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      height: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      qty: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      weight: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      length: mkFieldStat(),
+      width: mkFieldStat(),
+      height: mkFieldStat(),
+      qty: mkFieldStat(),
+      weight: mkFieldStat(),
     };
     for (const t of trace) {
       const s = fieldRenderStats[t.field];
@@ -367,12 +383,47 @@ export function CbmDebugPanel({ info }: Props) {
       s.totalRenders += t.renderCount;
       s.worstRenderSpike = Math.max(s.worstRenderSpike, t.renderCount);
       s.worstFrameMs = Math.max(s.worstFrameMs, t.frameMs);
+      s.totalFrameMs += t.frameMs;
+      s.totalWallMs += t.deltaSinceLastMs;
     }
-    for (const k of Object.keys(fieldRenderStats) as (keyof FieldRenderStats)[]) {
+    for (const k of Object.keys(fieldRenderStats) as FieldKey[]) {
       const s = fieldRenderStats[k];
       s.avgRenders = s.keystrokes ? s.totalRenders / s.keystrokes : 0;
+      s.avgFrameMs = s.keystrokes ? s.totalFrameMs / s.keystrokes : 0;
     }
 
+    // Per-row timing aggregation.
+    const rowTimingStats: RowTimingStats[] = TEST_ROWS.map((_, rowIdx) => {
+      const rowTrace = trace.filter((t) => t.rowIdx === rowIdx);
+      const first = rowTrace[0];
+      const last = rowTrace[rowTrace.length - 1];
+      return {
+        rowIdx,
+        keystrokes: rowTrace.length,
+        wallMs: first && last ? last.tSinceStartMs - first.tSinceStartMs : 0,
+        totalFrameMs: rowTrace.reduce((a, t) => a + t.frameMs, 0),
+        worstFrameMs: rowTrace.reduce((a, t) => Math.max(a, t.frameMs), 0),
+        totalRenders: rowTrace.reduce((a, t) => a + t.renderCount, 0),
+      };
+    });
+
+    // Identify the field most responsible for jank — used by the heatmap UI
+    // and CI to point to the slowest input.
+    let worstFrameField: FieldKey | null = null;
+    let worstFrameFieldVal = 0;
+    let hottestField: FieldKey | null = null;
+    let hottestFieldVal = 0;
+    for (const k of Object.keys(fieldRenderStats) as FieldKey[]) {
+      const s = fieldRenderStats[k];
+      if (s.worstFrameMs > worstFrameFieldVal) {
+        worstFrameFieldVal = s.worstFrameMs;
+        worstFrameField = k;
+      }
+      if (s.totalFrameMs > hottestFieldVal) {
+        hottestFieldVal = s.totalFrameMs;
+        hottestField = k;
+      }
+    }
 
     return {
       result: {
@@ -384,6 +435,9 @@ export function CbmDebugPanel({ info }: Props) {
         avgRendersPerKeystroke: avgRenders,
         totalRenders,
         fieldRenderStats,
+        rowTimingStats,
+        worstFrameField,
+        hottestField,
         perRowSum: finalSum,
         headlineTotal: info.headlineTotalCbm,
         expectedTotal: expected,
