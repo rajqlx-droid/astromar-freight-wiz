@@ -35,7 +35,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import {
   Dialog,
   DialogContent,
@@ -455,21 +455,23 @@ export function CbmCalculator({ items, setItems }: Props) {
                   <Sparkles className="size-3.5" /> Optimize loading
                 </Button>
               ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span tabIndex={0}>
-                      <Button
-                        size="sm"
-                        disabled
-                        className="text-white shadow-sm opacity-60"
-                        style={{ background: "var(--brand-orange)" }}
-                      >
-                        <Sparkles className="size-3.5" /> Optimize loading
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Enter cargo dimensions first</TooltipContent>
-                </Tooltip>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button
+                          size="sm"
+                          disabled
+                          className="text-white shadow-sm opacity-60"
+                          style={{ background: "var(--brand-orange)" }}
+                        >
+                          <Sparkles className="size-3.5" /> Optimize loading
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Enter cargo dimensions first</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           </Card>
