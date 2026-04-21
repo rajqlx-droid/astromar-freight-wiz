@@ -36,6 +36,8 @@ export interface PdfLoadingRow {
   frontViewPng?: string;
   /** Optional pre-rasterised top-down PNG dataURL (W × depth) for this row. */
   topViewPng?: string;
+  /** Optional pre-rasterised iso 3D wireframe PNG dataURL for this row. */
+  isoViewPng?: string;
 }
 
 export interface PdfExtras {
