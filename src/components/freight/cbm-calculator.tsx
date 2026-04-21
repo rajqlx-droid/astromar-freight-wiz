@@ -794,7 +794,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           <div className="flex items-center justify-end">
             <button
               type="button"
-              onClick={() => setConfirmModalOpen(true)}
+              onClick={openConfirmModal}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
             >
               <Pencil className="size-3" /> Edit packing options
@@ -803,7 +803,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           <ContainerSuggestion
             recommendation={recommendation}
             currentChoice={forcedChoice ?? "auto"}
-            onApply={(id) => setForcedChoice(id)}
+            onApply={setForcedChoice}
             activeUnitIdx={activeUnitIdx}
             onUnitSelect={handleUnitSelect}
             unitStats={unitStats}
