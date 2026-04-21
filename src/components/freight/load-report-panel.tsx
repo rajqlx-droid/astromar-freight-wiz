@@ -38,6 +38,20 @@ export function LoadReportPanel({ pack, rollup }: Props) {
         ? "text-amber-600"
         : "text-rose-600";
 
+  const lateralOffset = (pack as unknown as { cogLateralOffsetPct?: number }).cogLateralOffsetPct ?? 0;
+  const lateralLabel =
+    Math.abs(lateralOffset) < 0.1
+      ? "Centred"
+      : lateralOffset > 0
+        ? "Right-heavy"
+        : "Left-heavy";
+  const lateralTone =
+    Math.abs(lateralOffset) < 0.1
+      ? "text-emerald-600"
+      : Math.abs(lateralOffset) < 0.15
+        ? "text-amber-600"
+        : "text-rose-600";
+
   const anyUnplaced = pack.perItem.some((p) => p.unplaced > 0);
 
   return (
