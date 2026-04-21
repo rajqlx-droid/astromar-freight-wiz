@@ -218,31 +218,6 @@ export function UnitSelector({
   );
 }
 
-  return (
-    <div className="flex items-center gap-2">
-      <label
-        htmlFor={id}
-        className="text-xs font-semibold text-brand-navy"
-        suppressHydrationWarning
-      >
-        {label}
-      </label>
-      <select
-        id={id}
-        value={value}
-        onChange={handle}
-        className="h-9 rounded-md border-2 border-brand-navy/30 bg-background px-2 text-sm font-semibold text-brand-navy transition-colors hover:border-brand-orange focus:border-brand-orange focus:outline-none"
-        suppressHydrationWarning
-      >
-        {LENGTH_UNITS.map((u) => (
-          <option key={u.value} value={u.value}>
-            {u.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
 
 interface WtProps {
   value: WeightUnit;
