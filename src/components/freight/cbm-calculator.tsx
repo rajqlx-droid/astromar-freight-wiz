@@ -153,9 +153,26 @@ export function CbmCalculator({ items, setItems }: Props) {
   } | null>(null);
   const [optimizationRequested, setOptimizationRequested] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const openConfirmModal = useCallback(() => setConfirmModalOpen(true), []);
   const [activePack, setActivePack] = useState<
     import("@/lib/freight/packing-advanced").AdvancedPackResult | null
   >(null);
+  // Stable handler for ContainerLoadView's onReady callback. CRITICAL: this
+  // MUST be referentially stable across renders — if it changes identity,
+  // ContainerLoadView's effect (which depends on `onReady`) re-fires and
+  // calls back here → setActivePack → re-render → new handler → loop forever
+  // (React error #185). useCallback with empty deps is correct because the
+  // setters and ref are stable.
+  const handleViewerReady = useCallback(
+    (h: {
+      capture: () => Promise<{ iso: string; front: string; side: string } | null>;
+      getActivePack: () => import("@/lib/freight/packing-advanced").AdvancedPackResult | null;
+    }) => {
+      loadHandleRef.current = h;
+      setActivePack(h.getActivePack());
+    },
+    [],
+  );
   // Headline result reads from `draftItems` so per-row CBM tiles and "Total CBM"
   // always agree mid-typing — no more 400-800ms lag between the two.
   const baseResult = useMemo(() => calcCbm(draftItems), [draftItems]);
@@ -464,6 +481,36 @@ export function CbmCalculator({ items, setItems }: Props) {
     [update, setWtUnit],
   );
 
+  // Per-id callback caches. CRITICAL for avoiding React error #185:
+  //   - `registerRef` is forwarded into Radix Slot/Card composition. Passing
+  //     a NEW arrow function on every render makes Radix's `useComposedRefs`
+  //     call setRef(null)+setRef(el) each render. setRef internally calls a
+  //     useState setter, and during layout-effect cleanup that turns into
+  //     "Maximum update depth exceeded".
+  //   - `onPopoverOpenChange` and `renderPopover` would similarly thrash
+  //     Radix Popover's ref machinery.
+  // Keying by `it.id` ensures each row gets a stable function across renders.
+  const refCallbacksRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
+  const getRegisterRef = useCallback((id: string) => {
+    let cb = refCallbacksRef.current.get(id);
+    if (!cb) {
+      cb = (el: HTMLDivElement | null) => {
+        rowRefs.current[id] = el;
+      };
+      refCallbacksRef.current.set(id, cb);
+    }
+    return cb;
+  }, []);
+  const popoverOpenChangeRef = useRef<Map<string, (open: boolean) => void>>(new Map());
+  const getPopoverOpenChange = useCallback((id: string) => {
+    let cb = popoverOpenChangeRef.current.get(id);
+    if (!cb) {
+      cb = (open: boolean) => setOpenPopoverId(open ? id : null);
+      popoverOpenChangeRef.current.set(id, cb);
+    }
+    return cb;
+  }, []);
+
   const inputsTable = draftItems.flatMap((it, idx) => {
     const itemCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
     const itemWt = it.qty * it.weight;
@@ -526,10 +573,8 @@ export function CbmCalculator({ items, setItems }: Props) {
             globalLenUnit={lenUnit}
             globalWtUnit={wtUnit}
             popoverOpen={openPopoverId === it.id}
-            onPopoverOpenChange={(open) => setOpenPopoverId(open ? it.id : null)}
-            registerRef={(el) => {
-              rowRefs.current[it.id] = el;
-            }}
+            onPopoverOpenChange={getPopoverOpenChange(it.id)}
+            registerRef={getRegisterRef(it.id)}
             allowRemove={items.length > 1}
             onUpdateDraft={updateDraft}
             onUpdatePacking={updatePacking}
@@ -750,7 +795,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           <div className="flex items-center justify-end">
             <button
               type="button"
-              onClick={() => setConfirmModalOpen(true)}
+              onClick={openConfirmModal}
               className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
             >
               <Pencil className="size-3" /> Edit packing options
@@ -759,7 +804,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           <ContainerSuggestion
             recommendation={recommendation}
             currentChoice={forcedChoice ?? "auto"}
-            onApply={(id) => setForcedChoice(id)}
+            onApply={setForcedChoice}
             activeUnitIdx={activeUnitIdx}
             onUnitSelect={handleUnitSelect}
             unitStats={unitStats}
@@ -771,10 +816,7 @@ export function CbmCalculator({ items, setItems }: Props) {
             onChoiceChange={setForcedChoice}
             activeUnitIdx={activeUnitIdx}
             onActiveUnitChange={setActiveUnitIdx}
-            onReady={(h) => {
-              loadHandleRef.current = h;
-              setActivePack(h.getActivePack());
-            }}
+            onReady={handleViewerReady}
           />
         </div>
       )}

@@ -234,6 +234,16 @@ export function ContainerLoadView({
   const isCalculating = worker.pending && activePack.placed.length === 0 && hasCargo;
 
   // Expose snapshot capability to parent (current visible pack).
+  // CRITICAL: do NOT put `activePack` in deps. The parent's `onReady` calls
+  // `setActivePack()` synchronously, which would re-trigger this effect on
+  // the next render → infinite loop (React error #185 / "Maximum update
+  // depth exceeded"). Instead, mirror the latest pack in a ref so the
+  // exposed `getActivePack` always returns fresh data without re-firing
+  // the effect.
+  const activePackRef = useRef<AdvancedPackResult>(activePack);
+  useEffect(() => {
+    activePackRef.current = activePack;
+  }, [activePack]);
   useEffect(() => {
     if (!onReady) return;
     onReady({
@@ -245,9 +255,9 @@ export function ContainerLoadView({
           return null;
         }
       },
-      getActivePack: () => activePack,
+      getActivePack: () => activePackRef.current,
     });
-  }, [onReady, is3D, activeTab, activePack]);
+  }, [onReady, is3D, activeTab]);
 
   const viewerLabelledBy = isMulti ? `container-bucket-tab-${activeTab}` : undefined;
   return (
