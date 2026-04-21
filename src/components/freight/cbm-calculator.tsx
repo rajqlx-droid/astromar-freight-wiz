@@ -459,141 +459,38 @@ export function CbmCalculator({ items, setItems }: Props) {
     <div className="space-y-6">
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-3 lg:col-span-5">
-        {draftItems.map((it, idx) => {
-          const color = ITEM_COLORS[idx % ITEM_COLORS.length];
-          const confirmed = it.packingConfirmed === true;
-          return (
-            <Card
-              key={it.id}
-              ref={(el) => {
-                rowRefs.current[it.id] = el;
-              }}
-              className="border-2 p-3 transition-shadow"
-              style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
-            >
-              {(() => {
-                const rowLen = lenUnitFor(it);
-                const rowWt = wtUnitFor(it);
-                const rowCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
-                return (
-                  <>
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className="size-3 rounded-sm border border-black/10"
-                          style={{ background: color }}
-                          aria-hidden
-                        />
-                        <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <UnitSelector
-                            id={`cbm-len-unit-${it.id}`}
-                            value={rowLen}
-                            onChange={setRowLenUnit(it, idx)}
-                            compact
-                          />
-                          <WeightUnitSelector
-                            id={`cbm-wt-unit-${it.id}`}
-                            value={rowWt}
-                            onChange={setRowWtUnit(it, idx)}
-                            compact
-                          />
-                          {/* Inline Package type selector — chosen per item, syncs with packing options popover */}
-                          <Select
-                            value={it.packageType ?? "carton"}
-                            onValueChange={(v) =>
-                              updatePacking(it.id, { packageType: v as PackageType })
-                            }
-                          >
-                            <SelectTrigger
-                              className="h-7 w-auto gap-1 rounded-full border-brand-navy/25 bg-muted/40 px-2.5 py-0 text-[11px] font-medium text-brand-navy shadow-none focus:ring-1"
-                              aria-label={`Item ${idx + 1} package type`}
-                            >
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Pkg
-                              </span>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PACKAGE_TYPES.map((p) => (
-                                <SelectItem key={p.value} value={p.value}>
-                                  {p.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-1">
-                        {/* Packing options chip — sits next to row actions to save vertical space */}
-                        <Popover
-                          open={openPopoverId === it.id}
-                          onOpenChange={(o) => setOpenPopoverId(o ? it.id : null)}
-                        >
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className={cn(
-                                "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                                confirmed
-                                  ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
-                                  : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
-                              )}
-                            >
-                              {confirmed ? (
-                                <CheckCircle2 className="size-3.5 shrink-0" />
-                              ) : (
-                                <Settings2 className="size-3.5 shrink-0" />
-                              )}
-                              <span className="truncate">
-                                {confirmed ? buildSummary(it) : "Packing options"}
-                              </span>
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-4">
-                            {renderPackingPopoverContent({
-                              it,
-                              idx,
-                              items,
-                              updatePacking,
-                              applyToAll,
-                              closePopover: () => setOpenPopoverId(null),
-                            })}
-                          </PopoverContent>
-                        </Popover>
-                        <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
-                          <Copy className="size-3.5" />
-                        </Button>
-                        {items.length > 1 && (
-                          <Button size="icon" variant="ghost" className="size-7 text-destructive" onClick={() => remove(it.id)} aria-label="Remove">
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      <NumberField compact id={`l-${it.id}`} label="Length" suffix={rowLen} required value={showLen(it.length, rowLen)} onChange={setLen(it.id, "length", rowLen)} hint={`Outer length of one carton in ${rowLen}.`} />
-                      <NumberField compact id={`w-${it.id}`} label="Width" suffix={rowLen} required value={showLen(it.width, rowLen)} onChange={setLen(it.id, "width", rowLen)} hint={`Outer width in ${rowLen}.`} />
-                      <NumberField compact id={`h-${it.id}`} label="Height" suffix={rowLen} required value={showLen(it.height, rowLen)} onChange={setLen(it.id, "height", rowLen)} hint={`Outer height in ${rowLen}.`} />
-                      <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => updateDraft(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
-                      <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
-                      <div
-                        className="flex flex-col justify-center rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-1.5"
-                        aria-label={`Item ${idx + 1} CBM`}
-                      >
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CBM</span>
-                        <span className="text-lg font-bold leading-tight" style={{ color: "var(--brand-orange)" }}>
-                          {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
-                          <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </Card>
-          );
-        })}
+        {draftItems.map((it, idx) => (
+          <CbmRow
+            key={it.id}
+            item={it}
+            idx={idx}
+            color={ITEM_COLORS[idx % ITEM_COLORS.length]}
+            globalLenUnit={lenUnit}
+            globalWtUnit={wtUnit}
+            popoverOpen={openPopoverId === it.id}
+            onPopoverOpenChange={(open) => setOpenPopoverId(open ? it.id : null)}
+            registerRef={(el) => {
+              rowRefs.current[it.id] = el;
+            }}
+            allowRemove={items.length > 1}
+            onUpdateDraft={updateDraft}
+            onUpdatePacking={updatePacking}
+            onDuplicate={duplicate}
+            onRemove={remove}
+            onSetLenUnit={setRowLenUnit(it.id, idx === 0)}
+            onSetWtUnit={setRowWtUnit(it.id, idx === 0)}
+            renderPopover={() =>
+              renderPackingPopoverContent({
+                it,
+                idx,
+                items,
+                updatePacking,
+                applyToAll,
+                closePopover: () => setOpenPopoverId(null),
+              })
+            }
+          />
+        ))}
         <div className="flex flex-wrap gap-2">
           <Button onClick={add} size="sm" variant="outline" className="border-brand-navy text-brand-navy">
             <Plus className="size-4" /> Add Item
