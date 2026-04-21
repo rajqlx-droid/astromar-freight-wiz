@@ -58,19 +58,45 @@ export interface KeystrokeTrace {
   frameMs: number;
   /** React render commits observed during this keystroke. */
   renderCount: number;
+  /** Wall-clock time relative to test start (ms). */
+  tSinceStartMs: number;
+  /** Wall-clock gap from the previous keystroke (ms). 0 for the first one. */
+  deltaSinceLastMs: number;
 }
+
+type FieldKey = "length" | "width" | "height" | "qty" | "weight";
 
 /** Per-field render aggregation across all rows in a single test run. */
 export type FieldRenderStats = Record<
-  "length" | "width" | "height" | "qty" | "weight",
+  FieldKey,
   {
     keystrokes: number;
     totalRenders: number;
     avgRenders: number;
     worstRenderSpike: number;
     worstFrameMs: number;
+    /** Sum of frame costs across all keystrokes for this field (ms). */
+    totalFrameMs: number;
+    /** Average frame cost per keystroke for this field (ms). */
+    avgFrameMs: number;
+    /** Wall-clock time spent typing into this field (ms). */
+    totalWallMs: number;
   }
 >;
+
+/** Per-row timing aggregate — total wall-clock + frame cost for the row. */
+export interface RowTimingStats {
+  rowIdx: number;
+  keystrokes: number;
+  /** Wall-clock duration from this row's first to last keystroke (ms). */
+  wallMs: number;
+  /** Sum of measured frame costs across the row's keystrokes (ms). */
+  totalFrameMs: number;
+  /** Worst single-keystroke frame cost in this row (ms). */
+  worstFrameMs: number;
+  /** Total React render commits attributed to this row. */
+  totalRenders: number;
+}
 
 /** Per-row expected vs actual snapshot, attached on calculation mismatch. */
 export interface RowFieldDiff {
@@ -96,6 +122,12 @@ interface TestResult {
   totalRenders: number;
   /** Render counts/jank broken down by which field was being typed. */
   fieldRenderStats: FieldRenderStats;
+  /** Per-row wall-clock + frame-cost timing (one entry per row). */
+  rowTimingStats: RowTimingStats[];
+  /** Field that produced the worst single-keystroke frame spike. */
+  worstFrameField: FieldKey | null;
+  /** Field with the highest cumulative frame-cost time. */
+  hottestField: FieldKey | null;
   /** Sum of per-row CBM tiles after the test completed. */
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
@@ -110,8 +142,35 @@ interface TestResult {
   totalDurationMs: number;
 }
 
+/**
+ * Top-level CI summary — flat, primitive-only fields. Designed so a CI script
+ * can grep one section without traversing the nested `result`. Mirror of the
+ * most actionable numbers in `result` plus a few derived counts.
+ */
+export interface HeadlessTestSummary {
+  pass: boolean;
+  failureCount: number;
+  /** Number of "calculation mismatch" failures (input loss or totals mismatch). */
+  mismatchCount: number;
+  /** Number of "performance" failures (frame jank or render storm). */
+  perfFailureCount: number;
+  worstFrameMs: number;
+  avgFrameMs: number;
+  worstRenderSpike: number;
+  avgRendersPerKeystroke: number;
+  totalRenders: number;
+  totalKeystrokes: number;
+  totalDurationMs: number;
+  /** The field that produced the worst single-keystroke frame, or null. */
+  worstFrameField: FieldKey | null;
+  /** The field with the highest cumulative frame cost, or null. */
+  hottestField: FieldKey | null;
+}
+
 /** Headless test report — pass/fail summary suitable for console + CI. */
 export interface HeadlessTestReport {
+  /** Flat CI-friendly summary — read this first in scripts. */
+  summary: HeadlessTestSummary;
   pass: boolean;
   failures: string[];
   result: TestResult;
@@ -258,6 +317,7 @@ export function CbmDebugPanel({ info }: Props) {
     await new Promise((r) => setTimeout(r, 50));
 
     let keystrokes = 0;
+    let lastKeystrokeT = 0;
     const fields = ["length", "width", "height", "qty", "weight"] as const;
 
     for (let rowIdx = 0; rowIdx < TEST_ROWS.length; rowIdx++) {
@@ -281,11 +341,15 @@ export function CbmDebugPanel({ info }: Props) {
           // Push a fresh array reference so React commits.
           info.setDraftItems(rows.map((r) => ({ ...r })));
           await new Promise<void>((r) => requestAnimationFrame(() => r()));
-          const cost = performance.now() - before;
+          const after = performance.now();
+          const cost = after - before;
           const renders = renderCountRef.current - rendersBefore;
           frameCosts.push(cost);
           renderCounts.push(renders);
           keystrokes++;
+          const tSinceStart = after - t0;
+          const deltaSinceLast = lastKeystrokeT === 0 ? 0 : after - lastKeystrokeT;
+          lastKeystrokeT = after;
           trace.push({
             step: keystrokes,
             rowIdx,
@@ -293,6 +357,8 @@ export function CbmDebugPanel({ info }: Props) {
             partial,
             frameMs: cost,
             renderCount: renders,
+            tSinceStartMs: tSinceStart,
+            deltaSinceLastMs: deltaSinceLast,
           });
           onProgress?.(
             `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms · ${renders} render(s)`,
@@ -322,12 +388,22 @@ export function CbmDebugPanel({ info }: Props) {
     // Aggregate the trace by which field was being typed so we can pinpoint
     // which input is the heaviest re-render trigger (e.g. "qty" causing
     // worker re-runs vs "weight" being a no-op for geometry).
+    const mkFieldStat = () => ({
+      keystrokes: 0,
+      totalRenders: 0,
+      avgRenders: 0,
+      worstRenderSpike: 0,
+      worstFrameMs: 0,
+      totalFrameMs: 0,
+      avgFrameMs: 0,
+      totalWallMs: 0,
+    });
     const fieldRenderStats: FieldRenderStats = {
-      length: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      width: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      height: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      qty: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
-      weight: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      length: mkFieldStat(),
+      width: mkFieldStat(),
+      height: mkFieldStat(),
+      qty: mkFieldStat(),
+      weight: mkFieldStat(),
     };
     for (const t of trace) {
       const s = fieldRenderStats[t.field];
@@ -335,12 +411,47 @@ export function CbmDebugPanel({ info }: Props) {
       s.totalRenders += t.renderCount;
       s.worstRenderSpike = Math.max(s.worstRenderSpike, t.renderCount);
       s.worstFrameMs = Math.max(s.worstFrameMs, t.frameMs);
+      s.totalFrameMs += t.frameMs;
+      s.totalWallMs += t.deltaSinceLastMs;
     }
-    for (const k of Object.keys(fieldRenderStats) as (keyof FieldRenderStats)[]) {
+    for (const k of Object.keys(fieldRenderStats) as FieldKey[]) {
       const s = fieldRenderStats[k];
       s.avgRenders = s.keystrokes ? s.totalRenders / s.keystrokes : 0;
+      s.avgFrameMs = s.keystrokes ? s.totalFrameMs / s.keystrokes : 0;
     }
 
+    // Per-row timing aggregation.
+    const rowTimingStats: RowTimingStats[] = TEST_ROWS.map((_, rowIdx) => {
+      const rowTrace = trace.filter((t) => t.rowIdx === rowIdx);
+      const first = rowTrace[0];
+      const last = rowTrace[rowTrace.length - 1];
+      return {
+        rowIdx,
+        keystrokes: rowTrace.length,
+        wallMs: first && last ? last.tSinceStartMs - first.tSinceStartMs : 0,
+        totalFrameMs: rowTrace.reduce((a, t) => a + t.frameMs, 0),
+        worstFrameMs: rowTrace.reduce((a, t) => Math.max(a, t.frameMs), 0),
+        totalRenders: rowTrace.reduce((a, t) => a + t.renderCount, 0),
+      };
+    });
+
+    // Identify the field most responsible for jank — used by the heatmap UI
+    // and CI to point to the slowest input.
+    let worstFrameField: FieldKey | null = null;
+    let worstFrameFieldVal = 0;
+    let hottestField: FieldKey | null = null;
+    let hottestFieldVal = 0;
+    for (const k of Object.keys(fieldRenderStats) as FieldKey[]) {
+      const s = fieldRenderStats[k];
+      if (s.worstFrameMs > worstFrameFieldVal) {
+        worstFrameFieldVal = s.worstFrameMs;
+        worstFrameField = k;
+      }
+      if (s.totalFrameMs > hottestFieldVal) {
+        hottestFieldVal = s.totalFrameMs;
+        hottestField = k;
+      }
+    }
 
     return {
       result: {
@@ -352,6 +463,9 @@ export function CbmDebugPanel({ info }: Props) {
         avgRendersPerKeystroke: avgRenders,
         totalRenders,
         fieldRenderStats,
+        rowTimingStats,
+        worstFrameField,
+        hottestField,
         perRowSum: finalSum,
         headlineTotal: info.headlineTotalCbm,
         expectedTotal: expected,
@@ -436,12 +550,15 @@ export function CbmDebugPanel({ info }: Props) {
 
     // Read URL flags to decide output format and whether to attach the trace.
     let formatJson = false;
+    let formatCsv = false;
     let pretty = false;
     let alwaysTrace = false;
     let download = false;
     try {
       const url = new URL(window.location.href);
-      formatJson = url.searchParams.get("format") === "json";
+      const fmt = url.searchParams.get("format");
+      formatJson = fmt === "json";
+      formatCsv = fmt === "csv";
       pretty = url.searchParams.get("pretty") === "1";
       alwaysTrace = url.searchParams.get("trace") === "1";
       download = url.searchParams.get("download") === "1";
@@ -469,8 +586,31 @@ export function CbmDebugPanel({ info }: Props) {
         })
       : undefined;
 
+    // Classify failures so the flat summary can split mismatch vs perf for CI.
+    const mismatchCount = failures.filter(
+      (f) => f.startsWith("Input data loss") || f.startsWith("Totals mismatch"),
+    ).length;
+    const perfFailureCount = failures.length - mismatchCount;
+
+    const summary: HeadlessTestSummary = {
+      pass: failures.length === 0,
+      failureCount: failures.length,
+      mismatchCount,
+      perfFailureCount,
+      worstFrameMs: result.worstFrameMs,
+      avgFrameMs: result.avgFrameMs,
+      worstRenderSpike: result.worstRenderSpike,
+      avgRendersPerKeystroke: result.avgRendersPerKeystroke,
+      totalRenders: result.totalRenders,
+      totalKeystrokes: result.totalKeystrokes,
+      totalDurationMs: result.totalDurationMs,
+      worstFrameField: result.worstFrameField,
+      hottestField: result.hottestField,
+    };
+
     const includeTrace = failures.length > 0 || alwaysTrace;
     const report: HeadlessTestReport = {
+      summary,
       pass: failures.length === 0,
       failures,
       result,
@@ -482,14 +622,21 @@ export function CbmDebugPanel({ info }: Props) {
     setProgress("");
 
     /* eslint-disable no-console */
-    if (formatJson) {
+    if (formatCsv) {
+      // CI mode (CSV): emit two CSV blocks — keystroke trace + per-field stats.
+      const csv = buildCsvReport(trace, result.fieldRenderStats);
+      console.log(csv);
+    } else if (formatJson) {
       // CI mode: JSON.stringify, optionally pretty-printed.
       console.log(JSON.stringify(report, null, pretty ? 2 : 0));
     } else {
       console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
+      console.log("Summary:", summary);
       console.log("Result:", result);
       console.log("Per-field render stats:", result.fieldRenderStats);
       console.table(result.fieldRenderStats);
+      console.log("Per-row timing:", result.rowTimingStats);
+      console.table(result.rowTimingStats);
       if (failures.length) {
         console.warn("Failures:", failures);
         if (rowDiffs) {
@@ -515,20 +662,27 @@ export function CbmDebugPanel({ info }: Props) {
     }
     /* eslint-enable no-console */
 
-    // Optional: download the full failure report as a .json file. Triggered
-    // automatically when `download=1` is in the URL and the test failed,
-    // OR opt-in for passes by also setting `trace=1`.
+    // Optional: download the full failure report. JSON by default; CSV when
+    // `format=csv` is set so the trace + field stats land in a spreadsheet.
     if (download && (failures.length > 0 || alwaysTrace)) {
       try {
-        const fullReport = { ...report, trace, rowDiffs };
-        const blob = new Blob([JSON.stringify(fullReport, null, 2)], {
-          type: "application/json",
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
         const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const a = document.createElement("a");
+        let url: string;
+        if (formatCsv) {
+          const csv = buildCsvReport(trace, result.fieldRenderStats);
+          const blob = new Blob([csv], { type: "text/csv" });
+          url = URL.createObjectURL(blob);
+          a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.csv`;
+        } else {
+          const fullReport = { ...report, trace, rowDiffs };
+          const blob = new Blob([JSON.stringify(fullReport, null, 2)], {
+            type: "application/json",
+          });
+          url = URL.createObjectURL(blob);
+          a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.json`;
+        }
         a.href = url;
-        a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -806,6 +960,10 @@ export function CbmDebugPanel({ info }: Props) {
                     },
                   )}
                 </div>
+
+                {/* Heatmap — relative worst-frame magnitude per field, so it's
+                    obvious at a glance which input causes spikes. */}
+                <FieldHeatmap fieldStats={result.fieldRenderStats} worstField={result.worstFrameField} />
               </div>
             )}
           </section>
@@ -813,12 +971,14 @@ export function CbmDebugPanel({ info }: Props) {
           <p className="text-[10px] text-muted-foreground">
             Headless mode:{" "}
             <code className="rounded bg-muted px-1">?debug=test</code> ·{" "}
-            <code className="rounded bg-muted px-1">&amp;format=json</code> for CI ·{" "}
+            <code className="rounded bg-muted px-1">&amp;format=json</code> /{" "}
+            <code className="rounded bg-muted px-1">&amp;format=csv</code> for CI ·{" "}
             <code className="rounded bg-muted px-1">&amp;pretty=1</code> indents JSON ·{" "}
             <code className="rounded bg-muted px-1">&amp;trace=1</code> always log trace ·{" "}
-            <code className="rounded bg-muted px-1">&amp;download=1</code> save .json on fail ·
+            <code className="rounded bg-muted px-1">&amp;download=1</code> save file on fail ·
             or call <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
           </p>
+
           <p className="text-[10px] text-muted-foreground">
             Toggle off:{" "}
             <code className="rounded bg-muted px-1">localStorage.removeItem(&apos;freight.debug&apos;)</code>
@@ -870,4 +1030,146 @@ function Row({
  */
 /* (patchAccumulated helper removed — the test now mutates a working `rows`
    array in place per keystroke, which is correct and simpler.) */
+
+/**
+ * Heatmap visualization — shows worst-frame magnitude per field, scaled
+ * relative to the slowest field. Makes it obvious at a glance which input
+ * (length/width/height/qty/weight) is responsible for the worst spikes.
+ */
+function FieldHeatmap({
+  fieldStats,
+  worstField,
+}: {
+  fieldStats: FieldRenderStats;
+  worstField: FieldKey | null;
+}) {
+  const fields = Object.keys(fieldStats) as FieldKey[];
+  const maxWorst = fields.reduce((a, k) => Math.max(a, fieldStats[k].worstFrameMs), 0);
+  return (
+    <div className="mt-2 space-y-1 border-t border-border pt-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Worst-frame heatmap
+        </div>
+        {worstField && (
+          <Badge variant="outline" className="font-mono text-[10px]">
+            hottest: {worstField}
+          </Badge>
+        )}
+      </div>
+      <div className="space-y-1">
+        {fields.map((f) => {
+          const s = fieldStats[f];
+          const ratio = maxWorst > 0 ? s.worstFrameMs / maxWorst : 0;
+          // Clamp visible bar to a 6% floor so empty cells are still visible.
+          const widthPct = Math.max(ratio * 100, s.worstFrameMs > 0 ? 6 : 0);
+          // Color ramp: green → amber → rose based on absolute ms threshold.
+          const barClass =
+            s.worstFrameMs > JANK_THRESHOLD_MS
+              ? "bg-rose-500"
+              : s.worstFrameMs > AVG_FRAME_THRESHOLD_MS
+                ? "bg-amber-500"
+                : "bg-emerald-500";
+          const isWorst = f === worstField;
+          return (
+            <div key={f} className="flex items-center gap-2 text-[10px]">
+              <div
+                className={cn(
+                  "w-14 font-mono",
+                  isWorst ? "font-semibold text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {f}
+              </div>
+              <div className="relative h-3 flex-1 overflow-hidden rounded bg-muted">
+                <div
+                  className={cn("h-full transition-all", barClass)}
+                  style={{ width: `${widthPct}%` }}
+                />
+              </div>
+              <div className="w-14 text-right font-mono text-muted-foreground">
+                {s.worstFrameMs.toFixed(1)}ms
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Build a two-section CSV report: per-keystroke trace followed by per-field
+ * aggregate stats. Easier than JSON for spreadsheet pivot tables.
+ */
+function buildCsvReport(trace: KeystrokeTrace[], fieldStats: FieldRenderStats): string {
+  const esc = (v: string | number) => {
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines: string[] = [];
+  lines.push("# section: trace");
+  lines.push(
+    [
+      "step",
+      "rowIdx",
+      "field",
+      "partial",
+      "frameMs",
+      "renderCount",
+      "tSinceStartMs",
+      "deltaSinceLastMs",
+    ].join(","),
+  );
+  for (const t of trace) {
+    lines.push(
+      [
+        t.step,
+        t.rowIdx,
+        t.field,
+        t.partial,
+        t.frameMs.toFixed(2),
+        t.renderCount,
+        t.tSinceStartMs.toFixed(2),
+        t.deltaSinceLastMs.toFixed(2),
+      ]
+        .map(esc)
+        .join(","),
+    );
+  }
+  lines.push("");
+  lines.push("# section: fieldRenderStats");
+  lines.push(
+    [
+      "field",
+      "keystrokes",
+      "totalRenders",
+      "avgRenders",
+      "worstRenderSpike",
+      "worstFrameMs",
+      "totalFrameMs",
+      "avgFrameMs",
+      "totalWallMs",
+    ].join(","),
+  );
+  for (const k of Object.keys(fieldStats) as (keyof FieldRenderStats)[]) {
+    const s = fieldStats[k];
+    lines.push(
+      [
+        k,
+        s.keystrokes,
+        s.totalRenders,
+        s.avgRenders.toFixed(3),
+        s.worstRenderSpike,
+        s.worstFrameMs.toFixed(2),
+        s.totalFrameMs.toFixed(2),
+        s.avgFrameMs.toFixed(2),
+        s.totalWallMs.toFixed(2),
+      ]
+        .map(esc)
+        .join(","),
+    );
+  }
+  return lines.join("\n");
+}
 
