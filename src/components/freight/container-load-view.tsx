@@ -576,7 +576,15 @@ function SinglePlanBody({
                 </thead>
                 <tbody>
                   {scenarios.map((sc) => (
-                    <tr key={sc.strategyId} className={cn("border-b last:border-0", sc.isBest && "bg-emerald-50 dark:bg-emerald-950/20")}>
+                    <tr
+                      key={sc.strategyId}
+                      onClick={() => setSelectedStrategyId(sc.isBest && selectedStrategyId === sc.strategyId ? null : sc.strategyId)}
+                      className={cn(
+                        "cursor-pointer border-b last:border-0",
+                        sc.isBest && "bg-emerald-50 dark:bg-emerald-950/20",
+                        selectedStrategyId === sc.strategyId && "ring-1 ring-brand-navy",
+                      )}
+                    >
                       <td className="py-1.5 pr-2 font-medium">
                         {sc.isBest && <span className="mr-1 text-amber-500">★</span>}
                         {sc.strategyName}
