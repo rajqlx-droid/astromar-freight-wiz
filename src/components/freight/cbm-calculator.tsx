@@ -771,10 +771,7 @@ export function CbmCalculator({ items, setItems }: Props) {
             onChoiceChange={setForcedChoice}
             activeUnitIdx={activeUnitIdx}
             onActiveUnitChange={setActiveUnitIdx}
-            onReady={(h) => {
-              loadHandleRef.current = h;
-              setActivePack(h.getActivePack());
-            }}
+            onReady={handleViewerReady}
           />
         </div>
       )}
