@@ -248,7 +248,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   const showOptimization = optimizationRequested && allConfirmed;
 
   const update = (id: string, patch: Partial<CbmItem>) => {
-    setItems(items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    setDraftItems(draftItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   };
   /** Toggle a packing flag and auto-confirm the row in one shot. */
   const updatePacking = (id: string, patch: Partial<CbmItem>) => {

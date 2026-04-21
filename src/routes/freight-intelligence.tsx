@@ -344,7 +344,7 @@ function FreightIntelligencePage() {
             <span style={{ color:"#ffffff", fontWeight:700, fontSize:"13px", letterSpacing:"0.04em" }}>ASTROMAR</span>
             <span style={{ color:"rgba(255,255,255,0.45)", fontSize:"11px" }}>Free Container Load Optimiser</span>
           </div>
-          <a href="https://www.astromar.com" target="_blank" rel="noopener noreferrer" style={{ color:"rgba(255,255,255,0.75)", fontSize:"11px", textDecoration:"none", border:"1px solid rgba(255,255,255,0.2)", padding:"3px 10px", borderRadius:"6px", whiteSpace:"nowrap" }}>
+          <a href="https://astromarfreezone.com" target="_blank" rel="noopener noreferrer" style={{ color:"rgba(255,255,255,0.75)", fontSize:"11px", textDecoration:"none", border:"1px solid rgba(255,255,255,0.2)", padding:"3px 10px", borderRadius:"6px", whiteSpace:"nowrap" }}>
             Astromar.com →
           </a>
         </div>
