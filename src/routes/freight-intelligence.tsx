@@ -65,6 +65,13 @@ import {
 } from "@/lib/freight/calculators";
 
 export const Route = createFileRoute("/freight-intelligence")({
+  // Disable SSR for this route. The page contains many Radix Select components
+  // (each renders a hidden native <select> via SelectBubbleInput). Browser
+  // extensions that style native selects (e.g. "bb-customSelect") mutate the
+  // server-rendered HTML before React hydrates, causing a hydration mismatch
+  // that React retries in a loop and surfaces as "Maximum update depth exceeded".
+  // Rendering this interactive page on the client only avoids the mismatch.
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Smart Tools Everywhere — Freight Intelligence Suite" },
