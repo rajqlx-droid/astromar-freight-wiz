@@ -72,7 +72,7 @@ const isRigidUnit = (t?: PackageType) => t === "crate" || t === "pallet";
 export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
   const [wtUnit, setWtUnit] = usePersistentWeightUnit();
-  const [forcedChoice, setForcedChoice] = useState<"20gp" | "40gp" | "40hc" | "45hc" | "lcl" | "reefer" | null>(null);
+  const [forcedChoice, setForcedChoice] = useState<"20gp" | "40gp" | "40hc" | "lcl" | null>(null);
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const loadHandleRef = useRef<{
