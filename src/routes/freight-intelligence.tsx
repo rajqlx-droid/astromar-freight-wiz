@@ -619,6 +619,7 @@ function FreightIntelligencePage() {
                     </SheetContent>
                   </Sheet>
                 </div>
+              </div>
 
 
               {/* Mobile-only optimization promo (full width, since desktop version is inline above) */}
