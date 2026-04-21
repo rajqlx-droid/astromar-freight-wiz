@@ -17,27 +17,12 @@ export interface ContainerPreset {
 }
 
 export const CONTAINERS: ContainerPreset[] = [
-  {
-    id: "20gp",
-    name: "20ft GP",
-    inner: { l: 5900, w: 2352, h: 2393 },
-    capCbm: 30,
-    maxPayloadKg: 28000,
-  },
-  {
-    id: "40gp",
-    name: "40ft GP",
-    inner: { l: 12032, w: 2352, h: 2393 },
-    capCbm: 60,
-    maxPayloadKg: 26500,
-  },
-  {
-    id: "40hc",
-    name: "40ft HC",
-    inner: { l: 12032, w: 2352, h: 2700 },
-    capCbm: 70,
-    maxPayloadKg: 26500,
-  },
+  { id: "20gp", name: "20ft GP", inner: { l: 5900, w: 2352, h: 2393 }, capCbm: 30, maxPayloadKg: 28000 },
+  { id: "40gp", name: "40ft GP", inner: { l: 12032, w: 2352, h: 2393 }, capCbm: 60, maxPayloadKg: 26500 },
+  { id: "40hc", name: "40ft HC", inner: { l: 12032, w: 2352, h: 2700 }, capCbm: 70, maxPayloadKg: 26500 },
+  { id: "45hc" as any, name: "45ft HC", inner: { l: 13556, w: 2352, h: 2700 }, capCbm: 86, maxPayloadKg: 27700 },
+  { id: "lcl" as any, name: "LCL / Groupage", inner: { l: 3000, w: 2352, h: 2393 }, capCbm: 15, maxPayloadKg: 10000 },
+  { id: "reefer" as any, name: "40ft Reefer", inner: { l: 11580, w: 2286, h: 2197 }, capCbm: 58, maxPayloadKg: 27700 },
 ];
 
 /** Searates-style palette — distinct, accessible. */
@@ -82,7 +67,7 @@ export interface PackResult {
   utilizationPct: number; // cargoCbm / capCbm
 }
 
-const RENDER_CAP = 200;
+const RENDER_CAP = 500;
 const CELL_MM = 100;
 const SUPPORT_MIN_RATIO = 0.9;
 const PLACE_STEP_MM = 100;
