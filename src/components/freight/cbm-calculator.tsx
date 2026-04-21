@@ -257,6 +257,15 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   const recommendation: ContainerRecommendation = workerRecommendation ?? fastRecommendation;
 
+  // Geometric ceiling analysis — pure geometry, runs on every keystroke. Detects
+  // items whose dimensions cap utilisation regardless of packer effort
+  // (e.g. a 1.22m cube can't pair-side or stack 2-high in a 40' GP).
+  const ceilingReport = useMemo<GeometricCeilingReport>(() => {
+    const containerId = forcedChoice ?? recommendation.units[0]?.container.id ?? "40gp";
+    const target = CONTAINERS.find((c) => c.id === containerId) ?? CONTAINERS[1];
+    return analyseGeometricCeiling(draftItems, target);
+  }, [draftItems, forcedChoice, recommendation]);
+
   // Active container bucket index for the multi-container case. Shared between
   // the suggestion banner cards and the 3D viewer's tabbed view so clicking
   // a card swaps the visible container. Persisted across refresh / tab switch.
