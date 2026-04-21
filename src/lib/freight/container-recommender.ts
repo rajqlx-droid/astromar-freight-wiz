@@ -1,20 +1,25 @@
 /**
- * Smart container recommendation engine.
+ * Smart container recommendation engine — geometry-aware.
  *
- * Given total cargo CBM and weight, recommend the optimal container or
- * multi-container split using industry-standard usable capacities (≈85%
- * of geometric volume after dunnage / packing inefficiency).
+ * Given a list of cargo items, recommend the optimal container or multi-
+ * container split. Validates BOTH:
+ *   1. CBM/weight sanity (industry usable caps).
+ *   2. Physical fit — runs the actual 3D packer against each candidate
+ *      container and only accepts a container when every piece is placed.
+ *      This catches cases where CBM math says "fits" but tall non-stackable
+ *      pallets can't actually be packed inside the container's height.
  *
- * Pure JS, deterministic, SSR-safe. No dependencies.
+ * Pure JS, deterministic, SSR-safe.
  */
 
 import type { CbmItem } from "./calculators";
 import { CONTAINERS, type ContainerPreset } from "./packing";
+import { packContainerAdvanced } from "./packing-advanced";
 
 /**
- * Usable CBM by container (recommended max load — leaves headroom for
- * dunnage, mixed orientations, and stowage inefficiency). These match
- * what shippers like Searates / Maersk publish as practical limits.
+ * Usable CBM by container — used as a fast pre-filter before running the
+ * (more expensive) geometric packer. These match Searates / Maersk
+ * practical limits (≈ 85% of geometric volume).
  */
 export const USABLE_CBM: Record<ContainerPreset["id"], number> = {
   "20gp": 30,
@@ -41,7 +46,13 @@ export interface ContainerRecommendation {
   /** True if this requires more than one container. */
   isMulti: boolean;
   /** Reason this recommendation was triggered. */
-  reason: "fits-single" | "exceeds-single-cbm" | "exceeds-single-weight";
+  reason:
+    | "fits-single"
+    | "exceeds-single-cbm"
+    | "exceeds-single-weight"
+    | "exceeds-single-geometry";
+  /** Optional human-readable detail for the geometry case. */
+  reasonDetail?: string;
 }
 
 /** Sort containers ascending by usable CBM (smallest first). */
@@ -49,52 +60,128 @@ const ASC = [...CONTAINERS].sort(
   (a, b) => USABLE_CBM[a.id] - USABLE_CBM[b.id],
 );
 
-/** Find smallest single container that fits both CBM and weight. */
-function fitSingle(
-  cbm: number,
-  weightKg: number,
-): ContainerPreset | null {
-  for (const c of ASC) {
-    if (cbm <= USABLE_CBM[c.id] && weightKg <= c.maxPayloadKg) return c;
+/** Sum CBM for a list of items. */
+function sumCbm(items: CbmItem[]): number {
+  let t = 0;
+  for (const it of items) {
+    t += ((it.length * it.width * it.height) / 1_000_000) * it.qty;
   }
-  return null;
+  return t;
+}
+
+/** Sum weight for a list of items. */
+function sumWeight(items: CbmItem[]): number {
+  let t = 0;
+  for (const it of items) t += it.weight * it.qty;
+  return t;
+}
+
+/** Sum quantity for a list of items. */
+function sumQty(items: CbmItem[]): number {
+  let t = 0;
+  for (const it of items) t += it.qty;
+  return t;
 }
 
 /**
- * Greedy multi-container split: fill biggest container repeatedly,
- * then add smallest container that fits the remainder.
+ * Find smallest single container that physically fits ALL items.
+ * Runs the geometric packer; only accepts a container when every piece is
+ * placed (and CBM/weight sanity hold).
  */
-function splitMulti(cbm: number, weightKg: number): RecommendedUnit[] {
-  const big = CONTAINERS.find((c) => c.id === "40hc")!;
-  const usableBig = USABLE_CBM[big.id];
-  // Distribute weight proportionally to volume.
-  const weightPerCbm = cbm > 0 ? weightKg / cbm : 0;
-  const units: RecommendedUnit[] = [];
-  let remCbm = cbm;
-  let remWt = weightKg;
+function fitSingle(
+  items: CbmItem[],
+): { container: ContainerPreset; geometryFails: boolean } | null {
+  const cbm = sumCbm(items);
+  const weightKg = sumWeight(items);
+  const totalQty = sumQty(items);
+  let geometryFails = false;
 
-  while (remCbm > usableBig) {
-    const fillW = Math.min(big.maxPayloadKg, usableBig * weightPerCbm);
+  for (const c of ASC) {
+    // Cheap pre-filter: CBM/weight must at least theoretically fit.
+    if (cbm > USABLE_CBM[c.id]) continue;
+    if (weightKg > c.maxPayloadKg) continue;
+
+    // Real geometry check.
+    const pack = packContainerAdvanced(items, c);
+    if (pack.placedCartons >= totalQty) {
+      return { container: c, geometryFails };
+    }
+    // CBM/weight said yes but geometry said no — record and try a bigger box.
+    geometryFails = true;
+  }
+  return geometryFails ? { container: ASC[ASC.length - 1], geometryFails: true } : null;
+}
+
+/**
+ * Geometry-aware multi-container split.
+ * Greedy: pack into the largest container (40HC), take whatever cartons
+ * could NOT be placed, recursively pack the leftover into the next best
+ * container, repeat until everything is placed (or we hit a hard ceiling).
+ */
+function splitMulti(items: CbmItem[]): RecommendedUnit[] {
+  const big = CONTAINERS.find((c) => c.id === "40hc")!;
+  const units: RecommendedUnit[] = [];
+
+  let remaining: CbmItem[] = items.map((it) => ({ ...it }));
+  // Hard safety ceiling — no recommendation should ever need more than 20
+  // containers; if it does, something is wrong with the input dimensions.
+  const MAX_UNITS = 20;
+
+  while (sumQty(remaining) > 0 && units.length < MAX_UNITS) {
+    const remCbm = sumCbm(remaining);
+    const remWt = sumWeight(remaining);
+
+    // If the remainder fits in a single smaller container, use it (closes
+    // the chain with the smallest preset that physically holds the leftover).
+    const lastFit = fitSingle(remaining);
+    if (lastFit && !lastFit.geometryFails) {
+      const c = lastFit.container;
+      units.push({
+        container: c,
+        fillCbm: remCbm,
+        fillWeightKg: remWt,
+        cbmPct: (remCbm / USABLE_CBM[c.id]) * 100,
+        weightPct: (remWt / c.maxPayloadKg) * 100,
+      });
+      break;
+    }
+
+    // Otherwise, fill a 40HC and recurse on the unplaced remainder.
+    const pack = packContainerAdvanced(remaining, big);
+    const placedCount = pack.placedCartons;
+
+    // Build "unplaced" item list from the per-item stats.
+    const next: CbmItem[] = [];
+    let placedCbm = 0;
+    let placedWt = 0;
+    remaining.forEach((it, idx) => {
+      const stat = pack.perItem[idx];
+      const placedQty = stat?.placed ?? 0;
+      const unplacedQty = Math.max(0, it.qty - placedQty);
+      const single = (it.length * it.width * it.height) / 1_000_000;
+      placedCbm += single * placedQty;
+      placedWt += it.weight * placedQty;
+      if (unplacedQty > 0) {
+        next.push({ ...it, qty: unplacedQty });
+      }
+    });
+
     units.push({
       container: big,
-      fillCbm: usableBig,
-      fillWeightKg: fillW,
-      cbmPct: 100,
-      weightPct: (fillW / big.maxPayloadKg) * 100,
+      fillCbm: placedCbm,
+      fillWeightKg: placedWt,
+      cbmPct: (placedCbm / USABLE_CBM[big.id]) * 100,
+      weightPct: (placedWt / big.maxPayloadKg) * 100,
     });
-    remCbm -= usableBig;
-    remWt -= fillW;
+
+    // Defensive: if a single 40HC couldn't place anything (unlikely — would
+    // mean a single carton is bigger than the container), bail out to avoid
+    // an infinite loop.
+    if (placedCount === 0) break;
+
+    remaining = next;
   }
-  if (remCbm > 0.0001) {
-    const last = fitSingle(remCbm, Math.max(0, remWt)) ?? big;
-    units.push({
-      container: last,
-      fillCbm: remCbm,
-      fillWeightKg: Math.max(0, remWt),
-      cbmPct: (remCbm / USABLE_CBM[last.id]) * 100,
-      weightPct: (Math.max(0, remWt) / last.maxPayloadKg) * 100,
-    });
-  }
+
   return units;
 }
 
@@ -112,55 +199,162 @@ function summarize(units: RecommendedUnit[]): string {
 }
 
 /**
- * Main entry point. Returns the recommended container mix.
+ * Main entry point. Pass cargo items so the recommender can validate
+ * physical fit (not just CBM math).
+ *
+ * Backwards-compatible overload: calling with (totalCbm, totalWeightKg)
+ * still works but skips the geometry check (legacy behaviour).
  */
 export function recommendContainers(
-  totalCbm: number,
-  totalWeightKg: number,
+  itemsOrCbm: CbmItem[] | number,
+  totalWeightKg?: number,
 ): ContainerRecommendation {
-  const single = fitSingle(totalCbm, totalWeightKg);
-
-  if (single) {
-    const unit: RecommendedUnit = {
-      container: single,
-      fillCbm: totalCbm,
-      fillWeightKg: totalWeightKg,
-      cbmPct: (totalCbm / USABLE_CBM[single.id]) * 100,
-      weightPct: (totalWeightKg / single.maxPayloadKg) * 100,
-    };
+  // Legacy CBM-only path for any caller that hasn't been updated.
+  if (typeof itemsOrCbm === "number") {
+    const totalCbm = itemsOrCbm;
+    const wt = totalWeightKg ?? 0;
+    let single: ContainerPreset | null = null;
+    for (const c of ASC) {
+      if (totalCbm <= USABLE_CBM[c.id] && wt <= c.maxPayloadKg) {
+        single = c;
+        break;
+      }
+    }
+    if (single) {
+      return {
+        units: [
+          {
+            container: single,
+            fillCbm: totalCbm,
+            fillWeightKg: wt,
+            cbmPct: (totalCbm / USABLE_CBM[single.id]) * 100,
+            weightPct: (wt / single.maxPayloadKg) * 100,
+          },
+        ],
+        summary: `1 × ${single.name}`,
+        totalCbm,
+        totalWeightKg: wt,
+        isMulti: false,
+        reason: "fits-single",
+      };
+    }
+    // Fall back to a CBM-proportional 40HC chain.
+    const big = CONTAINERS.find((c) => c.id === "40hc")!;
+    const units: RecommendedUnit[] = [];
+    let rem = totalCbm;
+    let remW = wt;
+    const wPerCbm = totalCbm > 0 ? wt / totalCbm : 0;
+    while (rem > USABLE_CBM[big.id]) {
+      const fillW = Math.min(big.maxPayloadKg, USABLE_CBM[big.id] * wPerCbm);
+      units.push({
+        container: big,
+        fillCbm: USABLE_CBM[big.id],
+        fillWeightKg: fillW,
+        cbmPct: 100,
+        weightPct: (fillW / big.maxPayloadKg) * 100,
+      });
+      rem -= USABLE_CBM[big.id];
+      remW -= fillW;
+    }
+    if (rem > 0.0001) {
+      units.push({
+        container: big,
+        fillCbm: rem,
+        fillWeightKg: Math.max(0, remW),
+        cbmPct: (rem / USABLE_CBM[big.id]) * 100,
+        weightPct: (Math.max(0, remW) / big.maxPayloadKg) * 100,
+      });
+    }
     return {
-      units: [unit],
-      summary: `1 × ${single.name}`,
+      units,
+      summary: summarize(units),
       totalCbm,
-      totalWeightKg,
+      totalWeightKg: wt,
+      isMulti: units.length > 1,
+      reason: totalCbm > USABLE_CBM[big.id] ? "exceeds-single-cbm" : "exceeds-single-weight",
+    };
+  }
+
+  // Geometry-aware path.
+  const items = itemsOrCbm;
+  const totalCbm = sumCbm(items);
+  const totalWt = sumWeight(items);
+  const totalQty = sumQty(items);
+
+  if (totalQty === 0) {
+    return {
+      units: [],
+      summary: "—",
+      totalCbm,
+      totalWeightKg: totalWt,
       isMulti: false,
       reason: "fits-single",
     };
   }
 
-  // Need multi.
-  const units = splitMulti(totalCbm, totalWeightKg);
+  const single = fitSingle(items);
+
+  if (single && !single.geometryFails) {
+    const c = single.container;
+    return {
+      units: [
+        {
+          container: c,
+          fillCbm: totalCbm,
+          fillWeightKg: totalWt,
+          cbmPct: (totalCbm / USABLE_CBM[c.id]) * 100,
+          weightPct: (totalWt / c.maxPayloadKg) * 100,
+        },
+      ],
+      summary: `1 × ${c.name}`,
+      totalCbm,
+      totalWeightKg: totalWt,
+      isMulti: false,
+      reason: "fits-single",
+    };
+  }
+
+  // Need multi (or single fits CBM but not geometry).
+  const units = splitMulti(items);
+
   // Determine reason.
   const biggest = CONTAINERS.find((c) => c.id === "40hc")!;
-  const reason: ContainerRecommendation["reason"] =
-    totalCbm > USABLE_CBM[biggest.id]
-      ? "exceeds-single-cbm"
-      : "exceeds-single-weight";
+  let reason: ContainerRecommendation["reason"];
+  let reasonDetail: string | undefined;
+  if (totalCbm > USABLE_CBM[biggest.id]) {
+    reason = "exceeds-single-cbm";
+  } else if (totalWt > biggest.maxPayloadKg) {
+    reason = "exceeds-single-weight";
+  } else {
+    reason = "exceeds-single-geometry";
+    // Try to be specific about what went wrong: simulate against the
+    // smallest container that CBM would fit in, and quote the actual
+    // placed count to make the failure tangible.
+    const cbmFit = ASC.find(
+      (c) => totalCbm <= USABLE_CBM[c.id] && totalWt <= c.maxPayloadKg,
+    );
+    if (cbmFit) {
+      const sim = packContainerAdvanced(items, cbmFit);
+      reasonDetail = `CBM math (${totalCbm.toFixed(1)} m³) fits a ${cbmFit.name}, but height/footprint geometry caps real load at ${sim.placedCartons} of ${totalQty} pieces — escalating container size.`;
+    }
+  }
 
   return {
     units,
     summary: summarize(units),
     totalCbm,
-    totalWeightKg,
-    isMulti: true,
+    totalWeightKg: totalWt,
+    isMulti: units.length > 1,
     reason,
+    reasonDetail,
   };
 }
 
 /**
  * Split items across multiple containers for per-container packing.
- * Greedy: assign each item (group) to the first container with capacity.
- * Returns one CbmItem[] per recommended unit.
+ * Geometry-aware: simulates packing into each container in order, putting
+ * unplaced cartons into the next bucket. Falls back to volume-greedy when
+ * the recommendation only has one unit.
  */
 export function splitItemsAcrossContainers(
   items: CbmItem[],
@@ -168,42 +362,36 @@ export function splitItemsAcrossContainers(
 ): CbmItem[][] {
   if (!rec.isMulti) return [items];
 
-  // Capacity buckets, in m³ remaining per unit.
-  const caps = rec.units.map((u) => USABLE_CBM[u.container.id]);
-  const buckets: CbmItem[][] = rec.units.map(() => []);
+  const buckets: CbmItem[][] = [];
+  let remaining: CbmItem[] = items.map((it) => ({ ...it }));
 
-  // Sort items largest-volume first to pack into biggest space.
-  const sorted = items
-    .map((it, idx) => ({
-      it,
-      idx,
-      vol: (it.length * it.width * it.height) / 1_000_000,
-    }))
-    .sort((a, b) => b.vol * b.it.qty - a.vol * a.it.qty);
-
-  for (const { it, vol } of sorted) {
-    let qtyRemaining = it.qty;
-    while (qtyRemaining > 0) {
-      // Find bucket with most remaining capacity that can hold ≥1 piece.
-      let best = -1;
-      let bestCap = -1;
-      for (let i = 0; i < caps.length; i++) {
-        if (caps[i] >= vol && caps[i] > bestCap) {
-          bestCap = caps[i];
-          best = i;
-        }
-      }
-      if (best === -1) {
-        // No bucket can hold even one — overflow into the largest bucket.
-        let max = 0;
-        for (let i = 1; i < caps.length; i++) if (caps[i] > caps[max]) max = i;
-        best = max;
-      }
-      const fitQty = Math.max(1, Math.min(qtyRemaining, Math.floor(caps[best] / vol)));
-      buckets[best].push({ ...it, id: `${it.id}-c${best}`, qty: fitQty });
-      caps[best] -= fitQty * vol;
-      qtyRemaining -= fitQty;
+  for (let i = 0; i < rec.units.length; i++) {
+    const unit = rec.units[i];
+    const isLast = i === rec.units.length - 1;
+    if (isLast || sumQty(remaining) === 0) {
+      buckets.push(remaining);
+      remaining = [];
+      // Fill any further buckets (shouldn't happen) with empties.
+      for (let j = i + 1; j < rec.units.length; j++) buckets.push([]);
+      break;
     }
+    const pack = packContainerAdvanced(remaining, unit.container);
+    const inBucket: CbmItem[] = [];
+    const next: CbmItem[] = [];
+    remaining.forEach((it, idx) => {
+      const stat = pack.perItem[idx];
+      const placedQty = stat?.placed ?? 0;
+      const unplacedQty = Math.max(0, it.qty - placedQty);
+      if (placedQty > 0) {
+        inBucket.push({ ...it, id: `${it.id}-c${i}`, qty: placedQty });
+      }
+      if (unplacedQty > 0) {
+        next.push({ ...it, qty: unplacedQty });
+      }
+    });
+    buckets.push(inBucket);
+    remaining = next;
   }
+
   return buckets;
 }

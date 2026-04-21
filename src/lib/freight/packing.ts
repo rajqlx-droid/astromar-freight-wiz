@@ -220,12 +220,46 @@ export function packContainer(
   };
 }
 
-/** Pick the smallest container that fits all cargo within stowable cap. */
-export function pickOptimalContainer(cargoCbm: number): ContainerPreset {
-  for (const c of CONTAINERS) {
-    if (cargoCbm <= c.capCbm) return c;
+/**
+ * Pick the smallest container that fits all cargo.
+ *
+ * Geometry-aware overload: when called with `items`, runs the 3D packer
+ * against each container (smallest → largest) and returns the smallest one
+ * that physically places every piece. Falls back to the largest container
+ * if no preset can hold the load (UI can then show a multi-container
+ * recommendation).
+ *
+ * Legacy CBM-only call signature `pickOptimalContainer(cargoCbm: number)`
+ * is preserved for backwards compatibility.
+ */
+export function pickOptimalContainer(cargoCbm: number): ContainerPreset;
+export function pickOptimalContainer(items: CbmItem[]): ContainerPreset;
+export function pickOptimalContainer(arg: number | CbmItem[]): ContainerPreset {
+  if (typeof arg === "number") {
+    for (const c of CONTAINERS) {
+      if (arg <= c.capCbm) return c;
+    }
+    return CONTAINERS[CONTAINERS.length - 1];
   }
-  return CONTAINERS[CONTAINERS.length - 1]; // largest
+  // Geometry-aware path. Lazy import to avoid a circular module load at boot.
+  // packing-advanced imports from packing, so we resolve it lazily here.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { packContainerAdvanced } = require("./packing-advanced") as typeof import("./packing-advanced");
+  const items = arg;
+  let totalQty = 0;
+  let cbm = 0;
+  for (const it of items) {
+    totalQty += it.qty;
+    cbm += ((it.length * it.width * it.height) / 1_000_000) * it.qty;
+  }
+  if (totalQty === 0) return CONTAINERS[0];
+
+  for (const c of CONTAINERS) {
+    if (cbm > c.capCbm * 1.05) continue; // CBM pre-filter (allow tiny slack).
+    const pack = packContainerAdvanced(items, c);
+    if (pack.placedCartons >= totalQty) return c;
+  }
+  return CONTAINERS[CONTAINERS.length - 1];
 }
 
 export interface MultiContainerPlan {

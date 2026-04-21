@@ -140,10 +140,10 @@ export function CbmCalculator({ items, setItems }: Props) {
       ],
     };
   }, [baseResult, activePack]);
-  const recommendation = useMemo(
-    () => recommendContainers(sumCbm(items), sumWeight(items)),
-    [items],
-  );
+  // Geometry-aware: pass items so the recommender runs the actual 3D packer
+  // and refuses containers that physically can't hold every piece (e.g. tall
+  // non-stackable pallets in a 20ft GP).
+  const recommendation = useMemo(() => recommendContainers(items), [items]);
 
   // Items that have real dimensions but haven't had packing options confirmed yet.
   const unconfirmed = useMemo(
