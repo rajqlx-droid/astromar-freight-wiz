@@ -1,70 +1,74 @@
 
 
-## Combined plan: multi-container sync + 3D viewer cleanup
+## Accessibility & persistence upgrades for multi-container selection
 
-Three approved-but-not-yet-implemented refinements rolled into one pass.
-
----
-
-### Part A — Sync 3D viewer tab with multi-container recommendation
-
-When the recommender returns a multi-container split (e.g. 1 × 40HC + 1 × 20GP), each banner card becomes a clickable bucket that drives the 3D viewer tab.
-
-**1. Lift `activeUnitIdx` state** (`src/components/freight/cbm-calculator.tsx`)
-- New `useState(0)` in the calculator. Compute `unitStats` (placed/total per unit) via a shared `useMemo` reusing `splitItemsAcrossContainers` + `packContainerAdvanced`.
-- Pass `activeUnitIdx` + `onActiveUnitChange` to both `ContainerSuggestion` and `ContainerLoadView`.
-
-**2. Clickable banner cards** (`src/components/freight/container-suggestion.tsx`)
-- New optional props: `activeUnitIdx`, `onUnitSelect`, `unitStats`.
-- Wrap each unit card in a `<button>` when `onUnitSelect` exists; active card gets `ring-2 ring-brand-navy`.
-- Append per-card pill: `{placed} / {total} placed` (emerald if equal, amber otherwise).
-- Footer hint: *"Click a container above to inspect it in the 3D viewer below."*
-- On click → `onUnitSelect(idx)` then smooth-scroll to `#container-load-viewer`.
-
-**3. Controlled tab + badges** (`src/components/freight/container-load-view.tsx`)
-- Accept optional `activeUnitIdx` / `onActiveUnitChange` props (fall back to internal state when uncontrolled).
-- Add `id="container-load-viewer"` on the outer Card.
-- Each `TabsTrigger` gets a small placed/total pill matching the banner color logic.
+Four cohesive enhancements layered on top of the existing multi-container tab system: skip links, full ARIA tabs pattern, persistence, and live announcements.
 
 ---
 
-### Part B — Move Loader HUD to bottom of 3D viewer
+### Part A — Skip-to-content + skip-to-viewer links
 
-The "READY · Container empty…" card overlaps the container interior at top-right.
+Two visually-hidden links that become visible on keyboard focus, letting users bypass the header/nav and jump straight to content or the 3D viewer.
 
-**`src/components/freight/loader-hud.tsx`**
-- Wrapper: `absolute right-2 top-44 w-[240px]` → `absolute bottom-2 left-1/2 -translate-x-1/2 max-w-[min(560px,90%)]`.
-- Convert vertical stack (instruction card + playback bar) into a single horizontal pill: instruction text on the left, playback controls on the right, thin divider between.
-- Empty state collapses to a one-liner ("Ready — press ▶ to load the first pallet"). Full instruction details only appear once stepping starts.
-
----
-
-### Part C — Hide doors when container is empty
-
-Open swing doors render as large dark/yellow slabs blocking the camera when there's nothing inside to look at.
-
-**`src/components/freight/container-load-view.tsx`**
-- Extend `hideDoors` prop on `Container3DView` from `stepMode` only to `stepMode || pack.placedCartons === 0 || (visiblePlacedSet?.size === 0)`.
-- Net effect: empty/auto containers render as a clean open-front box; doors reappear the moment cargo is placed.
-
-No changes to door geometry, dimension labels, camera presets, or cargo rendering.
+**`src/routes/freight-intelligence.tsx`**
+- Add two `<a>` elements at the very top of the layout (before the header):
+  - `Skip to main content` → `href="#main-content"`
+  - `Skip to 3D container viewer` → `href="#container-load-viewer"`
+- Style: `sr-only focus:not-sr-only` with positioned focus state (`fixed top-2 left-2 z-[100]`), navy pill, white text, ring on focus.
+- Add `id="main-content"` and `tabIndex={-1}` to the main content wrapper so the browser focuses it after the skip jump.
+- The viewer skip target already exists (`id="container-load-viewer"` is set on the `Card` in `container-load-view.tsx`); add `tabIndex={-1}` there so it can receive programmatic focus when jumped to.
 
 ---
 
-### Files touched (consolidated)
+### Part B — Full WAI-ARIA tabs pattern for container buckets
 
-- `src/components/freight/cbm-calculator.tsx` — lift `activeUnitIdx`, compute `unitStats`, scroll-to-viewer handler.
-- `src/components/freight/container-suggestion.tsx` — clickable cards, active ring, placed badges.
-- `src/components/freight/container-load-view.tsx` — controlled tab props, scroll-target id, tab placed badges, extended `hideDoors` condition.
-- `src/components/freight/loader-hud.tsx` — relocate to bottom-center, horizontal pill layout, compact empty state.
+Upgrade the existing `role="tablist"` / `role="tab"` implementation to the complete pattern.
+
+**`src/components/freight/container-suggestion.tsx`**
+- Add `aria-orientation="horizontal"` to the tablist container.
+- Add `aria-roledescription="container bucket"` on each tab so AT users hear "Container 1, container bucket, selected" instead of just "tab".
+- Roving tabindex is already implemented (active = 0, others = -1) — keep as is, but extract the keyboard handler into a stable `handleTabKeyDown(i, e)` helper for clarity.
+- Add a hidden `<div role="tabpanel" id="container-bucket-panel-{i}" aria-labelledby="container-bucket-tab-{i}">` reference target inside the viewer Card, so each tab's `aria-controls` points to a real panel element (currently it points to the viewer Card id, which isn't a tabpanel role). Cleaner approach: in `container-load-view.tsx`, add `role="region"` + `aria-labelledby={\`container-bucket-tab-${activeUnitIdx}\`}` to the viewer Card so every selected tab "owns" the viewer region. Each tab's `aria-controls="container-load-viewer"` then resolves correctly.
+- Add `aria-owns="container-load-viewer"` on the tablist so AT trees connect the buckets to the off-DOM-adjacent viewer below.
+
+---
+
+### Part C — Persist last-selected bucket across refresh and tab switching
+
+**`src/components/freight/cbm-calculator.tsx`**
+- New helper inside the component: read/write `localStorage["freight.activeUnitIdx"]` (number).
+- Initialize `useState` with a lazy reader that returns the persisted index, clamped to `recommendation.units.length - 1`.
+- Persist on every `setActiveUnitIdx` change via `useEffect`.
+- Reset-to-0 effect (`recommendation.isMulti` / `units.length` change) only fires when the persisted index is out of range — so refreshing on a multi-container result keeps your last-viewed bucket selected.
+- Storage key namespaced under `freight.` to match existing storage patterns (see `src/lib/freight/storage.ts`).
+
+---
+
+### Part D — ARIA live region for active bucket changes
+
+**`src/components/freight/cbm-calculator.tsx`**
+- Add a single visually-hidden `<div role="status" aria-live="polite" aria-atomic="true" className="sr-only">` near the bottom of the calculator render.
+- Drive its text content from a `useEffect` watching `activeUnitIdx` + `recommendation.units`:
+  - Multi-container, on change: `"Now viewing container ${idx+1} of ${total}: ${name}, ${placed} of ${totalPieces} placed."`
+  - Skip the announcement on first mount (use a ref guard) so users aren't bombarded on page load.
+  - Clear the message ~2s after each change so the same message can be re-announced if the user clicks the same card again.
+
+---
+
+### Files touched
+
+- `src/routes/freight-intelligence.tsx` — skip links + `id="main-content"` target.
+- `src/components/freight/container-load-view.tsx` — `tabIndex={-1}`, `role="region"`, `aria-labelledby` on the viewer Card.
+- `src/components/freight/container-suggestion.tsx` — `aria-orientation`, `aria-roledescription`, `aria-owns`, extracted keyboard helper.
+- `src/components/freight/cbm-calculator.tsx` — localStorage persistence for `activeUnitIdx`, live-region announcer.
 
 ### Out of scope
 
-- No changes to packer, recommender, door geometry, camera, or cargo rendering.
-- 2D fallback, single-pallet stepper, recording/video pipeline untouched.
+- No changes to packer, recommender, 3D viewer internals, loader HUD, or single-container mode.
+- No new dependencies; everything uses existing Tailwind utilities and browser APIs.
 - Air calculator and other tabs untouched.
 
 ### Expected result
 
-Clicking a banner card jumps the viewer to that container with a clear active outline and placed-count badges on both card and tab. Empty 3D scenes show the full container interior unobstructed, with a slim instruction bar pinned to the bottom instead of a card overlapping the cargo area.
+A keyboard user landing on `/freight-intelligence` can press Tab once to reveal "Skip to main content" and "Skip to 3D container viewer" links. Tabbing into the multi-container recommendation banner exposes a proper ARIA tablist where arrow keys move focus, Enter/Space activates a bucket, and a screen reader announces "Now viewing container 2 of 3: 40ft HC, 24 of 24 placed". Refreshing the page keeps the last-selected bucket active instead of snapping back to #1.
 
