@@ -88,7 +88,7 @@ export function usePackingWorker(): UsePackingWorker {
     };
   }, []);
 
-  const ensureWorker = (): Worker => {
+  const ensureWorker = useCallback((): Worker => {
     if (workerRef.current) return workerRef.current;
     const w = createWorker();
     w.addEventListener("message", (event: MessageEvent<WorkerResponse<AnyResponse>>) => {
@@ -111,28 +111,35 @@ export function usePackingWorker(): UsePackingWorker {
     });
     workerRef.current = w;
     return w;
-  };
+  }, []);
 
-  const send = <R extends AnyResponse>(payload: unknown): Promise<R> => {
-    const w = ensureWorker();
-    const id = ++seqRef.current;
-    setInflight((n) => n + 1);
-    return new Promise<R>((resolve, reject) => {
-      pendingRef.current.set(id, {
-        id,
-        resolve: resolve as (v: AnyResponse) => void,
-        reject,
+  const send = useCallback(
+    <R extends AnyResponse>(payload: unknown): Promise<R> => {
+      const w = ensureWorker();
+      const id = ++seqRef.current;
+      setInflight((n) => n + 1);
+      return new Promise<R>((resolve, reject) => {
+        pendingRef.current.set(id, {
+          id,
+          resolve: resolve as (v: AnyResponse) => void,
+          reject,
+        });
+        w.postMessage({ id, payload });
       });
-      w.postMessage({ id, payload });
-    });
-  };
+    },
+    [ensureWorker],
+  );
 
-  return {
-    pack: async (items, container) => {
+  const pack = useCallback<UsePackingWorker["pack"]>(
+    async (items, container) => {
       const r = await send<PackResponse>({ kind: "pack", items, container });
       return r.result;
     },
-    scenarios: async (items, container, strategies) => {
+    [send],
+  );
+
+  const scenarios = useCallback<UsePackingWorker["scenarios"]>(
+    async (items, container, strategies) => {
       const r = await send<ScenariosResponse>({
         kind: "scenarios",
         items,
@@ -141,14 +148,29 @@ export function usePackingWorker(): UsePackingWorker {
       });
       return r.result;
     },
-    multi: async (buckets, containers) => {
+    [send],
+  );
+
+  const multi = useCallback<UsePackingWorker["multi"]>(
+    async (buckets, containers) => {
       const r = await send<MultiResponse>({ kind: "multi", buckets, containers });
       return r.result;
     },
-    recommend: async (items) => {
+    [send],
+  );
+
+  const recommend = useCallback<UsePackingWorker["recommend"]>(
+    async (items) => {
       const r = await send<RecommendResponse>({ kind: "recommend", items });
       return r.result;
     },
-    pending: inflight > 0,
-  };
+    [send],
+  );
+
+  const pending = inflight > 0;
+
+  return useMemo<UsePackingWorker>(
+    () => ({ pack, scenarios, multi, recommend, pending }),
+    [pack, scenarios, multi, recommend, pending],
+  );
 }
