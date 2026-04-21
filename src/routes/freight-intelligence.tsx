@@ -620,17 +620,6 @@ function FreightIntelligencePage() {
                   </Sheet>
                 </div>
 
-                {!bannerOpen && (
-                  <button
-                    onClick={reopenBanner}
-                    className="no-print inline-flex shrink-0 items-center gap-1 self-start rounded-md border border-brand-navy/20 bg-background px-2 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-brand-orange hover:text-brand-orange"
-                    aria-label="Show pro tip"
-                  >
-                    <Lightbulb className="size-3.5" />
-                    <span className="hidden sm:inline">Tip</span>
-                  </button>
-                )}
-              </div>
 
               {/* Mobile-only optimization promo (full width, since desktop version is inline above) */}
               {active === "cbm" && (
