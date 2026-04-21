@@ -87,8 +87,25 @@ export function CbmCalculator({ items, setItems }: Props) {
   // echo back through props (which would otherwise cause an infinite
   // setDraftItems → setItems → setDraftItems loop — React error #185).
   const lastPushedRef = useRef<CbmItem[]>(items);
+  // Always-fresh ref to the parent setter so `pushItems` can stay stable
+  // across renders (callers like buttons / modals don't re-bind every render).
+  const setItemsRef = useRef(setItems);
+  useEffect(() => {
+    setItemsRef.current = setItems;
+  }, [setItems]);
+  /**
+   * Single funnel for pushing items to the parent. ALWAYS use this (never call
+   * `setItems` directly) so `lastPushedRef` stays in sync and the
+   * items↔draftItems sync effects below don't ping-pong forever (#185).
+   */
+  const pushItems = useCallback((next: CbmItem[]) => {
+    lastPushedRef.current = next;
+    setDraftItems(next);
+    setItemsRef.current(next);
+  }, []);
   useEffect(() => {
     if (items === lastPushedRef.current) return;
+    lastPushedRef.current = items;
     setDraftItems(items);
   }, [items]);
   useEffect(() => {
@@ -100,10 +117,10 @@ export function CbmCalculator({ items, setItems }: Props) {
     const delay = draftItems.length > 10 ? 600 : 250;
     const t = setTimeout(() => {
       lastPushedRef.current = draftItems;
-      setItems(draftItems);
+      setItemsRef.current(draftItems);
     }, delay);
     return () => clearTimeout(t);
-  }, [draftItems, setItems]);
+  }, [draftItems]);
   const [forcedChoice, setForcedChoice] = useState<import("@/lib/freight/container-ids").ContainerId | null>(null);
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -366,33 +383,33 @@ export function CbmCalculator({ items, setItems }: Props) {
   /** Toggle a packing flag and auto-confirm the row in one shot. */
   const updatePacking = useCallback(
     (id: string, patch: Partial<CbmItem>) => {
-      setItems(
+      pushItems(
         items.map((it) => (it.id === id ? { ...it, ...patch, packingConfirmed: true } : it)),
       );
     },
-    [items, setItems],
+    [items, pushItems],
   );
   const remove = useCallback(
-    (id: string) => setItems(items.filter((it) => it.id !== id)),
-    [items, setItems],
+    (id: string) => pushItems(items.filter((it) => it.id !== id)),
+    [items, pushItems],
   );
   const duplicate = useCallback(
     (id: string) => {
       const src = items.find((it) => it.id === id);
       if (!src) return;
-      setItems([...items, { ...src, id: nextId("cbm") }]);
+      pushItems([...items, { ...src, id: nextId("cbm") }]);
     },
-    [items, setItems],
+    [items, pushItems],
   );
-  const add = useCallback(() => setItems([...items, emptyCbmItem()]), [items, setItems]);
-  const clear = useCallback(() => setItems([emptyCbmItem(0)]), [setItems]);
+  const add = useCallback(() => pushItems([...items, emptyCbmItem()]), [items, pushItems]);
+  const clear = useCallback(() => pushItems([emptyCbmItem(0)]), [pushItems]);
 
   /** Copy one row's packing options to every other row & mark them all confirmed. */
   const applyToAll = useCallback(
     (sourceId: string) => {
       const src = items.find((it) => it.id === sourceId);
       if (!src) return;
-      setItems(
+      pushItems(
         items.map((it) => ({
           ...it,
           packageType: src.packageType,
@@ -405,7 +422,7 @@ export function CbmCalculator({ items, setItems }: Props) {
         })),
       );
     },
-    [items, setItems],
+    [items, pushItems],
   );
 
   /** Update the row's per-row unit AND, for Item 1, also the global default. */
@@ -547,7 +564,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                   onClick={() => {
                     // Flush any pending debounced edits so the optimizer sees
                     // the latest typed values immediately (not 400-800ms later).
-                    setItems(draftItems);
+                    pushItems(draftItems);
                     if (allConfirmed) {
                       setOptimizationRequested(true);
                     } else {
@@ -750,7 +767,7 @@ export function CbmCalculator({ items, setItems }: Props) {
       onApplyToAll={applyToAll}
       onConfirm={() => {
         // Mark every dimensioned row as confirmed and unlock optimization.
-        setItems(
+        pushItems(
           items.map((it) =>
             it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0
               ? { ...it, packingConfirmed: true }
