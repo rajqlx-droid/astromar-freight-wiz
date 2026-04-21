@@ -28,6 +28,7 @@ import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
 import { runAllScenarios, type ScenarioResult } from "@/lib/freight/scenario-runner";
 import { computeComplianceReport } from "@/lib/freight/compliance";
+import { type ContainerId } from "@/lib/freight/container-ids";
 
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
@@ -43,9 +44,9 @@ interface Props {
   /** Smart recommendation from the calculator. Drives multi-container tabbed view. */
   recommendation?: ContainerRecommendation;
   /** Manually-applied choice that overrides "auto". */
-  forcedChoice?: "20gp" | "40gp" | "40hc" | "lcl" | null;
+  forcedChoice?: ContainerId | null;
   /** Notify parent when user picks a container pill. */
-  onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | "lcl" | null) => void;
+  onChoiceChange?: (id: ContainerId | null) => void;
   /** Expose snapshot capture + active pack so parent (PDF flow) can use them. */
   onReady?: (handle: {
     capture: () => Promise<{ iso: string; front: string; side: string } | null>;
@@ -59,7 +60,7 @@ interface Props {
   onActiveUnitChange?: (idx: number) => void;
 }
 
-type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc" | "lcl";
+type ContainerChoice = "auto" | ContainerId;
 
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = Math.sin(Math.PI / 6);
@@ -129,10 +130,35 @@ export function ContainerLoadView({
     );
   }, [items, isMulti, recommendation]);
 
-  const scenarios = useMemo<ScenarioResult[]>(
+  const rawScenarios = useMemo<ScenarioResult[]>(
     () => (hasCargo ? runAllScenarios(isMulti ? (splitItemsAcrossContainers(items, recommendation!)[Number(activeTab)] ?? items) : items, activeContainer) : []),
-    [hasCargo, isMulti, items, recommendation, activeTab, activeContainer],
+    [items, activeContainer, hasCargo, isMulti, activeTab, recommendation]
   );
+
+  const scenarioKeyRef = useRef<string>("");
+
+  const scenarios = useMemo<ScenarioResult[]>(() => {
+    if (rawScenarios.length === 0) return [];
+    // Deduplicate: build a stable key from strategyIds + utilisation values.
+    const key = rawScenarios.map(s => `${s.strategyId}:${s.utilizationPct.toFixed(2)}`).join("|");
+    if (key === scenarioKeyRef.current) return rawScenarios;
+    // Check for duplicate strategyIds (defensive guard).
+    const ids = rawScenarios.map(s => s.strategyId);
+    const unique = new Set(ids);
+    if (unique.size !== ids.length) {
+      console.warn("[scenarios] Duplicate strategyIds detected — deduplicating");
+      const seen = new Set<string>();
+      const deduped = rawScenarios.filter(s => {
+        if (seen.has(s.strategyId)) return false;
+        seen.add(s.strategyId);
+        return true;
+      });
+      scenarioKeyRef.current = key;
+      return deduped;
+    }
+    scenarioKeyRef.current = key;
+    return rawScenarios;
+  }, [rawScenarios]);
 
   const activePack: AdvancedPackResult = selectedStrategyId
     ? (scenarios.find(s => s.strategyId === selectedStrategyId)?.pack ?? (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack))
@@ -370,7 +396,13 @@ function SinglePlanBody({
     () => buildPalletSequence(pack, rows),
     [pack, rows],
   );
-  const compliance = useMemo(() => computeComplianceReport(pack), [pack]);
+  const compliance = useMemo(() => {
+    // Guard: only compute compliance when pack has placed items or zero cargo.
+    const hasCargo = pack.totalCartons > 0;
+    if (!hasCargo) return computeComplianceReport(pack);
+    if (pack.totalCartons === 0) return computeComplianceReport(pack);
+    return computeComplianceReport(pack);
+  }, [pack]);
 
   // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
@@ -552,7 +584,7 @@ function SinglePlanBody({
           </div>
         )}
         {scenarios.length > 0 && (
-          <div className="rounded-lg border bg-card p-3">
+          <div key={`scenarios-${pack.container.id}`} className="rounded-lg border bg-card p-3">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-semibold text-brand-navy">Scenario Comparison</h4>
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
