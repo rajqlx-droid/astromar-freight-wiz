@@ -674,9 +674,11 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Card>
         )}
       </div>
-      <div className="space-y-6 lg:col-span-7">
-      <div className="lg:sticky lg:top-[140px] lg:self-start">
-      {/* sticky wrapper preserved for results card on desktop */}
+      <div className="lg:col-span-7">
+      {/* Results card sits beside inputs on lg+; stacks below on mobile.
+          NOTE: sticky positioning was removed — the WebGL canvas in the
+          optimization block could break out of the sticky stacking context
+          and visually overlap the Results card on certain viewports. */}
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
@@ -688,14 +690,22 @@ export function CbmCalculator({ items, setItems }: Props) {
         }
         resolveExtras={async () => {
           const h = loadHandleRef.current;
-          if (!h) return undefined;
-          const snaps = await h.capture();
-          const pack = h.getActivePack();
           const extras: import("@/lib/freight/pdf").PdfExtras = {};
-          if (snaps) extras.snapshots = snaps;
+          if (h) {
+            const snaps = await h.capture();
+            if (snaps) extras.snapshots = snaps;
+          }
+          const pack = loadHandleRef.current?.getActivePack() ?? null;
           if (pack && pack.placed.length > 0) {
-            const { buildRows, computeWallEfficiency, instructionFor, itemCountsForRow, buildRowSideViewSvg, buildRowFrontViewSvg, buildRowTopViewSvg } =
-              await import("@/lib/freight/loading-rows");
+            const { buildRows, itemCountsForRow, instructionFor } = await import(
+              "@/lib/freight/loading-rows"
+            );
+            const { computeWallEfficiency } = await import("@/lib/freight/loading-rows");
+            const {
+              buildRowSideViewSvg,
+              buildRowFrontViewSvg,
+              buildRowTopViewSvg,
+            } = await import("@/lib/freight/loading-rows");
             const { readHeavyThreshold } = await import("@/components/freight/loading-rows-panel");
             const rows = buildRows(pack, readHeavyThreshold());
             extras.wallEfficiency = computeWallEfficiency(rows);
@@ -706,7 +716,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                 const url = URL.createObjectURL(blob);
                 const img = new Image();
                 img.onload = () => {
-                  const scale = 2; // crisp on print
+                  const scale = 2;
                   const canvas = document.createElement("canvas");
                   canvas.width = img.width * scale;
                   canvas.height = img.height * scale;
@@ -766,7 +776,6 @@ export function CbmCalculator({ items, setItems }: Props) {
               }),
             );
           }
-          // KPI tiles for PDF cover.
           if (pack && pack.placed.length > 0) {
             const totalCbm = items.reduce(
               (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
@@ -796,41 +805,41 @@ export function CbmCalculator({ items, setItems }: Props) {
         }}
       />
       </div>
-
-      {/* Optimization plan — now part of the right column so the 3D viewer sits
-          beside the inputs on lg+ screens, stacked below on mobile. */}
-      {showOptimization && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-end">
-            <button
-              type="button"
-              onClick={openConfirmModal}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
-            >
-              <Pencil className="size-3" /> Edit packing options
-            </button>
-          </div>
-          <ContainerSuggestion
-            recommendation={recommendation}
-            currentChoice={forcedChoice ?? "auto"}
-            onApply={setForcedChoice}
-            activeUnitIdx={activeUnitIdx}
-            onUnitSelect={handleUnitSelect}
-            unitStats={unitStats}
-          />
-          <ContainerLoadView
-            items={items}
-            recommendation={recommendation}
-            forcedChoice={forcedChoice}
-            onChoiceChange={setForcedChoice}
-            activeUnitIdx={activeUnitIdx}
-            onActiveUnitChange={setActiveUnitIdx}
-            onReady={handleViewerReady}
-          />
-        </div>
-      )}
-      </div>
     </div>
+
+    {/* Optimization plan — full-width below the inputs/results grid so the
+        3D viewer has room to breathe on desktop and stacks cleanly on mobile,
+        with no chance of overlapping the Results card. */}
+    {showOptimization && (
+      <div className="space-y-3">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={openConfirmModal}
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
+          >
+            <Pencil className="size-3" /> Edit packing options
+          </button>
+        </div>
+        <ContainerSuggestion
+          recommendation={recommendation}
+          currentChoice={forcedChoice ?? "auto"}
+          onApply={setForcedChoice}
+          activeUnitIdx={activeUnitIdx}
+          onUnitSelect={handleUnitSelect}
+          unitStats={unitStats}
+        />
+        <ContainerLoadView
+          items={items}
+          recommendation={recommendation}
+          forcedChoice={forcedChoice}
+          onChoiceChange={setForcedChoice}
+          activeUnitIdx={activeUnitIdx}
+          onActiveUnitChange={setActiveUnitIdx}
+          onReady={handleViewerReady}
+        />
+      </div>
+    )}
 
     {/* Confirm packing options modal */}
     <ConfirmPackingModal
