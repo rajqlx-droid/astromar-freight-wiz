@@ -87,6 +87,8 @@ export function ContainerSuggestion({
         className="grid gap-2 sm:grid-cols-2"
         role={isClickable ? "tablist" : undefined}
         aria-label={isClickable ? "Recommended containers — switches the 3D viewer" : undefined}
+        aria-orientation={isClickable ? "horizontal" : undefined}
+        aria-owns={isClickable ? "container-load-viewer" : undefined}
       >
         {units.map((u, i) => {
           const stats = unitStats?.[i];
@@ -155,6 +157,7 @@ export function ContainerSuggestion({
                 key={i}
                 type="button"
                 role="tab"
+                aria-roledescription="container bucket"
                 id={`container-bucket-tab-${i}`}
                 aria-selected={isActive}
                 aria-controls="container-load-viewer"

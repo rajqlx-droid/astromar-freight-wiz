@@ -148,8 +148,18 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   // Active container bucket index for the multi-container case. Shared between
   // the suggestion banner cards and the 3D viewer's tabbed view so clicking
-  // a card swaps the visible container.
-  const [activeUnitIdx, setActiveUnitIdx] = useState(0);
+  // a card swaps the visible container. Persisted across refresh / tab switch.
+  const ACTIVE_UNIT_KEY = "freight.activeUnitIdx";
+  const [activeUnitIdx, setActiveUnitIdx] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const raw = localStorage.getItem(ACTIVE_UNIT_KEY);
+      const n = raw == null ? 0 : parseInt(raw, 10);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   // Per-unit placed/total counts — drives the "12/16 placed" badges on both
   // the banner cards and the viewer tabs. Kept in sync by re-running the
@@ -163,13 +173,48 @@ export function CbmCalculator({ items, setItems }: Props) {
     });
   }, [items, recommendation]);
 
-  // Reset to the first bucket whenever the recommendation switches between
-  // single ↔ multi mode, or when the unit list shrinks past the current index.
-  // Prevents stale "viewing #3" state when cargo changes and only 1 container
-  // is now needed.
+  // Clamp persisted idx if it's now out of range (e.g. switched single↔multi
+  // or unit count shrank). Otherwise leave the user's last-viewed bucket alone
+  // so refreshing on a multi-container result keeps state.
   useEffect(() => {
-    setActiveUnitIdx(0);
-  }, [recommendation.isMulti, recommendation.units.length]);
+    const max = recommendation.isMulti ? recommendation.units.length - 1 : 0;
+    if (activeUnitIdx > max || activeUnitIdx < 0) {
+      setActiveUnitIdx(0);
+    }
+  }, [recommendation.isMulti, recommendation.units.length, activeUnitIdx]);
+
+  // Persist on every change.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(ACTIVE_UNIT_KEY, String(activeUnitIdx));
+    } catch {
+      /* quota — ignore */
+    }
+  }, [activeUnitIdx]);
+
+  // ARIA live announcements for active bucket changes (multi-container only).
+  // Skip the first mount so SR users aren't bombarded on page load. Clear the
+  // message ~2s after each change so re-selecting the same card re-announces.
+  const [liveMessage, setLiveMessage] = useState("");
+  const firstMountRef = useRef(true);
+  useEffect(() => {
+    if (firstMountRef.current) {
+      firstMountRef.current = false;
+      return;
+    }
+    if (!recommendation.isMulti) return;
+    const total = recommendation.units.length;
+    const unit = recommendation.units[activeUnitIdx];
+    if (!unit) return;
+    const stats = unitStats?.[activeUnitIdx];
+    const placedTxt = stats ? `, ${stats.placed} of ${stats.total} placed` : "";
+    setLiveMessage(
+      `Now viewing container ${activeUnitIdx + 1} of ${total}: ${unit.container.name}${placedTxt}.`,
+    );
+    const t = setTimeout(() => setLiveMessage(""), 2000);
+    return () => clearTimeout(t);
+  }, [activeUnitIdx, recommendation.isMulti, recommendation.units, unitStats]);
 
   const handleUnitSelect = (idx: number) => {
     setActiveUnitIdx(idx);
