@@ -127,6 +127,30 @@ export function LoadReportPanel({ pack, rollup }: Props) {
         </div>
       </div>
 
+      {/* Lateral COG */}
+      <div className="rounded-md bg-muted/40 p-2">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <Scale className="size-3.5 rotate-90" /> Lateral balance
+          <span className={cn("ml-auto font-semibold", lateralTone)}>
+            {lateralLabel} ({(lateralOffset * 100).toFixed(1)}%)
+          </span>
+        </div>
+        <div className="relative h-2 rounded-full bg-muted">
+          <div className="absolute inset-y-0 left-1/2 w-px bg-muted-foreground/40" />
+          <div
+            className={cn(
+              "absolute top-1/2 size-3 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-white shadow",
+              Math.abs(lateralOffset) < 0.1 ? "bg-emerald-500" : Math.abs(lateralOffset) < 0.15 ? "bg-amber-500" : "bg-rose-500",
+            )}
+            style={{ left: `${50 + Math.max(-1, Math.min(1, lateralOffset)) * 50}%` }}
+          />
+        </div>
+        <div className="mt-1 flex justify-between text-[9px] uppercase tracking-wide text-muted-foreground">
+          <span>Left</span>
+          <span>Right</span>
+        </div>
+      </div>
+
       {/* Per-item rows */}
       <div className="space-y-1">
         {pack.perItem
