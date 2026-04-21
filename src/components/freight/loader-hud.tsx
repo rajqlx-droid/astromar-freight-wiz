@@ -7,6 +7,8 @@ import { Pause, Play, SkipBack, SkipForward, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PalletStep } from "@/lib/freight/loading-rows";
+import { computeComplianceReport } from "@/lib/freight/compliance";
+import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
 interface Props {
   step: PalletStep | null;
@@ -21,6 +23,7 @@ interface Props {
   onSpeedChange: (s: 0.5 | 1 | 2) => void;
   showForklift: boolean;
   onToggleForklift: () => void;
+  pack?: AdvancedPackResult | null;
 }
 
 export function LoaderHUD({
@@ -36,12 +39,27 @@ export function LoaderHUD({
   onSpeedChange,
   showForklift,
   onToggleForklift,
+  pack = null,
 }: Props) {
   const isEmpty = currentIdx < 0 || !step;
   const atLast = currentIdx >= totalSteps - 1;
+  const compliance = pack ? computeComplianceReport(pack) : null;
+  const scoreColor = !compliance ? "#888" : compliance.status === "GREEN" ? "#22c55e" : compliance.status === "YELLOW" ? "#f59e0b" : "#ef4444";
 
   return (
     <div className="pointer-events-auto absolute bottom-2 left-1/2 z-10 -translate-x-1/2 max-w-[min(620px,92%)]">
+      {compliance && (
+        <div
+          className="mb-1.5 flex items-center justify-center gap-2 rounded-full border bg-background/95 px-3 py-1 text-[10px] font-bold shadow backdrop-blur"
+          style={{ borderColor: scoreColor, color: scoreColor }}
+        >
+          <span className="text-sm">{compliance.score}</span>
+          <span className="uppercase tracking-wide">
+            {compliance.status === "GREEN" ? "COMPLIANT ✓" : compliance.status === "YELLOW" ? "REVIEW REQUIRED" : "VIOLATIONS ✗"}
+          </span>
+          {!compliance.canApprove && <span className="opacity-90">· EXPORT BLOCKED</span>}
+        </div>
+      )}
       <div className="flex items-stretch gap-2 rounded-full border-2 border-brand-navy/60 bg-background/95 px-2 py-1.5 shadow-xl backdrop-blur">
         {/* Instruction block */}
         <div className="flex min-w-0 flex-1 items-center gap-2 pl-1">
