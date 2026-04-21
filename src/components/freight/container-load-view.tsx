@@ -28,6 +28,7 @@ import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
 import { runAllScenarios, type ScenarioResult } from "@/lib/freight/scenario-runner";
 import { computeComplianceReport } from "@/lib/freight/compliance";
+import { type ContainerId } from "@/lib/freight/container-ids";
 
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
@@ -43,9 +44,9 @@ interface Props {
   /** Smart recommendation from the calculator. Drives multi-container tabbed view. */
   recommendation?: ContainerRecommendation;
   /** Manually-applied choice that overrides "auto". */
-  forcedChoice?: "20gp" | "40gp" | "40hc" | "lcl" | null;
+  forcedChoice?: ContainerId | null;
   /** Notify parent when user picks a container pill. */
-  onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | "lcl" | null) => void;
+  onChoiceChange?: (id: ContainerId | null) => void;
   /** Expose snapshot capture + active pack so parent (PDF flow) can use them. */
   onReady?: (handle: {
     capture: () => Promise<{ iso: string; front: string; side: string } | null>;
@@ -59,7 +60,7 @@ interface Props {
   onActiveUnitChange?: (idx: number) => void;
 }
 
-type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc" | "lcl";
+type ContainerChoice = "auto" | ContainerId;
 
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = Math.sin(Math.PI / 6);
