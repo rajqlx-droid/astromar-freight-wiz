@@ -330,7 +330,7 @@ export function CbmCalculator({ items, setItems }: Props) {
     if (idx === 0) setWtUnit(u);
   };
 
-  const inputsTable = items.flatMap((it, idx) => {
+  const inputsTable = draftItems.flatMap((it, idx) => {
     const itemCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
     const itemWt = it.qty * it.weight;
     const rows = [
@@ -381,7 +381,7 @@ export function CbmCalculator({ items, setItems }: Props) {
     <div className="space-y-6">
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-3 lg:col-span-5">
-        {items.map((it, idx) => {
+        {draftItems.map((it, idx) => {
           const color = ITEM_COLORS[idx % ITEM_COLORS.length];
           const confirmed = it.packingConfirmed === true;
           return (
