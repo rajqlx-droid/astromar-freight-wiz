@@ -562,20 +562,86 @@ export function cameraForFrame(
   const Cl = pack.container.inner.l / MM_PER_M;
   const Cw = pack.container.inner.w / MM_PER_M;
   const Ch = pack.container.inner.h / MM_PER_M;
-  // Door is at world +x (cargo group sits at -Cl/2, so high box.x → world +x).
-  // Start looking THROUGH THE OPEN DOOR toward the back wall, then slowly
-  // arc out to a 3/4 hero view as the loading progresses.
-  const t = frame / Math.max(1, timeline.totalFrames - 1);
-  const startAngle = 0;          // straight in from door
-  const endAngle = -Math.PI / 4; // 3/4 view
-  const angle = startAngle + (endAngle - startAngle) * t;
-  const dist = Math.max(Cl, Cw) * (1.5 + 0.25 * t);
-  const height = Ch * (0.9 + 0.4 * t);
-  // Aim slightly toward the back wall during loading so the user sees boxes
-  // stack from the back forward.
-  const target: [number, number, number] = [-Cl * 0.15 * (1 - t), Ch / 2, 0];
+
+  // World axes (matches container-3d-view.tsx):
+  //   +x → door side (cargo group centred so box.x=0 → world -Cl/2)
+  //   +y → up (height)
+  //   +z → lateral (cargo y → world z)
+  //
+  // The OLD camera sat on the door axis (z=0, looking down +x → -x), so the
+  // front rows occluded everything behind them. We now use a high 3/4
+  // isometric camera over the door-side corner, looking diagonally across
+  // the container. Every row stays visible because the camera never aligns
+  // with the loading axis.
+
+  const totalF = Math.max(1, timeline.totalFrames - 1);
+  const t = frame / totalF;
+  const introF = timeline.introFrames;
+  const outroStart = timeline.introFrames + timeline.loadFrames;
+  const heroStartFrame = Math.max(outroStart, totalF - timeline.fps * 2);
+  const inHero = frame >= heroStartFrame;
+
+  // ── Slow orbit: yaw drifts from -30° to -50° over the clip ─────────────
+  // Yaw is measured around the +y axis; angle 0 = camera on +x axis (door),
+  // negative angles rotate toward +z (camera moves to door-side corner).
+  const yawStart = -Math.PI * (30 / 180);
+  const yawEnd = -Math.PI * (50 / 180);
+  const orbitT = inHero ? 1 : t;
+  const yaw = yawStart + (yawEnd - yawStart) * orbitT;
+
+  // Pitch (elevation above horizon). 0 = level with floor, π/2 = top-down.
+  // ~30° tilt gives an iso-style 3/4 read with depth on every row.
+  const pitch = Math.PI * (28 / 180);
+
+  // Distance: 1.6× the longest container axis fills 16:9 nicely.
+  // Pull back another 15 % during the hero shot.
+  const baseDist = Math.max(Cl, Cw) * 1.6;
+  const dist = baseDist * (inHero ? 1.18 : 1.0);
+
+  // Camera height above floor.
+  const baseHeight = Ch * 1.4;
+  const height = inHero ? Ch * 1.6 : baseHeight;
+
+  // ── Active-box tracking ────────────────────────────────────────────────
+  // While a box is being placed, slide the camera target 60 % toward that
+  // box's world position so loaders see exactly where the next item lands.
+  const defaultTarget: [number, number, number] = [0, Ch * 0.45, 0];
+  let target: [number, number, number] = defaultTarget;
+  if (frame >= introF && frame < outroStart && !inHero) {
+    let active: BoxAnim | null = null;
+    for (const a of timeline.anims) {
+      if (a.startFrame <= frame && frame < a.endFrame) {
+        active = a;
+        break;
+      }
+    }
+    if (active) {
+      const box = pack.placed[active.placedIdx];
+      const wx = box.x / MM_PER_M + box.l / MM_PER_M / 2 - Cl / 2;
+      const wy = box.z / MM_PER_M + box.h / MM_PER_M / 2;
+      const wz = box.y / MM_PER_M + box.w / MM_PER_M / 2 - Cw / 2;
+      // Lerp 60 % toward the active box.
+      const k = 0.6;
+      target = [
+        defaultTarget[0] + (wx - defaultTarget[0]) * k,
+        defaultTarget[1] + (wy - defaultTarget[1]) * k,
+        defaultTarget[2] + (wz - defaultTarget[2]) * k,
+      ];
+    }
+  }
+
+  // Spherical → Cartesian. Camera orbits around `target`, not origin, so
+  // the active-box tracking actually moves the framing.
+  const cosP = Math.cos(pitch);
+  const sinP = Math.sin(pitch);
+  const cosY = Math.cos(yaw);
+  const sinY = Math.sin(yaw);
+  const px = target[0] + dist * cosP * cosY;
+  const py = target[1] + dist * sinP + (height - target[1]);
+  const pz = target[2] + dist * cosP * sinY;
+
   return {
-    position: [Math.cos(angle) * dist, height, Math.sin(angle) * dist],
+    position: [px, py, pz],
     target,
   };
 }

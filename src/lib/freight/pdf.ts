@@ -36,6 +36,8 @@ export interface PdfLoadingRow {
   frontViewPng?: string;
   /** Optional pre-rasterised top-down PNG dataURL (W × depth) for this row. */
   topViewPng?: string;
+  /** Optional pre-rasterised iso 3D wireframe PNG dataURL for this row. */
+  isoViewPng?: string;
 }
 
 export interface PdfExtras {
@@ -598,10 +600,14 @@ export function downloadResultPdf(
 
     const cardX = 40;
     const cardW = pageWidth - 80;
-    const svgW = 130;
-    const svgH = 44;
+    // 2×2 grid of mini-views: each cell is svgW × svgH with svgGap between.
+    const svgW = 64;
+    const svgH = 42;
     const svgGap = 4;
-    const imageColH = svgH * 3 + svgGap * 2 + 21; // three stacked views + labels
+    const labelH = 7;
+    const gridW = svgW * 2 + svgGap;
+    const gridH = (svgH + labelH) * 2 + svgGap;
+    const imageColH = gridH;
     const cardPad = 8;
 
     for (const r of extras.loadingRows) {
@@ -618,12 +624,9 @@ export function downloadResultPdf(
           : "-";
       const instructionLines = doc.splitTextToSize(
         `Loader: ${r.instruction}`,
-        cardW - svgW - cardPad * 3,
+        cardW - gridW - cardPad * 3,
       ) as string[];
-      // Items area: each item gets a small package-type glyph + label, laid
-      // out in a fixed grid so warehouse staff can scan shapes at a glance
-      // (matches the on-screen loading-rows panel chips).
-      const itemsAreaW = cardW - svgW - cardPad * 3;
+      const itemsAreaW = cardW - gridW - cardPad * 3;
       const itemColW = 78;
       const itemRowH = 11;
       const perRow = Math.max(1, Math.floor(itemsAreaW / itemColW));
@@ -631,13 +634,13 @@ export function downloadResultPdf(
       const warnLines = r.needsSeparator
         ? (doc.splitTextToSize(
             "Mixed pallet — insert a plywood/cardboard separator board between heavy and fragile units.",
-            cardW - svgW - cardPad * 3,
+            cardW - gridW - cardPad * 3,
           ) as string[])
         : [];
       const gapLines = r.gapWarning
         ? (doc.splitTextToSize(
             `Gap warning — back wall only ${Math.round(r.wallUtilizationPct)}% covered. Re-shuffle pallets side-to-side before sealing.`,
-            cardW - svgW - cardPad * 3,
+            cardW - gridW - cardPad * 3,
           ) as string[])
         : [];
       const textBlockH =
@@ -660,41 +663,33 @@ export function downloadResultPdf(
       doc.setLineWidth(0.8);
       doc.rect(cardX + cardW - 22, ry + 8, 12, 12, "S");
 
-      // Two stacked projection images (left): door view on top, side view below.
-      const imgX = cardX + cardPad;
-      const imgY0 = ry + cardPad;
+      // 2×2 grid: ISO (top-left), DOOR (top-right), SIDE (bottom-left), TOP (bottom-right).
+      const gridX = cardX + cardPad;
+      const gridY = ry + cardPad;
+      const cells: { label: string; png?: string; col: 0 | 1; row: 0 | 1 }[] = [
+        { label: "ISO 3D", png: r.isoViewPng, col: 0, row: 0 },
+        { label: "DOOR (W × H)", png: r.sideViewPng, col: 1, row: 0 },
+        { label: "SIDE (D × H)", png: r.frontViewPng, col: 0, row: 1 },
+        { label: "TOP (W × D)", png: r.topViewPng, col: 1, row: 1 },
+      ];
       doc.setFont("helvetica", "bold");
       doc.setFontSize(6);
       doc.setTextColor(120, 120, 120);
-      doc.text("DOOR VIEW (W × H)", imgX, imgY0 + 5);
-      if (r.sideViewPng) {
-        try {
-          doc.addImage(r.sideViewPng, "PNG", imgX, imgY0 + 7, svgW, svgH, undefined, "FAST");
-        } catch {
-          /* ignore broken dataURL */
-        }
-      }
-      const imgY1 = imgY0 + 7 + svgH + svgGap;
-      doc.text("SIDE VIEW (DEPTH × H)", imgX, imgY1 + 5);
-      if (r.frontViewPng) {
-        try {
-          doc.addImage(r.frontViewPng, "PNG", imgX, imgY1 + 7, svgW, svgH, undefined, "FAST");
-        } catch {
-          /* ignore broken dataURL */
-        }
-      }
-      const imgY2 = imgY1 + 7 + svgH + svgGap;
-      doc.text("TOP VIEW (W × DEPTH)", imgX, imgY2 + 5);
-      if (r.topViewPng) {
-        try {
-          doc.addImage(r.topViewPng, "PNG", imgX, imgY2 + 7, svgW, svgH, undefined, "FAST");
-        } catch {
-          /* ignore broken dataURL */
+      for (const cell of cells) {
+        const cx = gridX + cell.col * (svgW + svgGap);
+        const cy = gridY + cell.row * (svgH + labelH + svgGap);
+        doc.text(cell.label, cx, cy + 5);
+        if (cell.png) {
+          try {
+            doc.addImage(cell.png, "PNG", cx, cy + labelH, svgW, svgH, undefined, "FAST");
+          } catch {
+            /* ignore broken dataURL */
+          }
         }
       }
 
       // Right text block
-      const tx = cardX + svgW + cardPad * 2;
+      const tx = cardX + gridW + cardPad * 2;
       let ty = ry + cardPad + 4;
 
       doc.setFont("helvetica", "bold");
