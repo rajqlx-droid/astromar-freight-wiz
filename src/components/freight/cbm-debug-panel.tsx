@@ -779,6 +779,33 @@ export function CbmDebugPanel({ info }: Props) {
                   label="Total duration"
                   value={`${(result.totalDurationMs / 1000).toFixed(2)} s`}
                 />
+                {/* Per-field render breakdown — pinpoints which input is the
+                    heaviest re-render trigger. */}
+                <div className="mt-2 space-y-1 border-t border-border pt-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Per-field renders
+                  </div>
+                  {(Object.keys(result.fieldRenderStats) as (keyof FieldRenderStats)[]).map(
+                    (f) => {
+                      const s = result.fieldRenderStats[f];
+                      return (
+                        <Row
+                          key={f}
+                          label={f}
+                          value={`${s.avgRenders.toFixed(1)} avg · peak ${s.worstRenderSpike}`}
+                          tone={
+                            s.worstRenderSpike > RENDER_SPIKE_THRESHOLD
+                              ? "bad"
+                              : s.worstRenderSpike > 3
+                                ? "warn"
+                                : "good"
+                          }
+                          hint={`${s.keystrokes} keystrokes · worst frame ${s.worstFrameMs.toFixed(1)}ms`}
+                        />
+                      );
+                    },
+                  )}
+                </div>
               </div>
             )}
           </section>
