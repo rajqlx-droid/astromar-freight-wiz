@@ -26,6 +26,8 @@ import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
+import { runAllScenarios, type ScenarioResult } from "@/lib/freight/scenario-runner";
+import { computeComplianceReport } from "@/lib/freight/compliance";
 
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
@@ -350,6 +352,11 @@ function SinglePlanBody({
     () => buildPalletSequence(pack, rows),
     [pack, rows],
   );
+  const scenarios = useMemo<ScenarioResult[]>(
+    () => (items.length > 0 ? runAllScenarios(items, pack.container) : []),
+    [items, pack.container],
+  );
+  const compliance = useMemo(() => computeComplianceReport(pack), [pack]);
 
   // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
@@ -491,6 +498,7 @@ function SinglePlanBody({
                     nextPalletIdx={nextPalletIdx}
                     followCam={isPlaying}
                     showForkliftToken={showForkliftToken && currentStep != null}
+                    nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
                     overlay={
                       stepMode ? (
                         <LoaderHUD
@@ -506,6 +514,7 @@ function SinglePlanBody({
                           onSpeedChange={setSpeed}
                           showForklift={showForkliftToken}
                           onToggleForklift={() => setShowForkliftToken((v) => !v)}
+                          pack={pack}
                         />
                       ) : null
                     }
@@ -526,6 +535,67 @@ function SinglePlanBody({
                 activeRowHasGap={!!activeRow?.gapWarning}
               />
             )}
+          </div>
+        )}
+        {scenarios.length > 0 && (
+          <div className="rounded-lg border bg-card p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <h4 className="text-sm font-semibold text-brand-navy">Scenario Comparison</h4>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {scenarios.length} strategies
+              </span>
+              <span className="ml-auto text-[11px] text-muted-foreground">
+                Best: <span className="font-semibold text-brand-navy">{scenarios[0]?.strategyName}</span>
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-1.5 pr-2 font-medium">Strategy</th>
+                    <th className="py-1.5 pr-2 font-medium">Fitted</th>
+                    <th className="py-1.5 pr-2 font-medium">Utilisation</th>
+                    <th className="py-1.5 pr-2 font-medium">Void</th>
+                    <th className="py-1.5 pr-2 font-medium">CoG</th>
+                    <th className="py-1.5 pr-2 font-medium">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scenarios.map((sc) => (
+                    <tr key={sc.strategyId} className={cn("border-b last:border-0", sc.isBest && "bg-emerald-50 dark:bg-emerald-950/20")}>
+                      <td className="py-1.5 pr-2 font-medium">
+                        {sc.isBest && <span className="mr-1 text-amber-500">★</span>}
+                        {sc.strategyName}
+                      </td>
+                      <td className="py-1.5 pr-2">{sc.pack.placedCartons}/{sc.pack.totalCartons}</td>
+                      <td className="py-1.5 pr-2">{sc.utilizationPct.toFixed(1)}%</td>
+                      <td className="py-1.5 pr-2">{sc.voidPct.toFixed(1)}%</td>
+                      <td className="py-1.5 pr-2">{sc.cogOk ? "✓" : "⚠"}</td>
+                      <td className={cn("py-1.5 pr-2 font-bold", sc.compliance.score >= 80 ? "text-emerald-600" : sc.compliance.score >= 60 ? "text-amber-600" : "text-red-600")}>
+                        {sc.compliance.score}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
+              <span>Floor: <span className="font-semibold text-brand-navy">{pack.floorCoveragePct?.toFixed(1) ?? "—"}%</span></span>
+              <span>Placed: <span className="font-semibold text-brand-navy">{pack.placedCartons}/{pack.totalCartons}</span></span>
+              <span>
+                Lateral CoG:{" "}
+                <span className={cn("font-semibold", Math.abs(((pack as any).cogLateralOffsetPct ?? 0)) > 0.15 ? "text-amber-600" : "text-emerald-600")}>
+                  {(((pack as any).cogLateralOffsetPct ?? 0) * 100).toFixed(1)}% off-centre
+                </span>
+              </span>
+              <span className="ml-auto">
+                Compliance:{" "}
+                <span className={cn("font-bold", compliance.score >= 80 ? "text-emerald-600" : compliance.score >= 60 ? "text-amber-600" : "text-red-600")}>
+                  {compliance.score}/100
+                </span>{" "}
+                — {compliance.status === "GREEN" ? "APPROVED ✓" : compliance.status === "YELLOW" ? "REVIEW REQUIRED" : "VIOLATIONS ✗"}
+              </span>
+            </div>
           </div>
         )}
         <Legend items={items} />
