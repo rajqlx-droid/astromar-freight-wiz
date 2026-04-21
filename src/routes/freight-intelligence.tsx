@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Sparkles,
   ChevronDown,
+  BookOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import { nextId } from "@/lib/freight/ids";
