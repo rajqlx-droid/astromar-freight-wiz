@@ -55,11 +55,28 @@ interface TestResult {
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
   headlineTotal: number;
-  /** Whether the two agree (within 0.0001 m³ rounding). */
+  /** What perRowSum *should* be given the deterministic TEST_ROWS dataset. */
+  expectedTotal: number;
+  /** Whether perRowSum and headlineTotal agree (within 0.0001 m³ rounding). */
   totalsMatch: boolean;
+  /** Whether perRowSum equals the deterministic expectedTotal — catches input loss. */
+  matchesExpected: boolean;
   /** Time from first keystroke to final headline-total settle (ms). */
   totalDurationMs: number;
 }
+
+/** Headless test report — pass/fail summary suitable for console + CI. */
+export interface HeadlessTestReport {
+  pass: boolean;
+  failures: string[];
+  result: TestResult;
+  /** ISO timestamp the run completed. */
+  completedAt: string;
+}
+
+/** Thresholds for pass/fail in headless mode. */
+const JANK_THRESHOLD_MS = 50; // Worst frame above this = fail
+const AVG_FRAME_THRESHOLD_MS = 16; // Average frame above this = fail (60fps budget)
 
 interface Props {
   info: CbmDebugInfo;
@@ -399,9 +416,9 @@ export function CbmDebugPanel({ info }: Props) {
                   label="Worst frame"
                   value={`${result.worstFrameMs.toFixed(1)} ms`}
                   tone={
-                    result.worstFrameMs > 50
+                    result.worstFrameMs > JANK_THRESHOLD_MS
                       ? "bad"
-                      : result.worstFrameMs > 16
+                      : result.worstFrameMs > AVG_FRAME_THRESHOLD_MS
                         ? "warn"
                         : "good"
                   }
@@ -410,15 +427,25 @@ export function CbmDebugPanel({ info }: Props) {
                 <Row
                   label="Avg frame"
                   value={`${result.avgFrameMs.toFixed(1)} ms`}
-                  tone={result.avgFrameMs > 16 ? "warn" : "good"}
+                  tone={result.avgFrameMs > AVG_FRAME_THRESHOLD_MS ? "warn" : "good"}
                 />
                 <Row
                   label="Per-row sum"
                   value={`${result.perRowSum.toFixed(4)} m³`}
                 />
                 <Row
+                  label="Expected total"
+                  value={`${result.expectedTotal.toFixed(4)} m³`}
+                  hint="Deterministic from TEST_ROWS"
+                />
+                <Row
                   label="Headline total"
                   value={`${result.headlineTotal.toFixed(4)} m³`}
+                />
+                <Row
+                  label="Inputs preserved"
+                  value={result.matchesExpected ? "✓ yes" : "✗ NO (data loss)"}
+                  tone={result.matchesExpected ? "good" : "bad"}
                 />
                 <Row
                   label="Totals match"
@@ -433,6 +460,11 @@ export function CbmDebugPanel({ info }: Props) {
             )}
           </section>
 
+          <p className="text-[10px] text-muted-foreground">
+            Headless mode:{" "}
+            <code className="rounded bg-muted px-1">?debug=test</code> · or call{" "}
+            <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
+          </p>
           <p className="text-[10px] text-muted-foreground">
             Toggle off:{" "}
             <code className="rounded bg-muted px-1">localStorage.removeItem(&apos;freight.debug&apos;)</code>
@@ -482,20 +514,6 @@ function Row({
  * including `currentField` at digit count `digits`. Earlier fields use their
  * full target value; later fields stay at 0.
  */
-function patchAccumulated(
-  target: { length: number; width: number; height: number; qty: number; weight: number },
-  fields: ("length" | "width" | "height" | "qty" | "weight")[],
-  currentField: "length" | "width" | "height" | "qty" | "weight",
-  digits: number,
-): Partial<CbmItem> {
-  const patch: Partial<CbmItem> = {};
-  for (const f of fields) {
-    if (f === currentField) {
-      const str = String(target[f]);
-      patch[f] = parseInt(str.slice(0, digits), 10) || 0;
-      break;
-    }
-    patch[f] = target[f];
-  }
-  return patch;
-}
+/* (patchAccumulated helper removed — the test now mutates a working `rows`
+   array in place per keystroke, which is correct and simpler.) */
+
