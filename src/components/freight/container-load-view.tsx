@@ -334,6 +334,9 @@ function SinglePlanBody({
   isActive,
   viewerCollapsed = false,
   rollup,
+  scenarios,
+  selectedStrategyId,
+  setSelectedStrategyId,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -345,6 +348,9 @@ function SinglePlanBody({
   isActive: boolean;
   viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
+  scenarios: ScenarioResult[];
+  selectedStrategyId: import("@/lib/freight/scenario-runner").StrategyId | null;
+  setSelectedStrategyId: (id: import("@/lib/freight/scenario-runner").StrategyId | null) => void;
 }) {
   // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
   // along scene-z (container width axis). Cleared when row toggles off.
