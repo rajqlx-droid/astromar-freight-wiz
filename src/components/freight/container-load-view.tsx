@@ -115,12 +115,6 @@ export function ContainerLoadView({
       ? autoContainer
       : CONTAINERS.find((c) => c.id === choice) ?? autoContainer;
 
-  // Single-container pack (used when not multi).
-  const singlePack = useMemo(
-    () => packContainerAdvanced(items, activeContainer),
-    [items, activeContainer],
-  );
-
   // Multi-container packs (one per recommended unit).
   const multiPacks = useMemo<AdvancedPackResult[]>(() => {
     if (!isMulti || !recommendation) return [];
@@ -130,35 +124,21 @@ export function ContainerLoadView({
     );
   }, [items, isMulti, recommendation]);
 
-  const rawScenarios = useMemo<ScenarioResult[]>(
-    () => (hasCargo ? runAllScenarios(isMulti ? (splitItemsAcrossContainers(items, recommendation!)[Number(activeTab)] ?? items) : items, activeContainer) : []),
-    [items, activeContainer, hasCargo, isMulti, activeTab, recommendation]
+  const scenarios = useMemo<ScenarioResult[]>(
+    () => {
+      if (!hasCargo) return [];
+      const packItems = isMulti
+        ? (splitItemsAcrossContainers(items, recommendation!)[Number(activeTab)] ?? items)
+        : items;
+      return runAllScenarios(packItems, activeContainer);
+    },
+    [hasCargo, isMulti, items, recommendation, activeTab, activeContainer],
   );
 
-  const scenarioKeyRef = useRef<string>("");
-
-  const scenarios = useMemo<ScenarioResult[]>(() => {
-    if (rawScenarios.length === 0) return [];
-    // Deduplicate: build a stable key from strategyIds + utilisation values.
-    const key = rawScenarios.map(s => `${s.strategyId}:${s.utilizationPct.toFixed(2)}`).join("|");
-    if (key === scenarioKeyRef.current) return rawScenarios;
-    // Check for duplicate strategyIds (defensive guard).
-    const ids = rawScenarios.map(s => s.strategyId);
-    const unique = new Set(ids);
-    if (unique.size !== ids.length) {
-      console.warn("[scenarios] Duplicate strategyIds detected — deduplicating");
-      const seen = new Set<string>();
-      const deduped = rawScenarios.filter(s => {
-        if (seen.has(s.strategyId)) return false;
-        seen.add(s.strategyId);
-        return true;
-      });
-      scenarioKeyRef.current = key;
-      return deduped;
-    }
-    scenarioKeyRef.current = key;
-    return rawScenarios;
-  }, [rawScenarios]);
+  const singlePack = useMemo(
+    () => scenarios[0]?.pack ?? packContainerAdvanced(items, activeContainer),
+    [scenarios, items, activeContainer],
+  );
 
   const activePack: AdvancedPackResult = selectedStrategyId
     ? (scenarios.find(s => s.strategyId === selectedStrategyId)?.pack ?? (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack))
