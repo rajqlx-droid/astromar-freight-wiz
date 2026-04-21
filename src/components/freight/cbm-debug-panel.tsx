@@ -550,12 +550,15 @@ export function CbmDebugPanel({ info }: Props) {
 
     // Read URL flags to decide output format and whether to attach the trace.
     let formatJson = false;
+    let formatCsv = false;
     let pretty = false;
     let alwaysTrace = false;
     let download = false;
     try {
       const url = new URL(window.location.href);
-      formatJson = url.searchParams.get("format") === "json";
+      const fmt = url.searchParams.get("format");
+      formatJson = fmt === "json";
+      formatCsv = fmt === "csv";
       pretty = url.searchParams.get("pretty") === "1";
       alwaysTrace = url.searchParams.get("trace") === "1";
       download = url.searchParams.get("download") === "1";
@@ -583,8 +586,31 @@ export function CbmDebugPanel({ info }: Props) {
         })
       : undefined;
 
+    // Classify failures so the flat summary can split mismatch vs perf for CI.
+    const mismatchCount = failures.filter(
+      (f) => f.startsWith("Input data loss") || f.startsWith("Totals mismatch"),
+    ).length;
+    const perfFailureCount = failures.length - mismatchCount;
+
+    const summary: HeadlessTestSummary = {
+      pass: failures.length === 0,
+      failureCount: failures.length,
+      mismatchCount,
+      perfFailureCount,
+      worstFrameMs: result.worstFrameMs,
+      avgFrameMs: result.avgFrameMs,
+      worstRenderSpike: result.worstRenderSpike,
+      avgRendersPerKeystroke: result.avgRendersPerKeystroke,
+      totalRenders: result.totalRenders,
+      totalKeystrokes: result.totalKeystrokes,
+      totalDurationMs: result.totalDurationMs,
+      worstFrameField: result.worstFrameField,
+      hottestField: result.hottestField,
+    };
+
     const includeTrace = failures.length > 0 || alwaysTrace;
     const report: HeadlessTestReport = {
+      summary,
       pass: failures.length === 0,
       failures,
       result,
@@ -596,14 +622,21 @@ export function CbmDebugPanel({ info }: Props) {
     setProgress("");
 
     /* eslint-disable no-console */
-    if (formatJson) {
+    if (formatCsv) {
+      // CI mode (CSV): emit two CSV blocks — keystroke trace + per-field stats.
+      const csv = buildCsvReport(trace, result.fieldRenderStats);
+      console.log(csv);
+    } else if (formatJson) {
       // CI mode: JSON.stringify, optionally pretty-printed.
       console.log(JSON.stringify(report, null, pretty ? 2 : 0));
     } else {
       console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
+      console.log("Summary:", summary);
       console.log("Result:", result);
       console.log("Per-field render stats:", result.fieldRenderStats);
       console.table(result.fieldRenderStats);
+      console.log("Per-row timing:", result.rowTimingStats);
+      console.table(result.rowTimingStats);
       if (failures.length) {
         console.warn("Failures:", failures);
         if (rowDiffs) {
@@ -629,20 +662,27 @@ export function CbmDebugPanel({ info }: Props) {
     }
     /* eslint-enable no-console */
 
-    // Optional: download the full failure report as a .json file. Triggered
-    // automatically when `download=1` is in the URL and the test failed,
-    // OR opt-in for passes by also setting `trace=1`.
+    // Optional: download the full failure report. JSON by default; CSV when
+    // `format=csv` is set so the trace + field stats land in a spreadsheet.
     if (download && (failures.length > 0 || alwaysTrace)) {
       try {
-        const fullReport = { ...report, trace, rowDiffs };
-        const blob = new Blob([JSON.stringify(fullReport, null, 2)], {
-          type: "application/json",
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
         const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const a = document.createElement("a");
+        let url: string;
+        if (formatCsv) {
+          const csv = buildCsvReport(trace, result.fieldRenderStats);
+          const blob = new Blob([csv], { type: "text/csv" });
+          url = URL.createObjectURL(blob);
+          a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.csv`;
+        } else {
+          const fullReport = { ...report, trace, rowDiffs };
+          const blob = new Blob([JSON.stringify(fullReport, null, 2)], {
+            type: "application/json",
+          });
+          url = URL.createObjectURL(blob);
+          a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.json`;
+        }
         a.href = url;
-        a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
