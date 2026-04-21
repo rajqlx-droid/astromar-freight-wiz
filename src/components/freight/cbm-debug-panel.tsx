@@ -315,6 +315,29 @@ export function CbmDebugPanel({ info }: Props) {
     const totalRenders = renderCounts.reduce((a, b) => a + b, 0);
     const avgRenders = renderCounts.length ? totalRenders / renderCounts.length : 0;
 
+    // Aggregate the trace by which field was being typed so we can pinpoint
+    // which input is the heaviest re-render trigger (e.g. "qty" causing
+    // worker re-runs vs "weight" being a no-op for geometry).
+    const fieldRenderStats: FieldRenderStats = {
+      length: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      width: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      height: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      qty: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      weight: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+    };
+    for (const t of trace) {
+      const s = fieldRenderStats[t.field];
+      s.keystrokes += 1;
+      s.totalRenders += t.renderCount;
+      s.worstRenderSpike = Math.max(s.worstRenderSpike, t.renderCount);
+      s.worstFrameMs = Math.max(s.worstFrameMs, t.frameMs);
+    }
+    for (const k of Object.keys(fieldRenderStats) as (keyof FieldRenderStats)[]) {
+      const s = fieldRenderStats[k];
+      s.avgRenders = s.keystrokes ? s.totalRenders / s.keystrokes : 0;
+    }
+
+
     return {
       result: {
         rowsFilled: TEST_ROWS.length,
