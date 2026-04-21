@@ -354,8 +354,8 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   return (
     <div className="space-y-6">
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-3">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="space-y-3 lg:col-span-5">
         {items.map((it, idx) => {
           const color = ITEM_COLORS[idx % ITEM_COLORS.length];
           const confirmed = it.packingConfirmed === true;
