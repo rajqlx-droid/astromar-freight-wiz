@@ -110,6 +110,7 @@ interface Props {
    * the canvas without being clipped when the user enters fullscreen.
    */
   overlay?: React.ReactNode;
+  nearCeilingPlacedIdxs?: Set<number> | null;
 }
 
 /**
@@ -118,7 +119,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0, activePalletIdx = null, nextPalletIdx = null, followCam = false, showForkliftToken = false, overlay = null },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0, activePalletIdx = null, nextPalletIdx = null, followCam = false, showForkliftToken = false, overlay = null, nearCeilingPlacedIdxs = null },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -265,6 +266,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             nextPalletIdx={nextPalletIdx}
             followCam={followCam}
             showForkliftToken={showForkliftToken}
+            nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
           />
         </Suspense>
       </Canvas>
@@ -437,6 +439,7 @@ function SceneContents({
   nextPalletIdx,
   followCam,
   showForkliftToken,
+  nearCeilingPlacedIdxs,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -453,6 +456,7 @@ function SceneContents({
   nextPalletIdx: number | null;
   followCam: boolean;
   showForkliftToken: boolean;
+  nearCeilingPlacedIdxs: Set<number> | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -1171,6 +1175,7 @@ function CargoBox({
   containerH = 2.6,
   showCheckmark = false,
   showEdges = true,
+  nearCeiling = false,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1183,6 +1188,7 @@ function CargoBox({
   containerH?: number;
   showCheckmark?: boolean;
   showEdges?: boolean;
+  nearCeiling?: boolean;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1260,6 +1266,7 @@ function CargoBox({
         tiltColor={tiltColor}
         tilted={tilted}
         showEdges={showEdges}
+        onFloor={onFloor}
         onPointerOver={(e) => {
           if (!tilted) return;
           e.stopPropagation();
@@ -1325,6 +1332,12 @@ function CargoBox({
           </div>
         </Html>
       )}
+      {nearCeiling && (
+        <mesh position={[0, hm / 2 + 0.012, 0]}>
+          <boxGeometry args={[lm * 1.04, 0.018, wm * 1.04]} />
+          <meshBasicMaterial color="#f59e0b" transparent opacity={0.75} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -1342,6 +1355,7 @@ interface PackageShapeProps {
   tilted: boolean;
   tiltColor: string;
   showEdges?: boolean;
+  onFloor?: boolean;
   onPointerOver: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut: (e: ThreeEvent<PointerEvent>) => void;
 }
@@ -1383,7 +1397,7 @@ function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges
   );
 }
 
-function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onFloor, onPointerOver, onPointerOut }: PackageShapeProps) {
   const radius = Math.min(lm, wm) / 2;
   const drumColor = color || "#2c5282";
   return (
@@ -1414,6 +1428,16 @@ function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoi
         <cylinderGeometry args={[radius * 1.015, radius * 1.015, 0.018, 20]} />
         <meshStandardMaterial color="#2a2a2a" roughness={0.5} metalness={0.65} />
       </mesh>
+      {onFloor && (
+        <group>
+          {([[-1,0],[1,0],[0,-1],[0,1]] as [number,number][]).map(([dx,dz],i) => (
+            <mesh key={i} position={[dx*(radius+0.045), -hm/2+0.03, dz*(radius+0.045)]}>
+              <boxGeometry args={[0.065,0.065,0.065]} />
+              <meshStandardMaterial color="#7c3d12" roughness={0.9} />
+            </mesh>
+          ))}
+        </group>
+      )}
     </group>
   );
 }
