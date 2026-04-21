@@ -3,10 +3,11 @@
  * the 3D viewer. Empty state collapses to a one-liner so it never blocks the
  * container interior.
  */
-import { Pause, Play, SkipBack, SkipForward, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { Pause, Play, SkipBack, SkipForward, RotateCcw, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { PalletStep } from "@/lib/freight/loading-rows";
+import type { PalletStep, RowGroup } from "@/lib/freight/loading-rows";
 import { computeComplianceReport } from "@/lib/freight/compliance";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
@@ -24,6 +25,9 @@ interface Props {
   showForklift: boolean;
   onToggleForklift: () => void;
   pack?: AdvancedPackResult | null;
+  rows?: RowGroup[];
+  /** Called when the user clicks a failed Foundation Audit row. */
+  onJumpToRow?: (rowIdx1Based: number) => void;
 }
 
 export function LoaderHUD({
@@ -40,11 +44,15 @@ export function LoaderHUD({
   showForklift,
   onToggleForklift,
   pack = null,
+  rows,
+  onJumpToRow,
 }: Props) {
   const isEmpty = currentIdx < 0 || !step;
   const atLast = currentIdx >= totalSteps - 1;
-  const compliance = pack ? computeComplianceReport(pack) : null;
+  const compliance = pack ? computeComplianceReport(pack, { rows }) : null;
   const scoreColor = !compliance ? "#888" : compliance.status === "GREEN" ? "#22c55e" : compliance.status === "YELLOW" ? "#f59e0b" : "#ef4444";
+  const [auditOpen, setAuditOpen] = useState(false);
+  const failedAudits = compliance?.foundationAudit.filter((a) => !a.ok).length ?? 0;
 
   return (
     <div className="pointer-events-auto absolute bottom-2 left-1/2 z-10 -translate-x-1/2 max-w-[min(620px,92%)]">
@@ -58,6 +66,68 @@ export function LoaderHUD({
             {compliance.status === "GREEN" ? "COMPLIANT ✓" : compliance.status === "YELLOW" ? "REVIEW REQUIRED" : "VIOLATIONS ✗"}
           </span>
           {!compliance.canApprove && <span className="opacity-90">· EXPORT BLOCKED</span>}
+          <button
+            type="button"
+            onClick={() => setAuditOpen((v) => !v)}
+            className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-current/30 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider hover:bg-current/10"
+            aria-expanded={auditOpen}
+            title="Foundation audit"
+          >
+            Audit
+            {failedAudits > 0 && (
+              <span className="ml-0.5 rounded-full bg-current/20 px-1 text-[9px]">{failedAudits}</span>
+            )}
+            {auditOpen ? <ChevronDown className="size-2.5" /> : <ChevronUp className="size-2.5" />}
+          </button>
+        </div>
+      )}
+      {compliance && auditOpen && (
+        <div className="mb-1.5 rounded-lg border bg-background/95 px-3 py-2 text-[11px] shadow backdrop-blur">
+          <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            Foundation Audit
+          </p>
+          <ul className="space-y-1">
+            {compliance.foundationAudit.map((a) => {
+              const clickable = !a.ok && (a.rowIdxs?.length ?? 0) > 0 && !!onJumpToRow;
+              return (
+                <li
+                  key={a.code}
+                  className={cn(
+                    "flex items-start gap-2 rounded px-1 py-0.5",
+                    clickable && "cursor-pointer hover:bg-muted/60",
+                  )}
+                  onClick={() => {
+                    if (clickable && a.rowIdxs && a.rowIdxs[0] != null) {
+                      onJumpToRow?.(a.rowIdxs[0]);
+                    }
+                  }}
+                >
+                  <span
+                    className={cn(
+                      "mt-[1px] inline-block size-3 shrink-0 rounded-full text-center text-[9px] font-bold leading-3 text-white",
+                      a.ok ? "bg-emerald-600" : "bg-red-600",
+                    )}
+                    aria-hidden
+                  >
+                    {a.ok ? "✓" : "✗"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("font-medium", a.ok ? "text-foreground" : "text-red-700 dark:text-red-300")}>
+                      {a.label}
+                    </span>
+                    {a.detail && (
+                      <span className="ml-1 text-muted-foreground">— {a.detail}</span>
+                    )}
+                    {clickable && (
+                      <span className="ml-1 text-[9px] uppercase tracking-wider text-brand-navy/80">
+                        · jump to row
+                      </span>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
       <div className="flex items-stretch gap-2 rounded-full border-2 border-brand-navy/60 bg-background/95 px-2 py-1.5 shadow-xl backdrop-blur">
