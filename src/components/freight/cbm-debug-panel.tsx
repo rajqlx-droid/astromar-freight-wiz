@@ -60,6 +60,27 @@ export interface KeystrokeTrace {
   renderCount: number;
 }
 
+/** Per-field render aggregation across all rows in a single test run. */
+export type FieldRenderStats = Record<
+  "length" | "width" | "height" | "qty" | "weight",
+  {
+    keystrokes: number;
+    totalRenders: number;
+    avgRenders: number;
+    worstRenderSpike: number;
+    worstFrameMs: number;
+  }
+>;
+
+/** Per-row expected vs actual snapshot, attached on calculation mismatch. */
+export interface RowFieldDiff {
+  rowIdx: number;
+  expected: { length: number; width: number; height: number; qty: number; weight: number };
+  actual: { length: number; width: number; height: number; qty: number; weight: number };
+  /** Fields whose actual !== expected. Empty array means the row matches. */
+  mismatchedFields: string[];
+}
+
 interface TestResult {
   rowsFilled: number;
   totalKeystrokes: number;
@@ -73,6 +94,8 @@ interface TestResult {
   avgRendersPerKeystroke: number;
   /** Total React renders observed across the whole typing run. */
   totalRenders: number;
+  /** Render counts/jank broken down by which field was being typed. */
+  fieldRenderStats: FieldRenderStats;
   /** Sum of per-row CBM tiles after the test completed. */
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
@@ -98,6 +121,12 @@ export interface HeadlessTestReport {
    * pinpointing which keystroke triggered jank or input loss.
    */
   trace?: KeystrokeTrace[];
+  /**
+   * Per-row expected vs actual field values. Only attached when a calculation
+   * mismatch is detected (input loss or totals mismatch), so you can see exactly
+   * which row/field dropped data.
+   */
+  rowDiffs?: RowFieldDiff[];
   /** ISO timestamp the run completed. */
   completedAt: string;
 }
@@ -196,7 +225,11 @@ export function CbmDebugPanel({ info }: Props) {
    */
   const executeTest = async (
     onProgress?: (msg: string) => void,
-  ): Promise<{ result: TestResult; trace: KeystrokeTrace[] }> => {
+  ): Promise<{
+    result: TestResult;
+    trace: KeystrokeTrace[];
+    finalRows: RowFieldDiff["actual"][];
+  }> => {
     const frameCosts: number[] = [];
     const renderCounts: number[] = [];
     const trace: KeystrokeTrace[] = [];
@@ -286,6 +319,29 @@ export function CbmDebugPanel({ info }: Props) {
     const totalRenders = renderCounts.reduce((a, b) => a + b, 0);
     const avgRenders = renderCounts.length ? totalRenders / renderCounts.length : 0;
 
+    // Aggregate the trace by which field was being typed so we can pinpoint
+    // which input is the heaviest re-render trigger (e.g. "qty" causing
+    // worker re-runs vs "weight" being a no-op for geometry).
+    const fieldRenderStats: FieldRenderStats = {
+      length: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      width: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      height: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      qty: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+      weight: { keystrokes: 0, totalRenders: 0, avgRenders: 0, worstRenderSpike: 0, worstFrameMs: 0 },
+    };
+    for (const t of trace) {
+      const s = fieldRenderStats[t.field];
+      s.keystrokes += 1;
+      s.totalRenders += t.renderCount;
+      s.worstRenderSpike = Math.max(s.worstRenderSpike, t.renderCount);
+      s.worstFrameMs = Math.max(s.worstFrameMs, t.frameMs);
+    }
+    for (const k of Object.keys(fieldRenderStats) as (keyof FieldRenderStats)[]) {
+      const s = fieldRenderStats[k];
+      s.avgRenders = s.keystrokes ? s.totalRenders / s.keystrokes : 0;
+    }
+
+
     return {
       result: {
         rowsFilled: TEST_ROWS.length,
@@ -295,6 +351,7 @@ export function CbmDebugPanel({ info }: Props) {
         worstRenderSpike,
         avgRendersPerKeystroke: avgRenders,
         totalRenders,
+        fieldRenderStats,
         perRowSum: finalSum,
         headlineTotal: info.headlineTotalCbm,
         expectedTotal: expected,
@@ -303,6 +360,15 @@ export function CbmDebugPanel({ info }: Props) {
         totalDurationMs: performance.now() - t0,
       },
       trace,
+      // Snapshot of every row's final state, so the headless reporter can
+      // diff actual vs expected when there's a calculation mismatch.
+      finalRows: rows.map((r) => ({
+        length: r.length,
+        width: r.width,
+        height: r.height,
+        qty: r.qty,
+        weight: r.weight,
+      })),
     };
   };
 
@@ -328,15 +394,19 @@ export function CbmDebugPanel({ info }: Props) {
    * has `?debug=test`.
    *
    * Output modes (controlled by URL flags):
-   *   - default            → grouped, human-readable console output.
-   *   - `format=json`      → single-line JSON.stringify for CI scraping.
-   *   - `trace=1`          → always include the per-keystroke trace, even on pass.
+   *   - default                       → grouped, human-readable console output.
+   *   - `format=json`                 → single-line JSON.stringify for CI scraping.
+   *   - `format=json&pretty=1`        → multi-line, indented JSON for local debugging.
+   *   - `trace=1`                     → always include the per-keystroke trace, even on pass.
+   *   - `download=1`                  → on failure, also trigger a .json file download
+   *                                      with the full report (incl. trace + rowDiffs).
    *
-   * On failure the trace is ALWAYS included (regardless of `trace=1`) so the
-   * exact keystroke that caused jank or input loss is visible in the log.
+   * On failure the trace and rowDiffs are ALWAYS included (regardless of
+   * `trace=1`) so the failing keystroke and exact field-level data loss are
+   * visible in the log and downloadable artifact.
    */
   const runHeadless = useCallback(async (): Promise<HeadlessTestReport> => {
-    const { result, trace } = await executeTest(setProgress);
+    const { result, trace, finalRows } = await executeTest(setProgress);
     const failures: string[] = [];
     if (!result.matchesExpected) {
       failures.push(
@@ -366,14 +436,38 @@ export function CbmDebugPanel({ info }: Props) {
 
     // Read URL flags to decide output format and whether to attach the trace.
     let formatJson = false;
+    let pretty = false;
     let alwaysTrace = false;
+    let download = false;
     try {
       const url = new URL(window.location.href);
       formatJson = url.searchParams.get("format") === "json";
+      pretty = url.searchParams.get("pretty") === "1";
       alwaysTrace = url.searchParams.get("trace") === "1";
+      download = url.searchParams.get("download") === "1";
     } catch {
       /* ignore */
     }
+
+    // Build per-row diffs whenever there's a calculation mismatch — pinpoints
+    // exactly which row/field dropped data.
+    const calcMismatch = !result.matchesExpected || !result.totalsMatch;
+    const rowDiffs: RowFieldDiff[] | undefined = calcMismatch
+      ? TEST_ROWS.map((expected, rowIdx) => {
+          const actual = finalRows[rowIdx] ?? {
+            length: 0,
+            width: 0,
+            height: 0,
+            qty: 0,
+            weight: 0,
+          };
+          const mismatchedFields: string[] = [];
+          (["length", "width", "height", "qty", "weight"] as const).forEach((f) => {
+            if (expected[f] !== actual[f]) mismatchedFields.push(f);
+          });
+          return { rowIdx, expected, actual, mismatchedFields };
+        })
+      : undefined;
 
     const includeTrace = failures.length > 0 || alwaysTrace;
     const report: HeadlessTestReport = {
@@ -381,6 +475,7 @@ export function CbmDebugPanel({ info }: Props) {
       failures,
       result,
       ...(includeTrace ? { trace } : {}),
+      ...(rowDiffs ? { rowDiffs } : {}),
       completedAt: new Date().toISOString(),
     };
     setResult(result);
@@ -388,14 +483,25 @@ export function CbmDebugPanel({ info }: Props) {
 
     /* eslint-disable no-console */
     if (formatJson) {
-      // Single-line JSON for CI parsing — no pretty printing, no group wrappers.
-      console.log(JSON.stringify(report));
+      // CI mode: JSON.stringify, optionally pretty-printed.
+      console.log(JSON.stringify(report, null, pretty ? 2 : 0));
     } else {
       console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
       console.log("Result:", result);
+      console.log("Per-field render stats:", result.fieldRenderStats);
+      console.table(result.fieldRenderStats);
       if (failures.length) {
         console.warn("Failures:", failures);
-        // Compact per-keystroke trace — collapsed by default to keep the log tidy.
+        if (rowDiffs) {
+          console.groupCollapsed(`Row diffs (${rowDiffs.length} rows)`);
+          console.table(rowDiffs.map((d) => ({
+            row: d.rowIdx,
+            mismatched: d.mismatchedFields.join(",") || "—",
+            expected: JSON.stringify(d.expected),
+            actual: JSON.stringify(d.actual),
+          })));
+          console.groupEnd();
+        }
         console.groupCollapsed(`Trace (${trace.length} keystrokes)`);
         console.table(trace);
         console.groupEnd();
@@ -408,6 +514,31 @@ export function CbmDebugPanel({ info }: Props) {
       console.groupEnd();
     }
     /* eslint-enable no-console */
+
+    // Optional: download the full failure report as a .json file. Triggered
+    // automatically when `download=1` is in the URL and the test failed,
+    // OR opt-in for passes by also setting `trace=1`.
+    if (download && (failures.length > 0 || alwaysTrace)) {
+      try {
+        const fullReport = { ...report, trace, rowDiffs };
+        const blob = new Blob([JSON.stringify(fullReport, null, 2)], {
+          type: "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        a.href = url;
+        a.download = `cbm-headless-${report.pass ? "pass" : "fail"}-${stamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        /* eslint-disable-next-line no-console */
+        console.warn("[CBM headless test] download failed:", e);
+      }
+    }
+
     return report;
   }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -648,6 +779,33 @@ export function CbmDebugPanel({ info }: Props) {
                   label="Total duration"
                   value={`${(result.totalDurationMs / 1000).toFixed(2)} s`}
                 />
+                {/* Per-field render breakdown — pinpoints which input is the
+                    heaviest re-render trigger. */}
+                <div className="mt-2 space-y-1 border-t border-border pt-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Per-field renders
+                  </div>
+                  {(Object.keys(result.fieldRenderStats) as (keyof FieldRenderStats)[]).map(
+                    (f) => {
+                      const s = result.fieldRenderStats[f];
+                      return (
+                        <Row
+                          key={f}
+                          label={f}
+                          value={`${s.avgRenders.toFixed(1)} avg · peak ${s.worstRenderSpike}`}
+                          tone={
+                            s.worstRenderSpike > RENDER_SPIKE_THRESHOLD
+                              ? "bad"
+                              : s.worstRenderSpike > 3
+                                ? "warn"
+                                : "good"
+                          }
+                          hint={`${s.keystrokes} keystrokes · worst frame ${s.worstFrameMs.toFixed(1)}ms`}
+                        />
+                      );
+                    },
+                  )}
+                </div>
               </div>
             )}
           </section>
@@ -656,7 +814,9 @@ export function CbmDebugPanel({ info }: Props) {
             Headless mode:{" "}
             <code className="rounded bg-muted px-1">?debug=test</code> ·{" "}
             <code className="rounded bg-muted px-1">&amp;format=json</code> for CI ·{" "}
-            <code className="rounded bg-muted px-1">&amp;trace=1</code> to always log trace ·
+            <code className="rounded bg-muted px-1">&amp;pretty=1</code> indents JSON ·{" "}
+            <code className="rounded bg-muted px-1">&amp;trace=1</code> always log trace ·{" "}
+            <code className="rounded bg-muted px-1">&amp;download=1</code> save .json on fail ·
             or call <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
           </p>
           <p className="text-[10px] text-muted-foreground">
