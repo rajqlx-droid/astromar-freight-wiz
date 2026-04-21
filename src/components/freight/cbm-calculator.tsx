@@ -83,16 +83,25 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
   const [wtUnit, setWtUnit] = usePersistentWeightUnit();
   const [draftItems, setDraftItems] = useState<CbmItem[]>(items);
+  // Track the last array we pushed up to the parent so we can ignore the
+  // echo back through props (which would otherwise cause an infinite
+  // setDraftItems → setItems → setDraftItems loop — React error #185).
+  const lastPushedRef = useRef<CbmItem[]>(items);
   useEffect(() => {
+    if (items === lastPushedRef.current) return;
     setDraftItems(items);
   }, [items]);
   useEffect(() => {
+    if (draftItems === lastPushedRef.current) return;
     // Adaptive debounce: tighter for small manifests (responsive feel),
     // looser for large ones (avoids re-running heavy downstream work mid-typing).
     // Lightweight per-row CBM and Total CBM tiles read from `draftItems`
     // directly, so this delay only affects the geometry-aware recommender.
     const delay = draftItems.length > 10 ? 600 : 250;
-    const t = setTimeout(() => setItems(draftItems), delay);
+    const t = setTimeout(() => {
+      lastPushedRef.current = draftItems;
+      setItems(draftItems);
+    }, delay);
     return () => clearTimeout(t);
   }, [draftItems, setItems]);
   const [forcedChoice, setForcedChoice] = useState<import("@/lib/freight/container-ids").ContainerId | null>(null);
