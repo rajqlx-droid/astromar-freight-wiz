@@ -738,8 +738,16 @@ export function CbmCalculator({ items, setItems }: Props) {
         setOptimizationRequested(true);
       }}
     />
-    {/* ARIA live region — announces multi-container bucket changes to screen readers */}
-    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+    {/* ARIA live region — announces multi-container bucket changes to screen readers.
+        suppressHydrationWarning: the region is empty at SSR time and is populated
+        only after mount via useEffect, so any text mismatch is benign. */}
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className="sr-only"
+      suppressHydrationWarning
+    >
       {liveMessage}
     </div>
     </div>

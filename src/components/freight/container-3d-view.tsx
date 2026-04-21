@@ -579,38 +579,44 @@ function SceneContents({
 
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
-        {pack.placed.map((b, i) => {
-          const t = transforms?.[i];
-          if (recording && t && !t.visible) return null;
-          // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
-          if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
-          // Combine per-frame transform offset (recording) with the shuffle
-          // preview offset (applied to scene-z, the container width axis).
-          const shuffleZ = shufflePreview?.get(i) ?? 0;
-          const offset: [number, number, number] = [
-            t?.offset[0] ?? 0,
-            t?.offset[1] ?? 0,
-            (t?.offset[2] ?? 0) + shuffleZ,
-          ];
-          const isPreviewed = !recording && shuffleZ !== 0;
-          const flyIn = !recording && !!flyInPlacedSet?.has(i);
-          const isActivePallet = !recording && i === activePalletIdx;
-          return (
-            <CargoBox
-              key={i}
-              box={b}
-              stat={pack.perItem[b.itemIdx]}
-              offset={offset}
-              scale={t?.scale}
-              previewHighlight={isPreviewed}
-              flyIn={flyIn}
-              flyInKey={flyInKey}
-              containerL={Cm.l}
-              containerH={Cm.h}
-              showCheckmark={isActivePallet}
-            />
-          );
-        })}
+        {(() => {
+          // Render edge outlines only for small jobs (<=60 boxes). Above that
+          // the edges add a per-box draw call without measurable visual value.
+          const showEdges = pack.placed.length <= 60;
+          return pack.placed.map((b, i) => {
+            const t = transforms?.[i];
+            if (recording && t && !t.visible) return null;
+            // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
+            if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
+            // Combine per-frame transform offset (recording) with the shuffle
+            // preview offset (applied to scene-z, the container width axis).
+            const shuffleZ = shufflePreview?.get(i) ?? 0;
+            const offset: [number, number, number] = [
+              t?.offset[0] ?? 0,
+              t?.offset[1] ?? 0,
+              (t?.offset[2] ?? 0) + shuffleZ,
+            ];
+            const isPreviewed = !recording && shuffleZ !== 0;
+            const flyIn = !recording && !!flyInPlacedSet?.has(i);
+            const isActivePallet = !recording && i === activePalletIdx;
+            return (
+              <CargoBox
+                key={i}
+                box={b}
+                stat={pack.perItem[b.itemIdx]}
+                offset={offset}
+                scale={t?.scale}
+                previewHighlight={isPreviewed}
+                flyIn={flyIn}
+                flyInKey={flyInKey}
+                containerL={Cm.l}
+                containerH={Cm.h}
+                showCheckmark={isActivePallet}
+                showEdges={showEdges}
+              />
+            );
+          });
+        })()}
         {/* Pulsing yellow target outline at the NEXT pallet's slot */}
         {!recording && nextBox && (
           <NextPalletTarget box={nextBox} />
@@ -1164,6 +1170,7 @@ function CargoBox({
   containerL = 12,
   containerH = 2.6,
   showCheckmark = false,
+  showEdges = true,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1175,6 +1182,7 @@ function CargoBox({
   containerL?: number;
   containerH?: number;
   showCheckmark?: boolean;
+  showEdges?: boolean;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1251,6 +1259,7 @@ function CargoBox({
         hovered={hovered}
         tiltColor={tiltColor}
         tilted={tilted}
+        showEdges={showEdges}
         onPointerOver={(e) => {
           if (!tilted) return;
           e.stopPropagation();
@@ -1332,6 +1341,7 @@ interface PackageShapeProps {
   hovered: boolean;
   tilted: boolean;
   tiltColor: string;
+  showEdges?: boolean;
   onPointerOver: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut: (e: ThreeEvent<PointerEvent>) => void;
 }
@@ -1346,7 +1356,7 @@ function PackageShape(props: PackageShapeProps) {
   return <CartonShape {...props} />;
 }
 
-function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   return (
     <mesh castShadow receiveShadow onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <boxGeometry args={[lm, hm, wm]} />
@@ -1359,14 +1369,16 @@ function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, onPointer
         emissive={hovered ? tiltColor : "#000000"}
         emissiveIntensity={hovered ? 0.25 : 0}
       />
-      <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
-        <lineBasicMaterial
-          color={hovered ? tiltColor : "#1f2937"}
-          polygonOffset
-          polygonOffsetFactor={-1}
-          polygonOffsetUnits={-1}
-        />
-      </Edges>
+      {showEdges && (
+        <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
+          <lineBasicMaterial
+            color={hovered ? tiltColor : "#1f2937"}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </Edges>
+      )}
     </mesh>
   );
 }
@@ -1435,7 +1447,7 @@ function BaleShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoi
   );
 }
 
-function CrateShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function CrateShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   const crateColor = color || "#a07a4e";
   const slatColor = "#5a3d20";
   const slatThk = Math.min(lm, wm) * 0.06;
@@ -1450,9 +1462,11 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPo
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
-        <Edges scale={0.999} color="#3a2818">
-          <lineBasicMaterial color="#3a2818" />
-        </Edges>
+        {showEdges && (
+          <Edges scale={0.999} color="#3a2818">
+            <lineBasicMaterial color="#3a2818" />
+          </Edges>
+        )}
       </mesh>
       {[
         [-lm / 2 + slatThk / 2, -wm / 2 + slatThk / 2],
@@ -1475,7 +1489,7 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPo
   );
 }
 
-function PalletShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   const PALLET_H = 0.12;
   const loadH = Math.max(0.05, hm - PALLET_H);
   const wrapColor = "#a8c5d8";
@@ -1495,9 +1509,11 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onP
           emissive={hovered ? tiltColor : wrapColor}
           emissiveIntensity={hovered ? 0.25 : 0.05}
         />
-        <Edges scale={0.999} color="#5a7a90">
-          <lineBasicMaterial color="#5a7a90" />
-        </Edges>
+        {showEdges && (
+          <Edges scale={0.999} color="#5a7a90">
+            <lineBasicMaterial color="#5a7a90" />
+          </Edges>
+        )}
       </mesh>
     </group>
   );

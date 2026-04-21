@@ -483,7 +483,7 @@ function SinglePlanBody({
                     pack={pack}
                     shufflePreview={shufflePreview}
                     visiblePlacedSet={visiblePlacedSet}
-                    hideDoors={stepMode || pack.placedCartons === 0 || (visiblePlacedSet?.size === 0)}
+                    hideDoors={stepMode || pack.placedCartons === 0}
                     gapHeatmapRow={gapHeatmapRow}
                     flyInPlacedSet={flyInPlacedSet}
                     flyInKey={flyInKey}
