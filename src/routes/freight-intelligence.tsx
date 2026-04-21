@@ -339,6 +339,19 @@ function FreightIntelligencePage() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="min-h-screen bg-background">
+        {/* SKIP LINKS — visible only on keyboard focus */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-brand-navy focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand-orange focus:ring-offset-2"
+        >
+          Skip to main content
+        </a>
+        <a
+          href="#container-load-viewer"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-44 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-brand-navy focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-brand-orange focus:ring-offset-2"
+        >
+          Skip to 3D container viewer
+        </a>
         {/* HEADER */}
         <header
           className="no-print sticky top-0 z-50 w-full border-b-2 bg-background/95 shadow-sm backdrop-blur"
@@ -487,7 +500,11 @@ function FreightIntelligencePage() {
         </section>
 
         {/* CALCULATOR — single tool OR split compare view */}
-        <section className="mx-auto max-w-7xl px-3 pb-10 md:px-4">
+        <section
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto max-w-7xl px-3 pb-10 outline-none md:px-4"
+        >
           {compareMode ? (
             <SplitCompareView
               left={compareMode.left}
