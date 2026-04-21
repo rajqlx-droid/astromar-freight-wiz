@@ -298,6 +298,39 @@ export function CbmCalculator({ items, setItems }: Props) {
   const hasAnyDims = draftItems.some((it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0);
   const showOptimization = optimizationRequested && allConfirmed;
 
+  // Once the user has clicked "Optimize loading", run the geometry-aware
+  // recommender inside the Web Worker. Re-runs on every committed `items`
+  // change. While in flight, the UI keeps showing the previous worker result
+  // (or the cheap fast recommendation if none yet) so badges don't flicker.
+  useEffect(() => {
+    if (!showOptimization) return;
+    if (items.length === 0) return;
+    let cancelled = false;
+    worker
+      .recommend(items)
+      .then((res) => {
+        if (cancelled) return;
+        setWorkerRecommendation(res.recommendation);
+        setWorkerBucketPacks(res.bucketPacks);
+      })
+      .catch(() => {
+        // Swallow — if the worker fails we keep the fast CBM recommendation
+        // visible rather than blanking the panel.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showOptimization, items, worker]);
+
+  // When the user un-confirms or wipes the manifest, drop stale worker results
+  // so the banner reverts to the cheap fast recommendation immediately.
+  useEffect(() => {
+    if (!showOptimization) {
+      setWorkerRecommendation(null);
+      setWorkerBucketPacks([]);
+    }
+  }, [showOptimization]);
+
   const update = (id: string, patch: Partial<CbmItem>) => {
     setDraftItems(draftItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   };
