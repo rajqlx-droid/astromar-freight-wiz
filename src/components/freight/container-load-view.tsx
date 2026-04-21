@@ -88,7 +88,7 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
     usedCbm: 0,
     densityPct: 0,
     cogLateralOffsetPct: 0,
-    nearCeilingPlacedIdxs: new Set<number>(),
+    nearCeilingPlacedIdxs: [],
     floorCoveragePct: 0,
   };
 }
