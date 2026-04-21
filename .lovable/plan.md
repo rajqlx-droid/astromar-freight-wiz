@@ -1,41 +1,35 @@
 
 
-## Implement: Always-visible Optimize CTA + 3D Loading Plan discovery chip
+## Fix FAQ alignment + add Quick Reference card
 
-### 1. `src/components/freight/cbm-calculator.tsx`
+### Change in `src/routes/freight-intelligence.tsx` (FAQ section, ~lines 677–695)
 
-- Add stable anchor `id="cbm-optimize-cta"` to the "Get container optimization plan" card wrapper.
-- Remove the `hasAnyDims &&` part of the gate at line 421 so the card always renders when `!showOptimization`.
-- Disable the **Optimize loading** button when `!hasAnyDims`, and wrap it in a `Tooltip` showing "Enter cargo dimensions first" so users understand why it's greyed out.
-- No changes to packing logic, the 3D viewer, or PDF export.
+1. **Width fix**: change wrapper from `max-w-4xl` → `max-w-7xl` so FAQ aligns with the "Need expert assistance" banner above and footer below.
 
-### 2. `src/routes/freight-intelligence.tsx`
+2. **Two-column grid**: wrap heading + content in `grid gap-8 md:grid-cols-[1fr_320px]`. Heading spans full width via `md:col-span-2`. FAQ accordion goes in the left column.
 
-- Beside the `"Load Optimizer Calculator"` heading (rendered only when `active === "cbm"`), add a small clickable pill:
-  - Icon: `Sparkles` (lucide) + label `"3D Loading Plan"` + `ChevronDown` arrow.
-  - Style: `rounded-full h-7 px-3 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 text-xs font-medium`.
-  - On click: `document.getElementById("cbm-optimize-cta")?.scrollIntoView({ behavior: "smooth", block: "center" })`.
-  - Responsive: full label on `sm+`, icon-only (`Sparkles` + `ChevronDown`) on smaller screens to keep the 948px header tidy.
-- Pill renders only on the CBM tab; other tabs stay unchanged.
+3. **Right column — "Quick reference" card** (fills the empty space, no duplicate of contact banner):
+   - `bg-brand-navy-soft border border-brand-navy/10 rounded-2xl p-6 self-start`
+   - Icon badge: `BookOpen` (lucide) on `bg-brand-orange/15` rounded circle
+   - Heading: "Quick reference"
+   - Compact bullet list (cheat-sheet of the most-used freight constants from the FAQ answers):
+     - Sea LCL divisor: `÷1000` (1 CBM = 1000 kg)
+     - Air IATA divisor: `÷6000`
+     - 20' GP usable: ~28 CBM
+     - 40' GP usable: ~58 CBM
+     - 40' HC usable: ~68 CBM
+     - Indian port free days: 4–5
+   - Muted footer line: "Always verify duty/HSN with your CHA."
 
-### Visual result
+4. **Mobile** (`< md`): grid collapses to single column — accordion first, reference card below. Keeps the 948px viewport tidy.
 
-```text
-Load Optimizer Calculator   [✨ 3D Loading Plan ↓]   ← new pill (CBM tab only)
-CBM / Load Simulator
-...
-[ Item 1 ... ]
-┌─ Get container optimization plan ─────────────┐    ← always visible now
-│ See exactly how your cargo fits in 20'/40'…   │
-│ [ Optimize loading ▶ ]   (disabled + tooltip  │
-│                           until dims entered) │
-└───────────────────────────────────────────────┘
-```
-
-### Files touched
-- `src/components/freight/cbm-calculator.tsx` — gate change, anchor id, disabled state + tooltip on Optimize button.
-- `src/routes/freight-intelligence.tsx` — header pill beside "Load Optimizer Calculator" with smooth scroll-to-anchor.
+5. **Imports**: add `BookOpen` to the existing `lucide-react` import line in this file. No new packages.
 
 ### Out of scope
-- 3D viewer behavior, packing algorithm, PDF export, other calculator tabs.
+- "Need expert assistance" banner above stays exactly as-is.
+- FAQ questions and answers unchanged.
+- No other sections, calculators, or routes touched.
+
+### Files touched
+- `src/routes/freight-intelligence.tsx` — FAQ section only (wrapper width, grid layout, new right-column card, one icon import).
 
