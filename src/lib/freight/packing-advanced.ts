@@ -306,9 +306,9 @@ export function packContainerAdvanced(
           if (!weightOk) continue;
 
           const gRule = getGapRule(c.packageType);
-          if (x < gRule.wallMin) continue;
-          if (y < gRule.wallMin) continue;
-          if (y + o.w > C.w - gRule.wallMin) continue;
+          if (x > 0 && x < gRule.wallMin) continue;
+          if (y > 0 && y < gRule.wallMin) continue;
+          if (y + o.w < C.w && y + o.w > C.w - gRule.wallMin) continue;
           let gapViolation = false;
           for (const pb of placedInternal) {
             const xOv = x < pb.x + pb.l + gRule.minGap && x + o.l + gRule.minGap > pb.x;
