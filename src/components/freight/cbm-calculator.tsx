@@ -771,7 +771,10 @@ export function CbmCalculator({ items, setItems }: Props) {
         debounceMs: draftItems.length > 10 ? 600 : 250,
         workerPending: worker.pending,
         showOptimization,
-        headlineTotalCbm: baseResult.totalCbm,
+        headlineTotalCbm: draftItems.reduce(
+          (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
+          0,
+        ),
         recommendationSource: workerRecommendation ? "worker" : "fast",
         setDraftItems,
       }}
