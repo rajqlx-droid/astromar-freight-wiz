@@ -305,6 +305,8 @@ export function ContainerLoadView({
                 scenarios={scenarios}
                 selectedStrategyId={selectedStrategyId}
                 setSelectedStrategyId={setSelectedStrategyId}
+                compareStrategies={compareStrategies}
+                setCompareStrategies={setCompareStrategies}
                 rollup={{
                   totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
                   totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
@@ -330,6 +332,8 @@ export function ContainerLoadView({
           scenarios={scenarios}
           selectedStrategyId={selectedStrategyId}
           setSelectedStrategyId={setSelectedStrategyId}
+          compareStrategies={compareStrategies}
+          setCompareStrategies={setCompareStrategies}
         />
       )}
     </Card>
