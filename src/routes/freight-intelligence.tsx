@@ -501,7 +501,7 @@ function FreightIntelligencePage() {
           ) : (
             <>
               {/* Heading row: title on left, promo banner in middle (CBM only), Compare/History stacked on right. */}
-              <div className="mb-3 flex flex-row items-stretch gap-2 sm:gap-3">
+              <div className="mb-3 flex flex-row items-stretch gap-3 sm:gap-5">
                 {/* Title block */}
                 <div className="flex min-w-0 items-center gap-3">
                   <div
