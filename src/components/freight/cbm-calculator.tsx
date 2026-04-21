@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -46,7 +46,8 @@ import {
 } from "@/components/ui/dialog";
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
 import { ITEM_COLORS, totalCbm as sumCbm, totalWeight as sumWeight } from "@/lib/freight/packing";
-import { recommendContainers } from "@/lib/freight/container-recommender";
+import { recommendContainers, splitItemsAcrossContainers } from "@/lib/freight/container-recommender";
+import { packContainerAdvanced } from "@/lib/freight/packing-advanced";
 import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
@@ -144,6 +145,41 @@ export function CbmCalculator({ items, setItems }: Props) {
   // and refuses containers that physically can't hold every piece (e.g. tall
   // non-stackable pallets in a 20ft GP).
   const recommendation = useMemo(() => recommendContainers(items), [items]);
+
+  // Active container bucket index for the multi-container case. Shared between
+  // the suggestion banner cards and the 3D viewer's tabbed view so clicking
+  // a card swaps the visible container.
+  const [activeUnitIdx, setActiveUnitIdx] = useState(0);
+
+  // Per-unit placed/total counts — drives the "12/16 placed" badges on both
+  // the banner cards and the viewer tabs. Kept in sync by re-running the
+  // packer with the same inputs the viewer uses.
+  const unitStats = useMemo(() => {
+    if (!recommendation.isMulti) return undefined;
+    const buckets = splitItemsAcrossContainers(items, recommendation);
+    return recommendation.units.map((u, i) => {
+      const pack = packContainerAdvanced(buckets[i] ?? [], u.container);
+      return { placed: pack.placedCartons, total: pack.totalCartons };
+    });
+  }, [items, recommendation]);
+
+  // Clamp activeUnitIdx if the recommendation shrinks.
+  useEffect(() => {
+    if (activeUnitIdx > 0 && activeUnitIdx >= recommendation.units.length) {
+      setActiveUnitIdx(0);
+    }
+  }, [activeUnitIdx, recommendation.units.length]);
+
+  const handleUnitSelect = (idx: number) => {
+    setActiveUnitIdx(idx);
+    // Smooth-scroll the 3D viewer into view so the user immediately sees the
+    // bucket they just picked rendered below.
+    requestAnimationFrame(() => {
+      document
+        .getElementById("container-load-viewer")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   // Items that have real dimensions but haven't had packing options confirmed yet.
   const unconfirmed = useMemo(
@@ -616,12 +652,17 @@ export function CbmCalculator({ items, setItems }: Props) {
           recommendation={recommendation}
           currentChoice={forcedChoice ?? "auto"}
           onApply={(id) => setForcedChoice(id)}
+          activeUnitIdx={activeUnitIdx}
+          onUnitSelect={handleUnitSelect}
+          unitStats={unitStats}
         />
         <ContainerLoadView
           items={items}
           recommendation={recommendation}
           forcedChoice={forcedChoice}
           onChoiceChange={setForcedChoice}
+          activeUnitIdx={activeUnitIdx}
+          onActiveUnitChange={setActiveUnitIdx}
           onReady={(h) => {
             loadHandleRef.current = h;
             // Pull the active pack into state so the Density KPI can render.

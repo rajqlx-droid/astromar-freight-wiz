@@ -51,6 +51,10 @@ interface Props {
   }) => void;
   /** When set, disables the 3D toggle and Loading Video button (CBM gate). */
   optimizationDisabledReason?: string | null;
+  /** Controlled active unit index (multi-container). Falls back to internal state when omitted. */
+  activeUnitIdx?: number;
+  /** Notify parent when the user switches the visible container tab. */
+  onActiveUnitChange?: (idx: number) => void;
 }
 
 type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
@@ -65,6 +69,8 @@ export function ContainerLoadView({
   onChoiceChange,
   onReady,
   optimizationDisabledReason,
+  activeUnitIdx,
+  onActiveUnitChange,
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
@@ -75,7 +81,13 @@ export function ContainerLoadView({
 
   const [is3D, setIs3D] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState("0");
+  const [internalActiveTab, setInternalActiveTab] = useState("0");
+  const activeTab =
+    typeof activeUnitIdx === "number" ? String(activeUnitIdx) : internalActiveTab;
+  const setActiveTab = (v: string) => {
+    setInternalActiveTab(v);
+    onActiveUnitChange?.(Number(v));
+  };
   const [viewerCollapsed, setViewerCollapsed] = useState(false);
   const view3DRef = useRef<Container3DHandle | null>(null);
 
@@ -136,6 +148,7 @@ export function ContainerLoadView({
 
   return (
     <Card
+      id="container-load-viewer"
       className="border-2 p-4 sm:p-5"
       style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)" }}
     >
@@ -223,19 +236,32 @@ export function ContainerLoadView({
       ) : isMulti && multiPacks.length > 0 ? (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-3 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
-            {multiPacks.map((p, i) => (
-              <TabsTrigger
-                key={i}
-                value={String(i)}
-                className="flex-1 gap-1.5 text-[11px] sm:text-xs"
-              >
-                <span className="font-semibold">#{i + 1}</span>
-                {p.container.name}
-                <span className="hidden text-muted-foreground sm:inline">
-                  · {p.cargoCbm.toFixed(1)} m³
-                </span>
-              </TabsTrigger>
-            ))}
+            {multiPacks.map((p, i) => {
+              const allPlaced = p.placedCartons >= p.totalCartons && p.totalCartons > 0;
+              return (
+                <TabsTrigger
+                  key={i}
+                  value={String(i)}
+                  className="flex-1 gap-1.5 text-[11px] sm:text-xs"
+                >
+                  <span className="font-semibold">#{i + 1}</span>
+                  {p.container.name}
+                  <span className="hidden text-muted-foreground sm:inline">
+                    · {p.cargoCbm.toFixed(1)} m³
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                      allPlaced
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
+                    )}
+                  >
+                    {p.placedCartons}/{p.totalCartons}
+                  </span>
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
           {multiPacks.map((p, i) => (
             <TabsContent key={i} value={String(i)} className="m-0">
@@ -453,7 +479,7 @@ function SinglePlanBody({
                     pack={pack}
                     shufflePreview={shufflePreview}
                     visiblePlacedSet={visiblePlacedSet}
-                    hideDoors={stepMode}
+                    hideDoors={stepMode || pack.placedCartons === 0 || (visiblePlacedSet?.size === 0)}
                     gapHeatmapRow={gapHeatmapRow}
                     flyInPlacedSet={flyInPlacedSet}
                     flyInKey={flyInKey}
