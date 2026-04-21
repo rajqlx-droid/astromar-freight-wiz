@@ -122,37 +122,89 @@ export function ContainerLoadView({
   const deferredItems = useDeferredValue(items);
   const deferredContainer = useDeferredValue(activeContainer);
 
+  // ─── Off-main-thread packing via Web Worker ────────────────────────────
+  // The packer can take 10–30 seconds for multi-container loads with hundreds
+  // of cartons. Running it inline froze the page and produced a 36s INP.
+  // Now everything runs in a Worker; the UI keeps responding while jobs run.
+  const worker = usePackingWorker();
+
   // Multi-container packs (one per recommended unit).
-  const multiPacks = useMemo<AdvancedPackResult[]>(() => {
-    if (!isMulti || !recommendation) return [];
+  const [multiPacks, setMultiPacks] = useState<AdvancedPackResult[]>([]);
+  useEffect(() => {
+    if (!isMulti || !recommendation) {
+      setMultiPacks([]);
+      return;
+    }
+    let cancelled = false;
     const buckets = splitItemsAcrossContainers(deferredItems, recommendation);
-    return recommendation.units.map((u, i) =>
-      packContainerAdvanced(buckets[i] ?? [], u.container),
-    );
-  }, [deferredItems, isMulti, recommendation]);
+    const containers = recommendation.units.map((u) => u.container);
+    worker
+      .multi(buckets, containers)
+      .then((res) => {
+        if (!cancelled) setMultiPacks(res);
+      })
+      .catch(() => {
+        // Worker terminated mid-flight — keep prior result.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredItems, isMulti, recommendation, worker]);
 
-  const scenarios = useMemo<ScenarioResult[]>(
-    () => {
-      if (!hasCargo) return [];
-      const packItems = isMulti
-        ? (splitItemsAcrossContainers(deferredItems, recommendation!)[Number(activeTab)] ?? deferredItems)
-        : deferredItems;
-      const strategies: import("@/lib/freight/scenario-runner").StrategyId[] = compareStrategies
-        ? ["row-back", "weight-first", "floor-first", "mixed"]
-        : ["row-back"];
-      return runAllScenarios(packItems, deferredContainer, strategies);
-    },
-    [hasCargo, isMulti, deferredItems, recommendation, activeTab, deferredContainer, compareStrategies],
-  );
+  // Strategy comparison (default: just "row-back"; user can opt into all 4).
+  const [scenarios, setScenarios] = useState<ScenarioResult[]>([]);
+  useEffect(() => {
+    if (!hasCargo) {
+      setScenarios([]);
+      return;
+    }
+    let cancelled = false;
+    const packItems = isMulti
+      ? splitItemsAcrossContainers(deferredItems, recommendation!)[Number(activeTab)] ??
+        deferredItems
+      : deferredItems;
+    const strategies: import("@/lib/freight/scenario-runner").StrategyId[] = compareStrategies
+      ? ["row-back", "weight-first", "floor-first", "mixed"]
+      : ["row-back"];
+    worker
+      .scenarios(packItems, deferredContainer, strategies)
+      .then((res) => {
+        if (!cancelled) setScenarios(res);
+      })
+      .catch(() => {
+        /* worker gone */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasCargo,
+    isMulti,
+    deferredItems,
+    recommendation,
+    activeTab,
+    deferredContainer,
+    compareStrategies,
+    worker,
+  ]);
 
-  const singlePack = useMemo(
-    () => scenarios[0]?.pack ?? packContainerAdvanced(deferredItems, deferredContainer),
-    [scenarios, deferredItems, deferredContainer],
+  // singlePack falls out of scenarios[0]. While the first run is in flight,
+  // show an empty pack so downstream components (3D viewer, panels) render
+  // without crashing — the worker fills in the real result a moment later.
+  const singlePack: AdvancedPackResult = useMemo(
+    () => scenarios[0]?.pack ?? makeEmptyPack(deferredContainer),
+    [scenarios, deferredContainer],
   );
 
   const activePack: AdvancedPackResult = selectedStrategyId
-    ? (scenarios.find(s => s.strategyId === selectedStrategyId)?.pack ?? (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack))
-    : (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack);
+    ? scenarios.find((s) => s.strategyId === selectedStrategyId)?.pack ??
+      (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack)
+    : isMulti
+      ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
+      : singlePack;
+
+  // True when the worker hasn't returned a real pack yet for the current input.
+  const isCalculating = worker.pending && activePack.placed.length === 0 && hasCargo;
 
   // Expose snapshot capability to parent (current visible pack).
   useEffect(() => {
