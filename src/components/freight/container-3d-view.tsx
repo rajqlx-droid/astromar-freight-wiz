@@ -603,6 +603,7 @@ function SceneContents({
             const isPreviewed = !recording && shuffleZ !== 0;
             const flyIn = !recording && !!flyInPlacedSet?.has(i);
             const isActivePallet = !recording && i === activePalletIdx;
+            const isNearCeiling = !recording && (nearCeilingPlacedIdxs?.has(i) ?? false);
             return (
               <CargoBox
                 key={i}
@@ -617,6 +618,7 @@ function SceneContents({
                 containerH={Cm.h}
                 showCheckmark={isActivePallet}
                 showEdges={showEdges}
+                nearCeiling={isNearCeiling}
               />
             );
           });
