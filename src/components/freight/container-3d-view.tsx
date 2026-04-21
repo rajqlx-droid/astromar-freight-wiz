@@ -309,9 +309,17 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
   );
 });
 
-/* --------------- Procedural textures (real container look) --------------- */
+/* --------------- Procedural textures (real container look) ---------------
+ * Module-level caches: each texture is created at most once per process and
+ * reused across container switches. The texture data itself is tileable —
+ * only `repeat` depends on container dimensions, and that's a cheap update
+ * applied at consumption sites. This eliminates GPU memory growth that
+ * previously occurred each time the user switched buckets.
+ */
 
+let _skyTex: THREE.CanvasTexture | null = null;
 function makeSkyTexture(): THREE.CanvasTexture {
+  if (_skyTex) return _skyTex;
   const c = document.createElement("canvas");
   c.width = 8;
   c.height = 256;
@@ -323,10 +331,14 @@ function makeSkyTexture(): THREE.CanvasTexture {
   g.addColorStop(1, "#5a534a");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 8, 256);
-  return new THREE.CanvasTexture(c);
+  _skyTex = new THREE.CanvasTexture(c);
+  return _skyTex;
 }
 
+const _corrugatedCache = new Map<string, THREE.CanvasTexture>();
 function makeCorrugatedTexture(color: string): THREE.CanvasTexture {
+  const cached = _corrugatedCache.get(color);
+  if (cached) return cached;
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 64;
@@ -350,10 +362,13 @@ function makeCorrugatedTexture(color: string): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
+  _corrugatedCache.set(color, tex);
   return tex;
 }
 
+let _plywoodTex: THREE.CanvasTexture | null = null;
 function makePlywoodTexture(): THREE.CanvasTexture {
+  if (_plywoodTex) return _plywoodTex;
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 256;
@@ -371,10 +386,10 @@ function makePlywoodTexture(): THREE.CanvasTexture {
   }
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   for (let y = 0; y < 256; y += 64) ctx.fillRect(0, y, 256, 1);
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  return tex;
+  _plywoodTex = new THREE.CanvasTexture(c);
+  _plywoodTex.wrapS = THREE.RepeatWrapping;
+  _plywoodTex.wrapT = THREE.RepeatWrapping;
+  return _plywoodTex;
 }
 
 /* --------------- Scene contents --------------- */
