@@ -11,8 +11,8 @@ import {
   toCm,
   kgTo,
   toKg,
-  usePersistentLengthUnit,
-  usePersistentWeightUnit,
+  type LengthUnit,
+  type WeightUnit,
 } from "@/components/freight/unit-selector";
 import { calcAir, emptyAirItem, type AirItem } from "@/lib/freight/calculators";
 import { nextId } from "@/lib/freight/ids";
@@ -24,10 +24,10 @@ interface Props {
   setDivisor: (n: number) => void;
 }
 
-export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
-  const [lenUnit, setLenUnit] = usePersistentLengthUnit();
-  const [wtUnit, setWtUnit] = usePersistentWeightUnit();
-  const result = useMemo(() => calcAir(items, divisor), [items, divisor]);
+export function AirCalculator({ items, setItems, divisor: _divisor, setDivisor: _setDivisor }: Props) {
+  // Note: legacy global divisor props kept for parent compatibility but unused.
+  // Each item now owns its own divisor + units.
+  const result = useMemo(() => calcAir(items, 6000), [items]);
 
   const update = (id: string, patch: Partial<AirItem>) =>
     setItems(items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
@@ -37,28 +37,14 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
     if (src) setItems([...items, { ...src, id: nextId("air") }]);
   };
 
-  const showLen = (cm: number) => {
-    const v = cmTo(cm, lenUnit);
-    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
-  };
-  const setLen =
-    (id: string, key: "length" | "width" | "height") => (n: number) =>
-      update(id, { [key]: Number.isFinite(n) ? toCm(n, lenUnit) : 0 } as Partial<AirItem>);
-
-  const showWt = (kg: number) => {
-    const v = kgTo(kg, wtUnit);
-    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
-  };
-  const setWt = (id: string) => (n: number) =>
-    update(id, { weight: Number.isFinite(n) ? toKg(n, wtUnit) : 0 });
-
   const warn = result.items.find((i) => i.label === "Cost Impact" && i.value.startsWith("+"));
 
   const inputsTable = items.map((it, idx) => {
-    const volPerPc = (it.length * it.width * it.height) / divisor;
+    const div = it.divisor && it.divisor > 0 ? it.divisor : 6000;
+    const volPerPc = (it.length * it.width * it.height) / div;
     return {
       label: `Item ${idx + 1}`,
-      value: `${it.length}×${it.width}×${it.height} cm · ${it.qty} pcs · ${it.weight.toFixed(2)} kg actual · ${volPerPc.toFixed(2)} kg vol/pc`,
+      value: `${it.length}×${it.width}×${it.height} cm · ${it.qty} pcs · ${it.weight.toFixed(2)} kg actual · ÷${div} · ${volPerPc.toFixed(2)} kg vol/pc`,
     };
   });
 
@@ -68,7 +54,8 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
     let volumetric = 0;
     let totalQty = 0;
     for (const it of items) {
-      const v = (it.length * it.width * it.height) / divisor;
+      const div = it.divisor && it.divisor > 0 ? it.divisor : 6000;
+      const v = (it.length * it.width * it.height) / div;
       volumetric += v * it.qty;
       actual += it.weight * it.qty;
       totalQty += it.qty;
@@ -88,7 +75,7 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
           },
         ],
         breakdown: {
-          title: `Weight comparison · chargeable bills the higher of actual vs volumetric (÷${divisor})`,
+          title: `Weight comparison · chargeable bills the higher of actual vs volumetric (per-item divisor)`,
           segments: [
             { label: "Actual", value: actual, color: [27, 58, 107] },
             { label: "Volumetric", value: volumetric, color: [249, 115, 22] },
@@ -96,42 +83,40 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
         },
       },
     };
-  }, [items, divisor]);
+  }, [items]);
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
       <div className="space-y-3">
-        <Card
-          className="border-2 p-3"
-          style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
-        >
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[180px] flex-1">
-              <NumberField
-                compact
-                id="divisor"
-                label="Volumetric Divisor"
-                required
-                step={1}
-                value={divisor}
-                onChange={(n) => setDivisor(n || 6000)}
-                hint="IATA standard is 6000 for air freight. Some couriers use 5000."
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 pb-1">
-              <UnitSelector id="air-len-unit" value={lenUnit} onChange={setLenUnit} compact />
-              <WeightUnitSelector id="air-wt-unit" value={wtUnit} onChange={setWtUnit} compact />
-            </div>
-          </div>
-        </Card>
-
         {items.map((it, idx) => {
-          const rowVolKg = (it.length * it.width * it.height) / divisor; // per piece
+          const lenUnit: LengthUnit = it.lenUnit ?? "cm";
+          const wtUnit: WeightUnit = it.wtUnit ?? "kg";
+          const div = it.divisor && it.divisor > 0 ? it.divisor : 6000;
+
+          const showLen = (cm: number) => {
+            const v = cmTo(cm, lenUnit);
+            return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+          };
+          const setLen = (key: "length" | "width" | "height") => (n: number) =>
+            update(it.id, { [key]: Number.isFinite(n) ? toCm(n, lenUnit) : 0 } as Partial<AirItem>);
+          const showWt = (kg: number) => {
+            const v = kgTo(kg, wtUnit);
+            return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+          };
+          const setWt = (n: number) =>
+            update(it.id, { weight: Number.isFinite(n) ? toKg(n, wtUnit) : 0 });
+
+          const rowVolKg = (it.length * it.width * it.height) / div;
           const rowTotalVol = rowVolKg * it.qty;
           const rowTotalActual = it.weight * it.qty;
           const rowChargeable = Math.max(rowTotalActual, rowTotalVol);
+
           return (
-            <Card key={it.id} className="border-2 p-3" style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}>
+            <Card
+              key={it.id}
+              className="border-2 p-3"
+              style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
+            >
               <div className="mb-2 flex items-center justify-between">
                 <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
                 <div className="flex gap-1">
@@ -145,12 +130,44 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
-                <NumberField compact id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen(it.id, "length")} />
-                <NumberField compact id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen(it.id, "width")} />
-                <NumberField compact id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen(it.id, "height")} />
-                <NumberField compact id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
-                <NumberField compact id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt(it.id)} />
+
+              {/* Per-item settings: divisor + units */}
+              <div className="mb-3 flex flex-wrap items-end gap-2 rounded-md bg-brand-navy-soft/30 p-2">
+                <div className="min-w-[140px] flex-1">
+                  <NumberField
+                    compact
+                    steppers={false}
+                    id={`adiv-${it.id}`}
+                    label="Volumetric Divisor"
+                    required
+                    step={1}
+                    value={div}
+                    onChange={(n) => update(it.id, { divisor: n > 0 ? n : 6000 })}
+                    hint="IATA std 6000 (air). Couriers often use 5000."
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                  <UnitSelector
+                    id={`alen-${it.id}`}
+                    value={lenUnit}
+                    onChange={(u) => update(it.id, { lenUnit: u })}
+                    compact
+                  />
+                  <WeightUnitSelector
+                    id={`awt-u-${it.id}`}
+                    value={wtUnit}
+                    onChange={(u) => update(it.id, { wtUnit: u })}
+                    compact
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                <NumberField compact steppers={false} id={`al-${it.id}`} label="Length" suffix={lenUnit} required value={showLen(it.length)} onChange={setLen("length")} />
+                <NumberField compact steppers={false} id={`aw-${it.id}`} label="Width" suffix={lenUnit} required value={showLen(it.width)} onChange={setLen("width")} />
+                <NumberField compact steppers={false} id={`ah-${it.id}`} label="Height" suffix={lenUnit} required value={showLen(it.height)} onChange={setLen("height")} />
+                <NumberField compact steppers={false} id={`aq-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} />
+                <NumberField compact steppers={false} id={`awt-${it.id}`} label="Actual Wt" suffix={wtUnit} required value={showWt(it.weight)} onChange={setWt} />
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-semibold text-brand-navy">
                     Chargeable <span className="font-normal text-muted-foreground">({wtUnit})</span>
@@ -161,7 +178,7 @@ export function AirCalculator({ items, setItems, divisor, setDivisor }: Props) {
                     aria-label={`Item ${idx + 1} chargeable weight`}
                     title={rowTotalVol > rowTotalActual ? `Volumetric (${rowTotalVol.toFixed(2)} kg) exceeds actual` : "Billed on actual weight"}
                   >
-                    {rowChargeable.toFixed(2)}
+                    {Number(kgTo(rowChargeable, wtUnit)).toFixed(2)}
                   </div>
                 </div>
               </div>
