@@ -643,19 +643,28 @@ export function CbmCalculator({ items, setItems }: Props) {
                   <Sparkles className="size-3.5" /> Optimize loading
                 </Button>
               ) : (
+                // NOTE: do NOT use `<TooltipTrigger asChild>` wrapping a
+                // `<span><Button/></span>`. Radix's `useComposedRefs` tries
+                // to attach a ref to the inner span on every render, and
+                // because this branch re-mounts whenever `draftItems`
+                // changes (every keystroke), the ref attach/detach cycle
+                // triggers Radix's internal setState in a layout effect →
+                // "Maximum update depth exceeded" (React error #185).
+                //
+                // Instead let TooltipTrigger render its own wrapper button
+                // (no `asChild`) and put the disabled visual + label inside.
+                // The trigger is itself focusable & hoverable, so the
+                // tooltip shows correctly even though the action is "disabled".
                 <TooltipProvider>
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span tabIndex={0}>
-                        <Button
-                          size="sm"
-                          disabled
-                          className="text-white shadow-sm opacity-60"
-                          style={{ background: "var(--brand-orange)" }}
-                        >
-                          <Sparkles className="size-3.5" /> Optimize loading
-                        </Button>
-                      </span>
+                    <TooltipTrigger
+                      type="button"
+                      aria-disabled="true"
+                      className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white opacity-60 shadow-sm"
+                      style={{ background: "var(--brand-orange)" }}
+                      onClick={(e) => e.preventDefault()}
+                    >
+                      <Sparkles className="size-3.5" /> Optimize loading
                     </TooltipTrigger>
                     <TooltipContent side="top">Enter cargo dimensions first</TooltipContent>
                   </Tooltip>
