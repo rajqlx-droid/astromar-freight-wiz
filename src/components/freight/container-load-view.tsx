@@ -370,10 +370,6 @@ function SinglePlanBody({
     () => buildPalletSequence(pack, rows),
     [pack, rows],
   );
-  const scenarios = useMemo<ScenarioResult[]>(
-    () => (items.length > 0 ? runAllScenarios(items, pack.container) : []),
-    [items, pack.container],
-  );
   const compliance = useMemo(() => computeComplianceReport(pack), [pack]);
 
   // Clamp palletIdx if sequence shrinks.
