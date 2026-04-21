@@ -585,8 +585,18 @@ function SinglePlanBody({
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-semibold text-brand-navy">Scenario Comparison</h4>
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                {scenarios.length} strategies
+                {scenarios.length} {scenarios.length === 1 ? "strategy" : "strategies"}
               </span>
+              {!compareStrategies && (
+                <button
+                  type="button"
+                  onClick={() => setCompareStrategies(true)}
+                  className="rounded-full border border-brand-navy/30 bg-brand-navy px-2.5 py-0.5 text-[10px] font-semibold text-white hover:bg-brand-navy/90"
+                  title="Run 3 additional packing strategies and compare results"
+                >
+                  + Compare strategies
+                </button>
+              )}
               <span className="ml-auto text-[11px] text-muted-foreground">
                 Best: <span className="font-semibold text-brand-navy">{scenarios[0]?.strategyName}</span>
               </span>
