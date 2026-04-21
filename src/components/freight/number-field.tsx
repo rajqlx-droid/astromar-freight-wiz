@@ -129,7 +129,7 @@ export function NumberField({
           placeholder={placeholder}
           aria-invalid={!!error}
           className={cn(
-            "h-11 min-w-0 flex-1 border-2 transition-shadow focus-visible:ring-2 focus-visible:ring-brand-orange/30 md:h-10",
+            "h-11 min-w-[3.5rem] flex-1 border-2 px-2 text-center tabular-nums transition-shadow focus-visible:ring-2 focus-visible:ring-brand-orange/30 md:h-10",
             error
               ? "border-destructive focus-visible:border-destructive"
               : "border-brand-navy/30 focus-visible:border-brand-orange",
