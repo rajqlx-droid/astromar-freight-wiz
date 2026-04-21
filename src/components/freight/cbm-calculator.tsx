@@ -191,17 +191,25 @@ export function CbmCalculator({ items, setItems }: Props) {
   // Active container bucket index for the multi-container case. Shared between
   // the suggestion banner cards and the 3D viewer's tabbed view so clicking
   // a card swaps the visible container. Persisted across refresh / tab switch.
+  //
+  // SSR-safe init pattern: always seed with 0 on first render so server and
+  // client markup match exactly, then hydrate the stored value inside
+  // useEffect after mount. Reading localStorage in the useState initializer
+  // — even guarded by `typeof window` — produces hydration mismatches because
+  // the server renders 0 while the client renders the stored value.
   const ACTIVE_UNIT_KEY = "freight.activeUnitIdx";
-  const [activeUnitIdx, setActiveUnitIdx] = useState<number>(() => {
-    if (typeof window === "undefined") return 0;
+  const [activeUnitIdx, setActiveUnitIdx] = useState<number>(0);
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(ACTIVE_UNIT_KEY);
       const n = raw == null ? 0 : parseInt(raw, 10);
-      return Number.isFinite(n) && n >= 0 ? n : 0;
+      if (Number.isFinite(n) && n >= 0) setActiveUnitIdx(n);
     } catch {
-      return 0;
+      /* ignore */
     }
-  });
+    // Run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Per-unit placed/total counts — drives the "12/16 placed" badges.
   // When we have real bucket packs from the worker, use exact placedCartons.
