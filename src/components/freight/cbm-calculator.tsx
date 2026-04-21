@@ -58,6 +58,11 @@ import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { CbmDebugPanel } from "@/components/freight/cbm-debug-panel";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
+import {
+  createCbmSyncRecorder,
+  NOOP_RECORDER,
+  type CbmSyncRecorder,
+} from "@/lib/freight/__dev__/cbm-sync-metrics";
 
 type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
 type WeightUnit = "kg" | "g" | "lb";
@@ -93,6 +98,20 @@ export function CbmCalculator({ items, setItems }: Props) {
   useEffect(() => {
     setItemsRef.current = setItems;
   }, [setItems]);
+  // Dev-only metrics recorder — counts parent pushes & sync-effect cycles
+  // and warns to the console if a loop fingerprint appears (#185 early
+  // detection). NOOP_RECORDER is used in production builds so there is
+  // zero runtime overhead. Exposed on `window.__cbmSyncMetrics` in dev for
+  // quick inspection from the devtools console.
+  const recorderRef = useRef<CbmSyncRecorder>(
+    import.meta.env.DEV ? createCbmSyncRecorder() : NOOP_RECORDER,
+  );
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    if (typeof window === "undefined") return;
+    (window as unknown as { __cbmSyncMetrics?: CbmSyncRecorder }).__cbmSyncMetrics =
+      recorderRef.current;
+  }, []);
   /**
    * Single funnel for pushing items to the parent. ALWAYS use this (never call
    * `setItems` directly) so `lastPushedRef` stays in sync and the
@@ -102,14 +121,17 @@ export function CbmCalculator({ items, setItems }: Props) {
     lastPushedRef.current = next;
     setDraftItems(next);
     setItemsRef.current(next);
+    recorderRef.current.recordParentPush("push-items");
   }, []);
   useEffect(() => {
     if (items === lastPushedRef.current) return;
+    recorderRef.current.recordEffectCycle("items->draft");
     lastPushedRef.current = items;
     setDraftItems(items);
   }, [items]);
   useEffect(() => {
     if (draftItems === lastPushedRef.current) return;
+    recorderRef.current.recordEffectCycle("draft->items");
     // Adaptive debounce: tighter for small manifests (responsive feel),
     // looser for large ones (avoids re-running heavy downstream work mid-typing).
     // Lightweight per-row CBM and Total CBM tiles read from `draftItems`
@@ -118,6 +140,7 @@ export function CbmCalculator({ items, setItems }: Props) {
     const t = setTimeout(() => {
       lastPushedRef.current = draftItems;
       setItemsRef.current(draftItems);
+      recorderRef.current.recordParentPush("draft-flush");
     }, delay);
     return () => clearTimeout(t);
   }, [draftItems]);
