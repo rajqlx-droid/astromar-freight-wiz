@@ -58,6 +58,11 @@ import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { CbmDebugPanel } from "@/components/freight/cbm-debug-panel";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
+import {
+  createCbmSyncRecorder,
+  NOOP_RECORDER,
+  type CbmSyncRecorder,
+} from "@/lib/freight/__dev__/cbm-sync-metrics";
 
 type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
 type WeightUnit = "kg" | "g" | "lb";
