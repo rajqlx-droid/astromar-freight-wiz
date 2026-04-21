@@ -44,6 +44,22 @@ export interface CbmDebugInfo {
   setDraftItems: (items: CbmItem[]) => void;
 }
 
+/** A single simulated keystroke, captured for failure diagnostics. */
+export interface KeystrokeTrace {
+  /** Sequential index across the whole test (1-based). */
+  step: number;
+  /** Row index being typed into (0-based, refers to TEST_ROWS). */
+  rowIdx: number;
+  /** Field being typed into. */
+  field: "length" | "width" | "height" | "qty" | "weight";
+  /** Partial value after this keystroke (e.g. typing "60" produces 6 then 60). */
+  partial: number;
+  /** Main-thread cost of the keystroke (ms, measured around setDraftItems). */
+  frameMs: number;
+  /** React render commits observed during this keystroke. */
+  renderCount: number;
+}
+
 interface TestResult {
   rowsFilled: number;
   totalKeystrokes: number;
@@ -51,6 +67,12 @@ interface TestResult {
   worstFrameMs: number;
   /** Average per-keystroke main-thread time (ms). */
   avgFrameMs: number;
+  /** Worst React render-count observed for a single keystroke. */
+  worstRenderSpike: number;
+  /** Average React renders per keystroke. */
+  avgRendersPerKeystroke: number;
+  /** Total React renders observed across the whole typing run. */
+  totalRenders: number;
   /** Sum of per-row CBM tiles after the test completed. */
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
@@ -70,6 +92,12 @@ export interface HeadlessTestReport {
   pass: boolean;
   failures: string[];
   result: TestResult;
+  /**
+   * Compact per-keystroke trace. Only populated when the test FAILS (or the
+   * `trace=1` URL flag is set), to keep passing-run output cheap. Useful for
+   * pinpointing which keystroke triggered jank or input loss.
+   */
+  trace?: KeystrokeTrace[];
   /** ISO timestamp the run completed. */
   completedAt: string;
 }
@@ -77,6 +105,8 @@ export interface HeadlessTestReport {
 /** Thresholds for pass/fail in headless mode. */
 const JANK_THRESHOLD_MS = 50; // Worst frame above this = fail
 const AVG_FRAME_THRESHOLD_MS = 16; // Average frame above this = fail (60fps budget)
+/** Render spike budget — more than this many React commits per keystroke = fail. */
+const RENDER_SPIKE_THRESHOLD = 6;
 
 interface Props {
   info: CbmDebugInfo;
