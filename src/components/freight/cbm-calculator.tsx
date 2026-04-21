@@ -86,10 +86,11 @@ export function CbmCalculator({ items, setItems }: Props) {
     setDraftItems(items);
   }, [items]);
   useEffect(() => {
-    // Adaptive debounce: longer wait for large manifests so a "50" keystroke
-    // doesn't trigger a pack run mid-typing.
-    const totalQty = draftItems.reduce((s, it) => s + (it.qty || 0), 0);
-    const delay = totalQty > 20 ? 800 : 400;
+    // Adaptive debounce: tighter for small manifests (responsive feel),
+    // looser for large ones (avoids re-running heavy downstream work mid-typing).
+    // Lightweight per-row CBM and Total CBM tiles read from `draftItems`
+    // directly, so this delay only affects the geometry-aware recommender.
+    const delay = draftItems.length > 10 ? 600 : 250;
     const t = setTimeout(() => setItems(draftItems), delay);
     return () => clearTimeout(t);
   }, [draftItems, setItems]);
