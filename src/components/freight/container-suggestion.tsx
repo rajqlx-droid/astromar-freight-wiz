@@ -83,11 +83,18 @@ export function ContainerSuggestion({
         <span>{reasonText}</span>
       </p>
 
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div
+        className="grid gap-2 sm:grid-cols-2"
+        role={isClickable ? "tablist" : undefined}
+        aria-label={isClickable ? "Recommended containers — switches the 3D viewer" : undefined}
+      >
         {units.map((u, i) => {
           const stats = unitStats?.[i];
           const isActive = isClickable && activeUnitIdx === i;
           const allPlaced = stats ? stats.placed >= stats.total && stats.total > 0 : false;
+          const placedSrLabel = stats
+            ? `${stats.placed} of ${stats.total} packages placed${allPlaced ? "" : " (partial)"}`
+            : "";
           const cardBody = (
             <>
               <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -127,11 +134,12 @@ export function ContainerSuggestion({
                         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
                         : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
                     )}
+                    aria-hidden="true"
                   >
                     {stats.placed} / {stats.total} placed
                   </span>
                   {isClickable && (
-                    <span className="text-[10px] font-medium text-brand-navy/70">
+                    <span className="text-[10px] font-medium text-brand-navy/70" aria-hidden="true">
                       {isActive ? "Viewing →" : "View in 3D →"}
                     </span>
                   )}
@@ -141,18 +149,53 @@ export function ContainerSuggestion({
           );
 
           if (isClickable) {
+            const srLabel = `Container ${i + 1}: ${u.container.name}, ${u.cbmPct.toFixed(0)} percent volume${stats ? `, ${placedSrLabel}` : ""}. ${isActive ? "Currently viewing in 3D." : "Activate to view in 3D."}`;
             return (
               <button
                 key={i}
                 type="button"
+                role="tab"
+                id={`container-bucket-tab-${i}`}
+                aria-selected={isActive}
+                aria-controls="container-load-viewer"
+                aria-label={srLabel}
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => onUnitSelect?.(i)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+                    e.preventDefault();
+                    const next = (i + 1) % units.length;
+                    onUnitSelect?.(next);
+                    document
+                      .getElementById(`container-bucket-tab-${next}`)
+                      ?.focus();
+                  } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+                    e.preventDefault();
+                    const prev = (i - 1 + units.length) % units.length;
+                    onUnitSelect?.(prev);
+                    document
+                      .getElementById(`container-bucket-tab-${prev}`)
+                      ?.focus();
+                  } else if (e.key === "Home") {
+                    e.preventDefault();
+                    onUnitSelect?.(0);
+                    document.getElementById("container-bucket-tab-0")?.focus();
+                  } else if (e.key === "End") {
+                    e.preventDefault();
+                    const last = units.length - 1;
+                    onUnitSelect?.(last);
+                    document
+                      .getElementById(`container-bucket-tab-${last}`)
+                      ?.focus();
+                  }
+                }}
                 className={cn(
                   "rounded-md border bg-white/80 p-2 text-left text-xs shadow-sm transition-all hover:shadow-md dark:bg-black/30",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   isActive
                     ? "border-brand-navy/60 ring-2 ring-brand-navy ring-offset-1 ring-offset-transparent"
                     : "border-black/5 hover:border-brand-navy/30 dark:border-white/10",
                 )}
-                aria-pressed={isActive}
               >
                 {cardBody}
               </button>

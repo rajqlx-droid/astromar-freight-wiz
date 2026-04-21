@@ -163,12 +163,13 @@ export function CbmCalculator({ items, setItems }: Props) {
     });
   }, [items, recommendation]);
 
-  // Clamp activeUnitIdx if the recommendation shrinks.
+  // Reset to the first bucket whenever the recommendation switches between
+  // single ↔ multi mode, or when the unit list shrinks past the current index.
+  // Prevents stale "viewing #3" state when cargo changes and only 1 container
+  // is now needed.
   useEffect(() => {
-    if (activeUnitIdx > 0 && activeUnitIdx >= recommendation.units.length) {
-      setActiveUnitIdx(0);
-    }
-  }, [activeUnitIdx, recommendation.units.length]);
+    setActiveUnitIdx(0);
+  }, [recommendation.isMulti, recommendation.units.length]);
 
   const handleUnitSelect = (idx: number) => {
     setActiveUnitIdx(idx);
