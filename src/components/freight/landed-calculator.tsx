@@ -167,7 +167,7 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
                     </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
                   <div className="col-span-2 space-y-1 md:col-span-2">
                     <Label className="text-[11px] text-muted-foreground">Description</Label>
                     <Input
@@ -186,11 +186,13 @@ export function LandedCalculator({ state, setState, onDuplicateToExport }: Props
                       className="h-9 text-xs"
                     />
                   </div>
-                  <NumberField compact id={`lq-${ln.id}`} label="Qty" step={1} value={ln.qty} onChange={(n) => updateLine(ln.id, { qty: Math.max(0, Math.round(n)) })} />
-                  <div className="md:col-span-2">
-                    <NumberField compact id={`luv-${ln.id}`} label={`Unit Value (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
+                  <NumberField compact steppers={false} id={`lq-${ln.id}`} label="Qty" step={1} value={ln.qty} onChange={(n) => updateLine(ln.id, { qty: Math.max(0, Math.round(n)) })} />
+                  <div className="col-span-2 md:col-span-2">
+                    <NumberField compact steppers={false} id={`luv-${ln.id}`} label={`Unit Value (${state.currency})`} value={ln.unitValue} onChange={(n) => updateLine(ln.id, { unitValue: n })} />
                   </div>
-                  <NumberField compact id={`ldr-${ln.id}`} label="Duty %" suffix="%" value={ln.dutyRate ?? 0} onChange={(n) => updateLine(ln.id, { dutyRate: n })} />
+                  <div className="col-span-2 md:col-span-2 lg:col-span-1">
+                    <NumberField compact steppers={false} id={`ldr-${ln.id}`} label="Duty %" suffix="%" value={ln.dutyRate ?? 0} onChange={(n) => updateLine(ln.id, { dutyRate: n })} />
+                  </div>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t pt-2 text-[11px] text-muted-foreground">
                   <span className="rounded bg-brand-navy-soft/40 px-2 py-0.5">
