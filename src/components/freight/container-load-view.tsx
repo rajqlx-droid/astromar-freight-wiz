@@ -75,6 +75,7 @@ export function ContainerLoadView({
   onActiveUnitChange,
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
+  const [selectedStrategyId, setSelectedStrategyId] = useState<import("@/lib/freight/scenario-runner").StrategyId | null>(null);
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
   const setChoice = (c: ContainerChoice) => {
     setInternalChoice(c);
@@ -128,9 +129,14 @@ export function ContainerLoadView({
     );
   }, [items, isMulti, recommendation]);
 
-  const activePack: AdvancedPackResult = isMulti
-    ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
-    : singlePack;
+  const scenarios = useMemo<ScenarioResult[]>(
+    () => (hasCargo ? runAllScenarios(isMulti ? (splitItemsAcrossContainers(items, recommendation!)[Number(activeTab)] ?? items) : items, activeContainer) : []),
+    [hasCargo, isMulti, items, recommendation, activeTab, activeContainer],
+  );
+
+  const activePack: AdvancedPackResult = selectedStrategyId
+    ? (scenarios.find(s => s.strategyId === selectedStrategyId)?.pack ?? (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack))
+    : (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack);
 
   // Expose snapshot capability to parent (current visible pack).
   useEffect(() => {
@@ -281,6 +287,9 @@ export function ContainerLoadView({
                 view3DRef={view3DRef}
                 isActive={activeTab === String(i)}
                 viewerCollapsed={viewerCollapsed}
+                scenarios={scenarios}
+                selectedStrategyId={selectedStrategyId}
+                setSelectedStrategyId={setSelectedStrategyId}
                 rollup={{
                   totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
                   totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
@@ -303,6 +312,9 @@ export function ContainerLoadView({
           view3DRef={view3DRef}
           isActive
           viewerCollapsed={viewerCollapsed}
+          scenarios={scenarios}
+          selectedStrategyId={selectedStrategyId}
+          setSelectedStrategyId={setSelectedStrategyId}
         />
       )}
     </Card>
@@ -322,6 +334,9 @@ function SinglePlanBody({
   isActive,
   viewerCollapsed = false,
   rollup,
+  scenarios,
+  selectedStrategyId,
+  setSelectedStrategyId,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -333,6 +348,9 @@ function SinglePlanBody({
   isActive: boolean;
   viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
+  scenarios: ScenarioResult[];
+  selectedStrategyId: import("@/lib/freight/scenario-runner").StrategyId | null;
+  setSelectedStrategyId: (id: import("@/lib/freight/scenario-runner").StrategyId | null) => void;
 }) {
   // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
   // along scene-z (container width axis). Cleared when row toggles off.
@@ -351,10 +369,6 @@ function SinglePlanBody({
   const palletSequence = useMemo<PalletStep[]>(
     () => buildPalletSequence(pack, rows),
     [pack, rows],
-  );
-  const scenarios = useMemo<ScenarioResult[]>(
-    () => (items.length > 0 ? runAllScenarios(items, pack.container) : []),
-    [items, pack.container],
   );
   const compliance = useMemo(() => computeComplianceReport(pack), [pack]);
 
@@ -562,7 +576,15 @@ function SinglePlanBody({
                 </thead>
                 <tbody>
                   {scenarios.map((sc) => (
-                    <tr key={sc.strategyId} className={cn("border-b last:border-0", sc.isBest && "bg-emerald-50 dark:bg-emerald-950/20")}>
+                    <tr
+                      key={sc.strategyId}
+                      onClick={() => setSelectedStrategyId(sc.isBest && selectedStrategyId === sc.strategyId ? null : sc.strategyId)}
+                      className={cn(
+                        "cursor-pointer border-b last:border-0",
+                        sc.isBest && "bg-emerald-50 dark:bg-emerald-950/20",
+                        selectedStrategyId === sc.strategyId && "ring-1 ring-brand-navy",
+                      )}
+                    >
                       <td className="py-1.5 pr-2 font-medium">
                         {sc.isBest && <span className="mr-1 text-amber-500">★</span>}
                         {sc.strategyName}
