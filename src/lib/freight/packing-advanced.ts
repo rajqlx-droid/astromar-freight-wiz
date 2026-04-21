@@ -262,10 +262,14 @@ export function packContainerAdvanced(
 
     for (const o of orients) {
       // Candidate XY positions on a coarse grid.
-      const stepX = Math.min(PLACE_STEP_MM, Math.max(25, Math.floor(o.l / 4)));
-      const stepY = Math.min(PLACE_STEP_MM, Math.max(25, Math.floor(o.w / 4)));
+      const stepX = Math.min(placeStep, Math.max(25, Math.floor(o.l / 4)));
+      const stepY = Math.min(placeStep, Math.max(25, Math.floor(o.w / 4)));
+      // Frontier bound: back-to-front scoring guarantees no better placement
+      // exists far past the furthest already-placed box. Limit X scan to
+      // frontierX + 2 × maxBoxLen (clamped to container length).
+      const xLimit = Math.min(C.l - o.l, frontierX + 2 * maxItemLen);
       for (let y = 0; y + o.w <= C.w; y += stepY) {
-        for (let x = 0; x + o.l <= C.l; x += stepX) {
+        for (let x = 0; x <= xLimit; x += stepX) {
           const ev = evaluatePlacement(x, y, o.l, o.w, {
             ...c,
             origL: o.l,
