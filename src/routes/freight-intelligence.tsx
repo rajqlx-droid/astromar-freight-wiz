@@ -574,7 +574,7 @@ function FreightIntelligencePage() {
                 )}
 
                 {/* Action cluster: Compare/History stacked vertically (1 column, 2 rows) */}
-                <div className="ml-auto flex shrink-0 flex-col items-stretch gap-1 rounded-lg border border-brand-navy/30 bg-background p-1 shadow-sm">
+                <div className="ml-auto flex shrink-0 flex-col items-stretch gap-1.5 rounded-lg border border-brand-navy/30 bg-background p-1.5 shadow-sm">
                   <Tooltip>
                     <CompareDialog
                       active={active}
