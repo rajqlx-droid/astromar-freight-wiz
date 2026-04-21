@@ -1,38 +1,67 @@
 
 
-## Plan: Refactor `nearCeilingPlacedIdxs` from `Set` to `number[]` + fix CBM calculator state mutation
+## Mock flow walkthrough — confirms the bug and the fix
 
-Three small, surgical edits across three files. No behavior changes intended beyond the type swap and the state-setter fix.
+**Current broken flow** (verified by reading the code):
 
-### 1. `src/components/freight/cbm-calculator.tsx`
+1. User types `120` into a length field → `setDraftItems` → debounce commits → `setItems(...)` in parent
+2. New `items` array → cbm-calculator effect at line 380 fires (deps: `[showOptimization, items, worker]`) → calls `worker.recommend(items)`
+3. Inside the hook, `send()` calls `setInflight(n + 1)` → triggers re-render of cbm-calculator
+4. **Re-render runs `usePackingWorker()` again → returns a brand-new object literal** (lines 130–153) → `worker` identity changed
+5. Effect fires AGAIN even though `items` didn't change → another `recommend()` → another `setInflight` → another new `worker` object → another effect fire → ...
+6. React caps at ~50 cycles → **error #185 "Maximum update depth exceeded"**
 
-Replace the stale `setItems(items.map(...))` call with the draft-state equivalent so row patches go through the same draft pipeline as the rest of the form:
+The same pattern hits `container-load-view.tsx` twice (lines 160–179 for `multi`, 183–216 for `scenarios`), so the loop is triggered from three places simultaneously once the user reaches the 3D view.
 
-- `setItems(items.map(...))` → `setDraftItems(draftItems.map(...))`
+**Mock flow after fix**: Methods are wrapped in `useCallback([])`, so `worker.recommend` / `worker.multi` / `worker.scenarios` keep the same identity across renders. Effects depend on those stable function refs instead of the whole `worker` object. `setInflight` still re-renders the consumer, but the effect deps are unchanged → effect does NOT re-fire → no loop. The optimize → recommendation → 3D viewer → snapshots → loading-video pipeline runs once per real input change.
 
-### 2. `src/lib/freight/packing-advanced.ts`
+This will work. Plan below.
 
-Convert `nearCeilingPlacedIdxs` from a `Set<number>` to a `number[]`:
+---
 
-- Type field: `Set<number>` → `number[]`
-- Initializer: `new Set<number>()` → `[]`
-- Insertion: `.add(i)` → `.push(i)`
+## Plan: stabilize `usePackingWorker` and fix three effect deps
 
-### 3. `src/components/freight/container-3d-view.tsx`
+### 1. `src/hooks/use-packing-worker.ts`
 
-Mirror the type change at the consumer:
+- Import `useCallback` and `useMemo` (already imports `useEffect, useRef, useState`).
+- Wrap `pack`, `scenarios`, `multi`, `recommend` in `useCallback(..., [])` — they only read mutable refs (`workerRef`, `seqRef`, `pendingRef`) and stable setters, so empty deps are safe.
+- Extract `send` and `ensureWorker` as inner helpers inside the same `useCallback` closures (or hoist them as `useCallback([])` too) so they don't re-allocate.
+- Return `useMemo(() => ({ pack, scenarios, multi, recommend, pending: inflight > 0 }), [pack, scenarios, multi, recommend, inflight])`. The object identity still changes when `pending` flips, but no effect depends on the whole object after step 2.
 
-- Prop type: `Set<number> | null` → `number[] | null`
-- All membership checks: `nearCeilingPlacedIdxs?.has(i)` → `nearCeilingPlacedIdxs?.includes(i)`
+### 2. `src/components/freight/cbm-calculator.tsx` (line 398)
 
-### Technical notes
+Change effect dep from `worker` → `worker.recommend`:
+```ts
+}, [showOptimization, items, worker.recommend]);
+```
 
-- I will first read each file to confirm the target lines exist verbatim and to count the `.has(i)` occurrences in `container-3d-view.tsx` so every call site is updated.
-- No other files reference `nearCeilingPlacedIdxs` based on the symbol name, but I will grep to confirm before editing to avoid leaving a stray `Set` consumer that would break the build.
-- After edits, run `bunx tsc --noEmit` to confirm the type swap is consistent across the three files and nothing else broke.
-- Performance note (FYI, not changing): `Array.includes` is O(n) vs `Set.has` O(1). For the ceiling-reserve check this list is small (only boxes touching the ceiling band), so the difference is negligible — flagging only so you're aware this is a deliberate simplification, not a regression.
+### 3. `src/components/freight/container-load-view.tsx` (lines 179 and 215)
+
+```ts
+// line 179
+}, [deferredItems, isMulti, recommendation, worker.multi]);
+
+// line 215
+}, [hasCargo, isMulti, deferredItems, recommendation, activeTab,
+    deferredContainer, compareStrategies, worker.scenarios]);
+```
+
+### Verification (after switching to default mode)
+
+1. `bunx tsc --noEmit` — type-check passes.
+2. `bun run test` — all 13 sync-invariant tests stay green.
+3. Browser smoke-test on `/freight-intelligence`:
+   - Type cargo dimensions → no console error
+   - Click **Optimize loading** → recommendation panel populates, no #185
+   - Open 3D view → renders, snapshots capture
+   - Click **Loading video** → pipeline completes
+4. Verify `window.__cbmSyncMetrics?.effectCycleCount` does NOT climb without input.
+
+### Rollback safety
+
+If after these edits the error still reproduces, the next step is to add a `console.count("recommend-effect")` inside each of the three effects, reproduce once, and read the counts via `code--read_console_logs` — that will pinpoint which effect (if any) is still looping, which is hard evidence rather than guesses.
 
 ### Out of scope
 
-No other logic, styling, or unrelated cleanup will be touched.
+No changes to packing math, recommender logic, 3D rendering, SSR config, tooltips, results-card, or items↔draftItems sync — those are unrelated to this loop.
 
