@@ -176,7 +176,7 @@ export function ContainerLoadView({
     return () => {
       cancelled = true;
     };
-  }, [deferredItems, isMulti, recommendation, worker]);
+  }, [deferredItems, isMulti, recommendation, worker.multi]);
 
   // Strategy comparison (default: just "row-back"; user can opt into all 4).
   const [scenarios, setScenarios] = useState<ScenarioResult[]>([]);
