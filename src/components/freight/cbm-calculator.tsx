@@ -480,6 +480,36 @@ export function CbmCalculator({ items, setItems }: Props) {
     [update, setWtUnit],
   );
 
+  // Per-id callback caches. CRITICAL for avoiding React error #185:
+  //   - `registerRef` is forwarded into Radix Slot/Card composition. Passing
+  //     a NEW arrow function on every render makes Radix's `useComposedRefs`
+  //     call setRef(null)+setRef(el) each render. setRef internally calls a
+  //     useState setter, and during layout-effect cleanup that turns into
+  //     "Maximum update depth exceeded".
+  //   - `onPopoverOpenChange` and `renderPopover` would similarly thrash
+  //     Radix Popover's ref machinery.
+  // Keying by `it.id` ensures each row gets a stable function across renders.
+  const refCallbacksRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
+  const getRegisterRef = useCallback((id: string) => {
+    let cb = refCallbacksRef.current.get(id);
+    if (!cb) {
+      cb = (el: HTMLDivElement | null) => {
+        rowRefs.current[id] = el;
+      };
+      refCallbacksRef.current.set(id, cb);
+    }
+    return cb;
+  }, []);
+  const popoverOpenChangeRef = useRef<Map<string, (open: boolean) => void>>(new Map());
+  const getPopoverOpenChange = useCallback((id: string) => {
+    let cb = popoverOpenChangeRef.current.get(id);
+    if (!cb) {
+      cb = (open: boolean) => setOpenPopoverId(open ? id : null);
+      popoverOpenChangeRef.current.set(id, cb);
+    }
+    return cb;
+  }, []);
+
   const inputsTable = draftItems.flatMap((it, idx) => {
     const itemCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
     const itemWt = it.qty * it.weight;
