@@ -1,0 +1,495 @@
+/**
+ * CBM Calculator Debug Panel
+ * --------------------------
+ * In-app diagnostic overlay for the CBM Calculator. Shows live state of:
+ *  - Worker queue (pending? last latency?)
+ *  - Debounce window (current delay vs item count)
+ *  - Which totals come from `draftItems` (live, every keystroke) vs the
+ *    debounced `items` (committed) vs the worker recommendation
+ *  - Live diff between drafted and committed totals so users can SEE the
+ *    debounce window in action
+ *
+ * Also includes an automated typing/load test: programmatically fills 6 rows
+ * with realistic carton dimensions, measures per-keystroke main-thread cost,
+ * and reports any mismatch between the per-row CBM tile sum and the headline
+ * Total CBM.
+ *
+ * Hidden behind a query flag (?debug=1) and a small floating toggle so it
+ * never shows up in production traffic by accident.
+ */
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Bug, X, Play, RotateCcw, Activity } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import type { CbmItem } from "@/lib/freight/calculators";
+
+export interface CbmDebugInfo {
+  /** Live, every-keystroke working copy of the manifest. */
+  draftItems: CbmItem[];
+  /** Debounced parent state — what the worker / heavy paths see. */
+  committedItems: CbmItem[];
+  /** Current debounce window in ms (adaptive: 250ms for ≤10, 600ms for >10). */
+  debounceMs: number;
+  /** Worker is currently busy. */
+  workerPending: boolean;
+  /** True once the user has clicked "Optimize loading" — gates worker recommend. */
+  showOptimization: boolean;
+  /** Headline Total CBM as shown in the Results card. Should equal sum of draft. */
+  headlineTotalCbm: number;
+  /** "fast" while worker hasn't returned, "worker" once we have a worker reco. */
+  recommendationSource: "fast" | "worker";
+  /** Replace the whole manifest (used by the auto-test to seed and reset). */
+  setDraftItems: (items: CbmItem[]) => void;
+}
+
+interface TestResult {
+  rowsFilled: number;
+  totalKeystrokes: number;
+  /** Worst single-keystroke main-thread time (ms). >50ms = visible jank. */
+  worstFrameMs: number;
+  /** Average per-keystroke main-thread time (ms). */
+  avgFrameMs: number;
+  /** Sum of per-row CBM tiles after the test completed. */
+  perRowSum: number;
+  /** Headline Total CBM after the test completed. */
+  headlineTotal: number;
+  /** Whether the two agree (within 0.0001 m³ rounding). */
+  totalsMatch: boolean;
+  /** Time from first keystroke to final headline-total settle (ms). */
+  totalDurationMs: number;
+}
+
+interface Props {
+  info: CbmDebugInfo;
+}
+
+/* Realistic carton mix — varied sizes so the packer has actual work to do. */
+const TEST_ROWS = [
+  { length: 60, width: 40, height: 35, weight: 12, qty: 18 },
+  { length: 80, width: 60, height: 50, weight: 22, qty: 12 },
+  { length: 45, width: 35, height: 30, weight: 8, qty: 30 },
+  { length: 100, width: 80, height: 70, weight: 35, qty: 8 },
+  { length: 50, width: 50, height: 50, weight: 15, qty: 20 },
+  { length: 70, width: 45, height: 40, weight: 18, qty: 14 },
+];
+
+function isDebugEnabled(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("debug") === "1") return true;
+    return localStorage.getItem("freight.debug") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function CbmDebugPanel({ info }: Props) {
+  const [enabled, setEnabled] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<TestResult | null>(null);
+  const [progress, setProgress] = useState<string>("");
+  const cancelRef = useRef(false);
+
+  // SSR-safe enable check. Runs only on the client after hydration.
+  useEffect(() => {
+    setEnabled(isDebugEnabled());
+  }, []);
+
+  const perRowSum = useMemo(() => {
+    return info.draftItems.reduce(
+      (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
+      0,
+    );
+  }, [info.draftItems]);
+
+  const draftCommitDiff = useMemo(() => {
+    let diffs = 0;
+    const n = Math.max(info.draftItems.length, info.committedItems.length);
+    for (let i = 0; i < n; i++) {
+      const d = info.draftItems[i];
+      const c = info.committedItems[i];
+      if (!d || !c) {
+        diffs++;
+        continue;
+      }
+      if (
+        d.length !== c.length ||
+        d.width !== c.width ||
+        d.height !== c.height ||
+        d.qty !== c.qty ||
+        d.weight !== c.weight
+      ) {
+        diffs++;
+      }
+    }
+    return diffs;
+  }, [info.draftItems, info.committedItems]);
+
+  const totalsMatchLive = Math.abs(perRowSum - info.headlineTotalCbm) < 0.0001;
+
+  /* ------------------- Automated typing/load test ------------------- */
+  const runTest = async () => {
+    setRunning(true);
+    setResult(null);
+    cancelRef.current = false;
+    const frameCosts: number[] = [];
+    const t0 = performance.now();
+
+    // Seed empty rows first so the row count matches before we type.
+    const emptyRows: CbmItem[] = TEST_ROWS.map((_, i) => ({
+      id: `dbg-${Date.now()}-${i}`,
+      length: 0,
+      width: 0,
+      height: 0,
+      weight: 0,
+      qty: 0,
+      packageType: "carton",
+      stackable: true,
+      fragile: false,
+      maxStackWeightKg: 0,
+      allowSidewaysRotation: true,
+      allowAxisRotation: false,
+      packingConfirmed: false,
+    }));
+    info.setDraftItems(emptyRows);
+    setProgress("Seeded 6 empty rows…");
+    // Yield so React commits the empty state before we start mutating.
+    await new Promise((r) => setTimeout(r, 50));
+
+    let keystrokes = 0;
+    const fields: (keyof Pick<CbmItem, "length" | "width" | "height" | "qty" | "weight">)[] = [
+      "length",
+      "width",
+      "height",
+      "qty",
+      "weight",
+    ];
+
+    // Type each field of each row, measuring the main-thread cost between
+    // setDraftItems() and the next paint.
+    for (let rowIdx = 0; rowIdx < TEST_ROWS.length; rowIdx++) {
+      if (cancelRef.current) break;
+      const target = TEST_ROWS[rowIdx];
+      for (const field of fields) {
+        const value = target[field];
+        // Simulate typing digit-by-digit so we get realistic keystroke counts.
+        const str = String(value);
+        for (let d = 1; d <= str.length; d++) {
+          if (cancelRef.current) break;
+          const partial = parseInt(str.slice(0, d), 10) || 0;
+          const before = performance.now();
+          info.setDraftItems(
+            emptyRows.map((row, i) =>
+              i === rowIdx ? { ...row, ...patchAccumulated(target, fields, field, d) } : row,
+            ),
+          );
+          // Wait for next animation frame to measure commit + render cost.
+          await new Promise<void>((r) => requestAnimationFrame(() => r()));
+          const cost = performance.now() - before;
+          frameCosts.push(cost);
+          keystrokes++;
+          // Apply the partial back to emptyRows so the next field builds on it.
+          emptyRows[rowIdx] = {
+            ...emptyRows[rowIdx],
+            [field]: partial,
+          };
+          setProgress(
+            `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms`,
+          );
+        }
+      }
+    }
+
+    // Wait for the debounce window + a frame so the headline total settles.
+    await new Promise((r) => setTimeout(r, info.debounceMs + 100));
+    await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+    const finalSum = emptyRows.reduce(
+      (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
+      0,
+    );
+    const worst = frameCosts.reduce((a, b) => Math.max(a, b), 0);
+    const avg = frameCosts.length ? frameCosts.reduce((a, b) => a + b, 0) / frameCosts.length : 0;
+
+    setResult({
+      rowsFilled: TEST_ROWS.length,
+      totalKeystrokes: keystrokes,
+      worstFrameMs: worst,
+      avgFrameMs: avg,
+      perRowSum: finalSum,
+      headlineTotal: info.headlineTotalCbm,
+      totalsMatch: Math.abs(finalSum - info.headlineTotalCbm) < 0.0001,
+      totalDurationMs: performance.now() - t0,
+    });
+    setProgress("");
+    setRunning(false);
+  };
+
+  const cancelTest = () => {
+    cancelRef.current = true;
+    setRunning(false);
+    setProgress("Cancelled");
+  };
+
+  if (!enabled) return null;
+
+  return (
+    <>
+      {/* Floating toggle */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "fixed bottom-4 right-4 z-[60] flex h-10 w-10 items-center justify-center rounded-full",
+          "bg-foreground text-background shadow-lg transition hover:scale-105",
+          open && "scale-110",
+        )}
+        aria-label="Toggle debug panel"
+        title="CBM debug panel"
+      >
+        <Bug className="size-5" />
+      </button>
+
+      {open && (
+        <Card
+          className="fixed bottom-16 right-4 z-[60] flex max-h-[80vh] w-[360px] flex-col gap-3 overflow-y-auto p-4 shadow-2xl"
+          role="dialog"
+          aria-label="CBM Debug Panel"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Activity className="size-4 text-primary" />
+              <h3 className="text-sm font-semibold">CBM Debug</h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded p-1 hover:bg-muted"
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          {/* Live state */}
+          <section className="space-y-2 text-xs">
+            <Row
+              label="Draft items"
+              value={`${info.draftItems.length}`}
+              hint="Source for per-row CBM tiles + Total CBM (live)"
+            />
+            <Row
+              label="Committed items"
+              value={`${info.committedItems.length}`}
+              hint="What the worker / recommender see (debounced)"
+            />
+            <Row
+              label="Debounce window"
+              value={`${info.debounceMs} ms`}
+              hint={info.draftItems.length > 10 ? "Large manifest tier" : "Small manifest tier"}
+            />
+            <Row
+              label="Draft ↔ Committed diff"
+              value={`${draftCommitDiff} row(s)`}
+              tone={draftCommitDiff > 0 ? "warn" : "good"}
+              hint={
+                draftCommitDiff > 0
+                  ? "Debounce in flight — values mid-sync"
+                  : "States in sync"
+              }
+            />
+            <Row
+              label="Worker pending"
+              value={info.workerPending ? "yes" : "no"}
+              tone={info.workerPending ? "warn" : "good"}
+            />
+            <Row
+              label="Optimization gate"
+              value={info.showOptimization ? "open (worker reco)" : "closed (fast reco)"}
+              tone={info.showOptimization ? "good" : "muted"}
+            />
+            <Row
+              label="Recommendation source"
+              value={info.recommendationSource}
+              hint={
+                info.recommendationSource === "fast"
+                  ? "CBM-only, instant, no packing"
+                  : "Geometry-aware, from worker"
+              }
+            />
+          </section>
+
+          <hr className="border-border" />
+
+          {/* Total CBM consistency check */}
+          <section className="space-y-2 text-xs">
+            <h4 className="font-semibold uppercase tracking-wide text-muted-foreground">
+              Total CBM consistency
+            </h4>
+            <Row
+              label="Sum of per-row tiles"
+              value={`${perRowSum.toFixed(4)} m³`}
+              hint="Computed from draftItems"
+            />
+            <Row
+              label="Headline Total CBM"
+              value={`${info.headlineTotalCbm.toFixed(4)} m³`}
+              hint="From baseResult (also draftItems)"
+            />
+            <Row
+              label="Match"
+              value={totalsMatchLive ? "✓ agree" : "✗ MISMATCH"}
+              tone={totalsMatchLive ? "good" : "bad"}
+            />
+          </section>
+
+          <hr className="border-border" />
+
+          {/* Auto load test */}
+          <section className="space-y-2 text-xs">
+            <h4 className="font-semibold uppercase tracking-wide text-muted-foreground">
+              Auto typing test (6 rows)
+            </h4>
+            <p className="text-muted-foreground">
+              Programmatically types {TEST_ROWS.length} rows of varied carton dimensions and
+              measures per-keystroke jank.
+            </p>
+            <div className="flex gap-2">
+              {!running ? (
+                <Button size="sm" onClick={runTest} className="gap-1">
+                  <Play className="size-3" /> Run test
+                </Button>
+              ) : (
+                <Button size="sm" variant="destructive" onClick={cancelTest} className="gap-1">
+                  <X className="size-3" /> Cancel
+                </Button>
+              )}
+              {result && !running && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setResult(null);
+                    setProgress("");
+                  }}
+                  className="gap-1"
+                >
+                  <RotateCcw className="size-3" /> Reset
+                </Button>
+              )}
+            </div>
+            {progress && (
+              <p className="font-mono text-[11px] text-muted-foreground">{progress}</p>
+            )}
+            {result && (
+              <div className="space-y-1 rounded border border-border bg-muted/30 p-2">
+                <Row label="Rows filled" value={`${result.rowsFilled}`} />
+                <Row label="Keystrokes" value={`${result.totalKeystrokes}`} />
+                <Row
+                  label="Worst frame"
+                  value={`${result.worstFrameMs.toFixed(1)} ms`}
+                  tone={
+                    result.worstFrameMs > 50
+                      ? "bad"
+                      : result.worstFrameMs > 16
+                        ? "warn"
+                        : "good"
+                  }
+                  hint=">50ms = visible jank · >16ms = dropped frame"
+                />
+                <Row
+                  label="Avg frame"
+                  value={`${result.avgFrameMs.toFixed(1)} ms`}
+                  tone={result.avgFrameMs > 16 ? "warn" : "good"}
+                />
+                <Row
+                  label="Per-row sum"
+                  value={`${result.perRowSum.toFixed(4)} m³`}
+                />
+                <Row
+                  label="Headline total"
+                  value={`${result.headlineTotal.toFixed(4)} m³`}
+                />
+                <Row
+                  label="Totals match"
+                  value={result.totalsMatch ? "✓ yes" : "✗ NO"}
+                  tone={result.totalsMatch ? "good" : "bad"}
+                />
+                <Row
+                  label="Total duration"
+                  value={`${(result.totalDurationMs / 1000).toFixed(2)} s`}
+                />
+              </div>
+            )}
+          </section>
+
+          <p className="text-[10px] text-muted-foreground">
+            Toggle off:{" "}
+            <code className="rounded bg-muted px-1">localStorage.removeItem(&apos;freight.debug&apos;)</code>
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+/* ----------------- Helpers ----------------- */
+
+function Row({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "good" | "warn" | "bad" | "muted";
+}) {
+  const toneClass =
+    tone === "good"
+      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+      : tone === "warn"
+        ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+        : tone === "bad"
+          ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+          : "bg-muted text-muted-foreground";
+  return (
+    <div className="flex items-start justify-between gap-2">
+      <div className="flex-1">
+        <div className="text-foreground">{label}</div>
+        {hint && <div className="text-[10px] text-muted-foreground">{hint}</div>}
+      </div>
+      <Badge variant="outline" className={cn("font-mono text-[11px]", toneClass)}>
+        {value}
+      </Badge>
+    </div>
+  );
+}
+
+/**
+ * Build the partial patch reflecting what's been "typed so far" up to and
+ * including `currentField` at digit count `digits`. Earlier fields use their
+ * full target value; later fields stay at 0.
+ */
+function patchAccumulated(
+  target: { length: number; width: number; height: number; qty: number; weight: number },
+  fields: ("length" | "width" | "height" | "qty" | "weight")[],
+  currentField: "length" | "width" | "height" | "qty" | "weight",
+  digits: number,
+): Partial<CbmItem> {
+  const patch: Partial<CbmItem> = {};
+  for (const f of fields) {
+    if (f === currentField) {
+      const str = String(target[f]);
+      patch[f] = parseInt(str.slice(0, digits), 10) || 0;
+      break;
+    }
+    patch[f] = target[f];
+  }
+  return patch;
+}
