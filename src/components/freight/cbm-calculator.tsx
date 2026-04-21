@@ -693,7 +693,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           const extras: import("@/lib/freight/pdf").PdfExtras = {};
           if (h) {
             const snaps = await h.capture();
-            if (snaps) extras.containerSnapshots = snaps;
+            if (snaps) extras.snapshots = snaps;
           }
           const pack = loadHandleRef.current?.getActivePack() ?? null;
           if (pack && pack.placed.length > 0) {
