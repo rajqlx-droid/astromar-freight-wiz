@@ -62,7 +62,7 @@ import {
   createCbmSyncRecorder,
   NOOP_RECORDER,
   type CbmSyncRecorder,
-} from "@/lib/freight/__dev__/cbm-sync-metrics";
+} from "@/lib/freight/cbm-sync-metrics";
 
 type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
 type WeightUnit = "kg" | "g" | "lb";
@@ -100,15 +100,15 @@ export function CbmCalculator({ items, setItems }: Props) {
   }, [setItems]);
   // Dev-only metrics recorder — counts parent pushes & sync-effect cycles
   // and warns to the console if a loop fingerprint appears (#185 early
-  // detection). NOOP_RECORDER is used in production builds so there is
-  // zero runtime overhead. Exposed on `window.__cbmSyncMetrics` in dev for
-  // quick inspection from the devtools console.
-  const recorderRef = useRef<CbmSyncRecorder>(
-    import.meta.env.DEV ? createCbmSyncRecorder() : NOOP_RECORDER,
-  );
+  // detection). NOOP_RECORDER is used during SSR and in production builds so
+  // there is zero runtime overhead and no chance of an SSR ReferenceError.
+  // Exposed on `window.__cbmSyncMetrics` in dev for quick inspection.
+  const recorderRef = useRef<CbmSyncRecorder>(NOOP_RECORDER);
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     if (typeof window === "undefined") return;
+    // Swap to the real recorder on the client only — never during SSR render.
+    recorderRef.current = createCbmSyncRecorder();
     (window as unknown as { __cbmSyncMetrics?: CbmSyncRecorder }).__cbmSyncMetrics =
       recorderRef.current;
   }, []);
