@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -45,12 +45,21 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
-import { ITEM_COLORS, totalCbm as sumCbm, totalWeight as sumWeight } from "@/lib/freight/packing";
-import { recommendContainers, splitItemsAcrossContainers } from "@/lib/freight/container-recommender";
+import { ITEM_COLORS } from "@/lib/freight/packing";
+import {
+  recommendContainers,
+  recommendContainersFast,
+  type ContainerRecommendation,
+} from "@/lib/freight/container-recommender";
+import { usePackingWorker } from "@/hooks/use-packing-worker";
+import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
 import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
+
+type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
+type WeightUnit = "kg" | "g" | "lb";
 
 interface Props {
   items: CbmItem[];
