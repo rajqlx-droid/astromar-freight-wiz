@@ -500,8 +500,8 @@ function FreightIntelligencePage() {
             />
           ) : (
             <>
-              {/* Heading row: title on left, action cluster on right. Always single row — title truncates to make room. */}
-              <div className="mb-3 flex flex-row items-center gap-2 sm:gap-3">
+              {/* Heading row: title on left, promo banner in middle (CBM only), Compare/History stacked on right. */}
+              <div className="mb-3 flex flex-row items-stretch gap-2 sm:gap-3">
                 {/* Title block */}
                 <div className="flex min-w-0 items-center gap-3">
                   <div
@@ -522,121 +522,27 @@ function FreightIntelligencePage() {
                   </div>
                 </div>
 
-                {/* Action cluster: Compare/History segmented control. Always visible, right-aligned on desktop. */}
-                <div className="ml-auto flex shrink-0 items-center gap-2">
-                  <div className="flex items-center gap-0.5 rounded-lg border border-brand-navy/30 bg-background p-0.5 shadow-sm">
-                    <Tooltip>
-                      <CompareDialog
-                        active={active}
-                        onConfirm={(left, right) => setCompareMode({ left, right })}
-                        trigger={
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              aria-label="Compare calculators"
-                              className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                            >
-                              <GitCompareArrows className="size-3.5" />
-                              <span className="hidden sm:inline">Compare</span>
-                            </Button>
-                          </TooltipTrigger>
-                        }
-                      />
-                      <TooltipContent side="bottom" className="sm:hidden">Compare calculators</TooltipContent>
-                    </Tooltip>
-                    <div aria-hidden className="h-5 w-px bg-brand-navy/15" />
-                    <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <SheetTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              aria-label="View history"
-                              className="h-8 gap-1.5 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                            >
-                              <HistoryIcon className="size-3.5" />
-                              <span className="hidden sm:inline">History</span>
-                            </Button>
-                          </SheetTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" className="sm:hidden">View history</TooltipContent>
-                      </Tooltip>
-                      <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
-                        <SheetTitle className="sr-only">Calculation History</SheetTitle>
-                        <HistoryPanel />
-                      </SheetContent>
-                    </Sheet>
-                  </div>
-                  {!bannerOpen && (
-                    <button
-                      onClick={reopenBanner}
-                      className="no-print inline-flex shrink-0 items-center gap-1 rounded-md border border-brand-navy/20 bg-background px-2 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-brand-orange hover:text-brand-orange"
-                      aria-label="Show pro tip"
-                    >
-                      <Lightbulb className="size-3.5" />
-                      <span className="hidden sm:inline">Tip</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Optimization Plan promo banner — CBM only, sits below heading row */}
-              {active === "cbm" && (
-                <div
-                  className="no-print mb-3 overflow-hidden rounded-2xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy via-brand-navy to-[#1a2f5a] text-white shadow-md"
-                >
-                  <div className="relative flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-5">
-                    {/* Decorative isometric cubes — hidden on small screens to avoid clutter */}
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 select-none md:block"
-                    >
-                      <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                {/* Optimization Plan promo banner — CBM only, slots between title and action stack on desktop */}
+                {active === "cbm" && (
+                  <div
+                    className="no-print relative ml-2 hidden flex-1 overflow-hidden rounded-xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy via-brand-navy to-[#1a2f5a] px-3 py-2 text-white shadow-sm md:flex md:items-center md:gap-3"
+                  >
+                    <div aria-hidden className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 select-none lg:block">
+                      <svg width="70" height="50" viewBox="0 0 120 80" fill="none">
                         <g opacity="0.85">
-                          {/* back cube */}
                           <path d="M70 18 L92 28 L92 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.35" />
                           <path d="M70 18 L48 28 L48 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.55" />
                           <path d="M70 18 L92 28 L70 38 L48 28 Z" fill="var(--brand-orange)" opacity="0.75" />
-                          {/* front cube */}
-                          <path d="M50 38 L72 48 L72 72 L50 62 Z" fill="#fff" opacity="0.18" />
-                          <path d="M50 38 L28 48 L28 72 L50 62 Z" fill="#fff" opacity="0.28" />
-                          <path d="M50 38 L72 48 L50 58 L28 48 Z" fill="#fff" opacity="0.45" />
                         </g>
                       </svg>
                     </div>
-
-                    {/* Text + steps */}
-                    <div className="relative z-10 flex-1 md:pr-32">
-                      <div className="mb-1 flex items-center gap-2">
-                        <Sparkles className="size-4 text-brand-orange" />
-                        <h3 className="text-sm font-bold tracking-tight sm:text-base">
-                          Get your container optimization plan
-                        </h3>
-                      </div>
-                      <p className="mb-2.5 text-xs text-white/75 sm:text-sm">
-                        Enter cargo, get visual 3D + 2D loading plans instantly.
-                      </p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] sm:text-xs">
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="flex size-4 items-center justify-center rounded-full bg-brand-orange/20 text-[10px] font-bold text-brand-orange">1</span>
-                          <span className="text-white/85">Enter values</span>
-                        </span>
-                        <span className="text-white/30">→</span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="flex size-4 items-center justify-center rounded-full bg-brand-orange/20 text-[10px] font-bold text-brand-orange">2</span>
-                          <span className="text-white/85">Smart container fit</span>
-                        </span>
-                        <span className="text-white/30">→</span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className="flex size-4 items-center justify-center rounded-full bg-brand-orange/20 text-[10px] font-bold text-brand-orange">3</span>
-                          <span className="text-white/85">3D + 2D plan</span>
-                        </span>
+                    <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 lg:pr-16">
+                      <Sparkles className="size-4 shrink-0 text-brand-orange" />
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold leading-tight">Get your container optimization plan</p>
+                        <p className="truncate text-[11px] text-white/70">Enter cargo → 3D + 2D loading visuals</p>
                       </div>
                     </div>
-
-                    {/* CTA */}
                     <button
                       type="button"
                       onClick={() =>
@@ -644,10 +550,94 @@ function FreightIntelligencePage() {
                           .getElementById("cbm-optimize-cta")
                           ?.scrollIntoView({ behavior: "smooth", block: "center" })
                       }
-                      className="relative z-10 inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-lg bg-brand-orange px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-orange/90 sm:self-center sm:text-sm"
+                      className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-orange px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-orange/90"
                     >
                       View plan
-                      <ArrowRight className="size-3.5" />
+                      <ArrowRight className="size-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Action cluster: Compare/History stacked vertically (1 column, 2 rows) */}
+                <div className="ml-auto flex shrink-0 flex-col items-stretch gap-1 rounded-lg border border-brand-navy/30 bg-background p-1 shadow-sm">
+                  <Tooltip>
+                    <CompareDialog
+                      active={active}
+                      onConfirm={(left, right) => setCompareMode({ left, right })}
+                      trigger={
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Compare calculators"
+                            className="h-7 justify-start gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                          >
+                            <GitCompareArrows className="size-3.5" />
+                            <span className="hidden sm:inline">Compare</span>
+                          </Button>
+                        </TooltipTrigger>
+                      }
+                    />
+                    <TooltipContent side="left" className="sm:hidden">Compare calculators</TooltipContent>
+                  </Tooltip>
+                  <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <SheetTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label="View history"
+                            className="h-7 justify-start gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                          >
+                            <HistoryIcon className="size-3.5" />
+                            <span className="hidden sm:inline">History</span>
+                          </Button>
+                        </SheetTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="sm:hidden">View history</TooltipContent>
+                    </Tooltip>
+                    <SheetContent side="right" className="w-full p-0 sm:max-w-sm">
+                      <SheetTitle className="sr-only">Calculation History</SheetTitle>
+                      <HistoryPanel />
+                    </SheetContent>
+                  </Sheet>
+                </div>
+
+                {!bannerOpen && (
+                  <button
+                    onClick={reopenBanner}
+                    className="no-print inline-flex shrink-0 items-center gap-1 self-start rounded-md border border-brand-navy/20 bg-background px-2 py-1.5 text-[11px] font-medium text-muted-foreground hover:border-brand-orange hover:text-brand-orange"
+                    aria-label="Show pro tip"
+                  >
+                    <Lightbulb className="size-3.5" />
+                    <span className="hidden sm:inline">Tip</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Mobile-only optimization promo (full width, since desktop version is inline above) */}
+              {active === "cbm" && (
+                <div
+                  className="no-print mb-3 overflow-hidden rounded-xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy to-[#1a2f5a] px-3 py-2.5 text-white shadow-sm md:hidden"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="size-4 shrink-0 text-brand-orange" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-bold">Get your container optimization plan</p>
+                      <p className="truncate text-[11px] text-white/70">Enter cargo → 3D + 2D loading visuals</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById("cbm-optimize-cta")
+                          ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                      }
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-orange px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                    >
+                      View
+                      <ArrowRight className="size-3" />
                     </button>
                   </div>
                 </div>
