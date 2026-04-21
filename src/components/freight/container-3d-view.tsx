@@ -234,13 +234,16 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     >
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
+        frameloop="demand"
         gl={{ preserveDrawingBuffer: true, antialias: true }}
         camera={{ position: [Cm.l * 0.9, Cm.h * 1.4, Cm.w * 1.6], fov: 35 }}
         onCreated={({ gl, scene, camera }) => {
           glRef.current = gl;
           sceneRef.current = scene;
           cameraRef.current = camera as THREE.PerspectiveCamera;
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.toneMapping = THREE.NoToneMapping;
           scene.background = makeSkyTexture();
           scene.fog = new THREE.Fog(0xb8c2cc, Cm.l * 4, Cm.l * 14);
         }}
@@ -309,9 +312,17 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
   );
 });
 
-/* --------------- Procedural textures (real container look) --------------- */
+/* --------------- Procedural textures (real container look) ---------------
+ * Module-level caches: each texture is created at most once per process and
+ * reused across container switches. The texture data itself is tileable —
+ * only `repeat` depends on container dimensions, and that's a cheap update
+ * applied at consumption sites. This eliminates GPU memory growth that
+ * previously occurred each time the user switched buckets.
+ */
 
+let _skyTex: THREE.CanvasTexture | null = null;
 function makeSkyTexture(): THREE.CanvasTexture {
+  if (_skyTex) return _skyTex;
   const c = document.createElement("canvas");
   c.width = 8;
   c.height = 256;
@@ -323,10 +334,14 @@ function makeSkyTexture(): THREE.CanvasTexture {
   g.addColorStop(1, "#5a534a");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 8, 256);
-  return new THREE.CanvasTexture(c);
+  _skyTex = new THREE.CanvasTexture(c);
+  return _skyTex;
 }
 
+const _corrugatedCache = new Map<string, THREE.CanvasTexture>();
 function makeCorrugatedTexture(color: string): THREE.CanvasTexture {
+  const cached = _corrugatedCache.get(color);
+  if (cached) return cached;
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 64;
@@ -350,10 +365,13 @@ function makeCorrugatedTexture(color: string): THREE.CanvasTexture {
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
+  _corrugatedCache.set(color, tex);
   return tex;
 }
 
+let _plywoodTex: THREE.CanvasTexture | null = null;
 function makePlywoodTexture(): THREE.CanvasTexture {
+  if (_plywoodTex) return _plywoodTex;
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 256;
@@ -371,10 +389,34 @@ function makePlywoodTexture(): THREE.CanvasTexture {
   }
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   for (let y = 0; y < 256; y += 64) ctx.fillRect(0, y, 256, 1);
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  return tex;
+  _plywoodTex = new THREE.CanvasTexture(c);
+  _plywoodTex.wrapS = THREE.RepeatWrapping;
+  _plywoodTex.wrapT = THREE.RepeatWrapping;
+  return _plywoodTex;
+}
+
+/* --------------- Demand-mode invalidator ---------------
+ * With `frameloop="demand"` the canvas only renders when something invalidates
+ * it. OrbitControls already calls invalidate() on every drag/zoom, but we also
+ * need to invalidate on prop changes (preset switch, fly-in, recording frame,
+ * heatmap toggle, etc) and to keep ticking while an animation is in flight.
+ * When idle, this component does nothing — CPU usage drops to ~0.
+ */
+function InvalidateOnChange({
+  deps,
+  animate,
+}: {
+  deps: Array<number | string | boolean | null | undefined>;
+  animate: boolean;
+}) {
+  const { invalidate } = useThree();
+  useEffect(() => {
+    invalidate();
+  }, [invalidate, ...deps]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFrame(() => {
+    if (animate) invalidate();
+  });
+  return null;
 }
 
 /* --------------- Scene contents --------------- */
@@ -458,10 +500,40 @@ function SceneContents({
         position={[Cm.l, Cm.h * 3, Cm.w * 2]}
         intensity={1.1}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
+        shadow-bias={-0.0005}
+        shadow-camera-near={0.1}
+        shadow-camera-far={Math.max(Cm.l, Cm.w) * 8}
+        shadow-camera-left={-Cm.l}
+        shadow-camera-right={Cm.l}
+        shadow-camera-top={Cm.h * 2}
+        shadow-camera-bottom={-0.5}
       />
       <hemisphereLight intensity={0.35} groundColor={"#ddd"} />
+
+      <InvalidateOnChange
+        deps={[
+          preset,
+          recording ? frame : -1,
+          flyInPlacedSet ? flyInPlacedSet.size : 0,
+          flyInKey,
+          activePalletIdx ?? -1,
+          nextPalletIdx ?? -1,
+          followCam ? 1 : 0,
+          gapHeatmapRow ? 1 : 0,
+          showForkliftToken ? 1 : 0,
+          visiblePlacedSet ? visiblePlacedSet.size : -1,
+          hideDoors ? 1 : 0,
+        ]}
+        animate={
+          !!recording ||
+          followCam ||
+          (flyInPlacedSet?.size ?? 0) > 0 ||
+          nextPalletIdx != null ||
+          showForkliftToken
+        }
+      />
 
       <OrbitControls
         ref={controlsRef}
@@ -507,38 +579,44 @@ function SceneContents({
 
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
-        {pack.placed.map((b, i) => {
-          const t = transforms?.[i];
-          if (recording && t && !t.visible) return null;
-          // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
-          if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
-          // Combine per-frame transform offset (recording) with the shuffle
-          // preview offset (applied to scene-z, the container width axis).
-          const shuffleZ = shufflePreview?.get(i) ?? 0;
-          const offset: [number, number, number] = [
-            t?.offset[0] ?? 0,
-            t?.offset[1] ?? 0,
-            (t?.offset[2] ?? 0) + shuffleZ,
-          ];
-          const isPreviewed = !recording && shuffleZ !== 0;
-          const flyIn = !recording && !!flyInPlacedSet?.has(i);
-          const isActivePallet = !recording && i === activePalletIdx;
-          return (
-            <CargoBox
-              key={i}
-              box={b}
-              stat={pack.perItem[b.itemIdx]}
-              offset={offset}
-              scale={t?.scale}
-              previewHighlight={isPreviewed}
-              flyIn={flyIn}
-              flyInKey={flyInKey}
-              containerL={Cm.l}
-              containerH={Cm.h}
-              showCheckmark={isActivePallet}
-            />
-          );
-        })}
+        {(() => {
+          // Render edge outlines only for small jobs (<=60 boxes). Above that
+          // the edges add a per-box draw call without measurable visual value.
+          const showEdges = pack.placed.length <= 60;
+          return pack.placed.map((b, i) => {
+            const t = transforms?.[i];
+            if (recording && t && !t.visible) return null;
+            // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
+            if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
+            // Combine per-frame transform offset (recording) with the shuffle
+            // preview offset (applied to scene-z, the container width axis).
+            const shuffleZ = shufflePreview?.get(i) ?? 0;
+            const offset: [number, number, number] = [
+              t?.offset[0] ?? 0,
+              t?.offset[1] ?? 0,
+              (t?.offset[2] ?? 0) + shuffleZ,
+            ];
+            const isPreviewed = !recording && shuffleZ !== 0;
+            const flyIn = !recording && !!flyInPlacedSet?.has(i);
+            const isActivePallet = !recording && i === activePalletIdx;
+            return (
+              <CargoBox
+                key={i}
+                box={b}
+                stat={pack.perItem[b.itemIdx]}
+                offset={offset}
+                scale={t?.scale}
+                previewHighlight={isPreviewed}
+                flyIn={flyIn}
+                flyInKey={flyInKey}
+                containerL={Cm.l}
+                containerH={Cm.h}
+                showCheckmark={isActivePallet}
+                showEdges={showEdges}
+              />
+            );
+          });
+        })()}
         {/* Pulsing yellow target outline at the NEXT pallet's slot */}
         {!recording && nextBox && (
           <NextPalletTarget box={nextBox} />
@@ -606,27 +684,30 @@ function ContainerShell({
   const wallColor = "#2c4a6b";
   const doorColor = "#234058";
 
-  const plywoodTex = useMemo(() => {
-    const t = makePlywoodTexture();
-    t.repeat.set(Math.max(2, Cm.l / 1.2), Math.max(2, Cm.w / 1.2));
-    return t;
-  }, [Cm.l, Cm.w]);
+  // Cached, color-keyed textures. The texture data itself is reused across
+  // every container; only `repeat` depends on dimensions, so we mutate it in
+  // an effect (no GPU upload, no GC churn on container switch).
+  const plywoodTex = useMemo(() => makePlywoodTexture(), []);
+  const wallTexX = useMemo(() => makeCorrugatedTexture(wallColor), [wallColor]);
+  const wallTexZ = useMemo(() => makeCorrugatedTexture(wallColor), [wallColor]);
+  const doorTex = useMemo(() => makeCorrugatedTexture(doorColor), [doorColor]);
 
-  const wallTexX = useMemo(() => {
-    const t = makeCorrugatedTexture(wallColor);
-    t.repeat.set(Math.max(4, Cm.l / 0.3), Math.max(2, Cm.h / 1.5));
-    return t;
-  }, [Cm.l, Cm.h]);
-  const wallTexZ = useMemo(() => {
-    const t = makeCorrugatedTexture(wallColor);
-    t.repeat.set(Math.max(2, Cm.w / 0.3), Math.max(2, Cm.h / 1.5));
-    return t;
-  }, [Cm.w, Cm.h]);
-  const doorTex = useMemo(() => {
-    const t = makeCorrugatedTexture(doorColor);
-    t.repeat.set(Math.max(2, Cm.w / 0.6), Math.max(2, Cm.h / 1.5));
-    return t;
-  }, [Cm.w, Cm.h]);
+  useEffect(() => {
+    plywoodTex.repeat.set(Math.max(2, Cm.l / 1.2), Math.max(2, Cm.w / 1.2));
+    plywoodTex.needsUpdate = true;
+  }, [plywoodTex, Cm.l, Cm.w]);
+  useEffect(() => {
+    wallTexX.repeat.set(Math.max(4, Cm.l / 0.3), Math.max(2, Cm.h / 1.5));
+    wallTexX.needsUpdate = true;
+  }, [wallTexX, Cm.l, Cm.h]);
+  useEffect(() => {
+    wallTexZ.repeat.set(Math.max(2, Cm.w / 0.3), Math.max(2, Cm.h / 1.5));
+    wallTexZ.needsUpdate = true;
+  }, [wallTexZ, Cm.w, Cm.h]);
+  useEffect(() => {
+    doorTex.repeat.set(Math.max(2, Cm.w / 0.6), Math.max(2, Cm.h / 1.5));
+    doorTex.needsUpdate = true;
+  }, [doorTex, Cm.w, Cm.h]);
 
   const FRAME = "#1a2433";
   const frameThk = 0.06;
@@ -833,10 +914,10 @@ function WarehouseAmbience({ Cm }: { Cm: { l: number; w: number; h: number } }) 
   const stacks: Array<{ pos: [number, number, number]; count: number }> = [
     { pos: [-Cm.l / 2 - 1.6, 0, -Cm.w / 2 - 1.4], count: 5 },
     { pos: [-Cm.l / 2 - 1.6, 0, Cm.w / 2 + 1.4], count: 4 },
-    { pos: [-Cm.l / 2 - 3.0, 0, -Cm.w / 2 - 1.6], count: 6 },
+    { pos: [-Cm.l / 2 - 3.0, 0, -Cm.w / 2 - 1.6], count: 3 },
     // Loading-side feeder stacks (near door, +x). Forklift picks from here.
-    { pos: [Cm.l / 2 + 4.5, 0, -Cm.w / 2 - 1.4], count: 4 },
-    { pos: [Cm.l / 2 + 4.5, 0, Cm.w / 2 + 1.4], count: 4 },
+    { pos: [Cm.l / 2 + 4.5, 0, -Cm.w / 2 - 1.4], count: 3 },
+    { pos: [Cm.l / 2 + 4.5, 0, Cm.w / 2 + 1.4], count: 3 },
   ];
 
   // Traffic cones flanking the door (door is at +Cl/2). Two pairs forming a lane.
@@ -1089,6 +1170,7 @@ function CargoBox({
   containerL = 12,
   containerH = 2.6,
   showCheckmark = false,
+  showEdges = true,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1100,6 +1182,7 @@ function CargoBox({
   containerL?: number;
   containerH?: number;
   showCheckmark?: boolean;
+  showEdges?: boolean;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1141,14 +1224,12 @@ function CargoBox({
   const stageOffsetX = Math.max(2, containerL * 0.55);
   const stageOffsetY = Math.max(1.2, containerH * 0.7);
 
+  // Only subscribe to the per-frame loop while this box is actively flying in.
+  // Idle boxes (the common case after load) register zero useFrame callbacks.
   useFrame((_state, delta) => {
+    if (!flyIn) return;
     const g = groupRef.current;
     if (!g) return;
-    if (!flyIn) {
-      // Snap to rest pose.
-      g.position.set(cx, cy + palletLift, cz);
-      return;
-    }
     if (animStartRef.current === null) animStartRef.current = 0;
     animStartRef.current += delta;
     const t = Math.min(1, animStartRef.current / FLY_DURATION);
@@ -1178,6 +1259,7 @@ function CargoBox({
         hovered={hovered}
         tiltColor={tiltColor}
         tilted={tilted}
+        showEdges={showEdges}
         onPointerOver={(e) => {
           if (!tilted) return;
           e.stopPropagation();
@@ -1259,6 +1341,7 @@ interface PackageShapeProps {
   hovered: boolean;
   tilted: boolean;
   tiltColor: string;
+  showEdges?: boolean;
   onPointerOver: (e: ThreeEvent<PointerEvent>) => void;
   onPointerOut: (e: ThreeEvent<PointerEvent>) => void;
 }
@@ -1273,7 +1356,7 @@ function PackageShape(props: PackageShapeProps) {
   return <CartonShape {...props} />;
 }
 
-function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   return (
     <mesh castShadow receiveShadow onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <boxGeometry args={[lm, hm, wm]} />
@@ -1286,14 +1369,16 @@ function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, onPointer
         emissive={hovered ? tiltColor : "#000000"}
         emissiveIntensity={hovered ? 0.25 : 0}
       />
-      <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
-        <lineBasicMaterial
-          color={hovered ? tiltColor : "#1f2937"}
-          polygonOffset
-          polygonOffsetFactor={-1}
-          polygonOffsetUnits={-1}
-        />
-      </Edges>
+      {showEdges && (
+        <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
+          <lineBasicMaterial
+            color={hovered ? tiltColor : "#1f2937"}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </Edges>
+      )}
     </mesh>
   );
 }
@@ -1362,7 +1447,7 @@ function BaleShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoi
   );
 }
 
-function CrateShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function CrateShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   const crateColor = color || "#a07a4e";
   const slatColor = "#5a3d20";
   const slatThk = Math.min(lm, wm) * 0.06;
@@ -1377,9 +1462,11 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPo
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
-        <Edges scale={0.999} color="#3a2818">
-          <lineBasicMaterial color="#3a2818" />
-        </Edges>
+        {showEdges && (
+          <Edges scale={0.999} color="#3a2818">
+            <lineBasicMaterial color="#3a2818" />
+          </Edges>
+        )}
       </mesh>
       {[
         [-lm / 2 + slatThk / 2, -wm / 2 + slatThk / 2],
@@ -1402,7 +1489,7 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPo
   );
 }
 
-function PalletShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   const PALLET_H = 0.12;
   const loadH = Math.max(0.05, hm - PALLET_H);
   const wrapColor = "#a8c5d8";
@@ -1422,9 +1509,11 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onP
           emissive={hovered ? tiltColor : wrapColor}
           emissiveIntensity={hovered ? 0.25 : 0.05}
         />
-        <Edges scale={0.999} color="#5a7a90">
-          <lineBasicMaterial color="#5a7a90" />
-        </Edges>
+        {showEdges && (
+          <Edges scale={0.999} color="#5a7a90">
+            <lineBasicMaterial color="#5a7a90" />
+          </Edges>
+        )}
       </mesh>
     </group>
   );
