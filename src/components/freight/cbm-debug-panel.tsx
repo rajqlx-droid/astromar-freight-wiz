@@ -605,6 +605,23 @@ export function CbmDebugPanel({ info }: Props) {
                   tone={result.avgFrameMs > AVG_FRAME_THRESHOLD_MS ? "warn" : "good"}
                 />
                 <Row
+                  label="Worst render spike"
+                  value={`${result.worstRenderSpike} render(s)`}
+                  tone={
+                    result.worstRenderSpike > RENDER_SPIKE_THRESHOLD
+                      ? "bad"
+                      : result.worstRenderSpike > 3
+                        ? "warn"
+                        : "good"
+                  }
+                  hint={`>${RENDER_SPIKE_THRESHOLD} per keystroke = render storm`}
+                />
+                <Row
+                  label="Avg renders / keystroke"
+                  value={result.avgRendersPerKeystroke.toFixed(2)}
+                  hint={`${result.totalRenders} total commits`}
+                />
+                <Row
                   label="Per-row sum"
                   value={`${result.perRowSum.toFixed(4)} m³`}
                 />
