@@ -744,8 +744,8 @@ function FreightIntelligencePage() {
                 { q: "Are my saved calculations stored on a server?", a: "No. Saves and history live entirely in your browser's localStorage. Clearing your browser data deletes them." },
               ].map((f) => (
                 <AccordionItem key={f.q} value={f.q}>
-                  <AccordionTrigger className="text-left text-base md:text-lg font-semibold text-brand-navy py-5">{f.q}</AccordionTrigger>
-                  <AccordionContent className="text-base text-muted-foreground leading-relaxed">{f.a}</AccordionContent>
+                  <AccordionTrigger className="text-left text-sm md:text-base font-semibold text-brand-navy py-4">{f.q}</AccordionTrigger>
+                  <AccordionContent className="text-sm text-muted-foreground leading-relaxed">{f.a}</AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>
