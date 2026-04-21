@@ -1,67 +1,51 @@
 
 
-## Fix: Page Unresponsive on Realistic Loads (50+ cartons)
+## Fix typing lag and incorrect Total CBM in CBM Calculator
 
-### Diagnosis
+Two related issues are slowing the CBM calculator and producing the wrong "Total CBM" you see in the screenshot. Both come from the same root cause: heavy 3D packing math is running on every keystroke, and the on-screen totals are computed from two different states (live draft vs. debounced commit), so they disagree mid-typing.
 
-The "Page Unresponsive" dialog fires because every input commit triggers **6 synchronous full packing runs** on the main thread:
+### What's wrong today
 
-- `runAllScenarios` runs the packer **4 times** (one per strategy)
-- `multiPacks` runs it once per recommended container
-- `unitStats` (in cbm-calculator) runs it **again** per recommended container — duplicate work
-- Plus `singlePack` fallback in some code paths
+1. **Total CBM lags / looks wrong**
+   - The per-row "CBM" tile reads from `draftItems` (live, every keystroke).
+   - The Results card "Total CBM" reads from `items` (debounced 400-800ms behind).
+   - The "X of Y placed" badges on container suggestions use a rough CBM-based estimate (`cargoCbm × 0.85`), not the real packer output, so counts disagree with the 3D viewer.
 
-For 50 cartons of 55×55×55cm in a 40HC:
-- ~67,680 candidate positions per box per orientation
-- Gap-check loop scans all already-placed boxes per candidate
-- Result: **~85M operations per pack × 6 packs ≈ 500M ops blocking the main thread**
+2. **Typing slows down with 5+ items**
+   - `recommendContainers(items)` runs `packContainerAdvanced` synchronously on the main thread against every container preset, **even when the user hasn't clicked "Optimize loading" yet**.
+   - For multi-container loads it then runs the packer again inside `splitMulti` (potentially 5-10+ full packs).
+   - `unitStats` calls `splitItemsAcrossContainers` which runs the packer yet again.
+   - Each pack at 100+ cartons = 200-1000ms blocking the main thread → input feels frozen.
+   - Result: every debounce flush triggers ~1-3s of synchronous packing on the main thread.
 
-The 300-qty `scaleFactor` guard doesn't help — 50 cartons is well below the cap.
+### Plan
 
-### Fix Plan
+**1. Stop running the 3D packer on every keystroke**
+   - Gate `recommendation` and `unitStats` in `src/components/freight/cbm-calculator.tsx` behind `showOptimization` (or at minimum `optimizationRequested`). Before the user clicks "Optimize loading", show a lightweight CBM-only recommendation using the legacy numeric path (`recommendContainers(totalCbm, totalWeight)`) — no geometry packing.
+   - After the user opts in, run the geometry-aware version, but move it off the main thread via the existing `usePackingWorker` hook (already wired for `multi`).
 
-**1. Eliminate duplicate packing work**
+**2. Make Total CBM correct and live**
+   - Compute `result` from `draftItems` (not `items`) so per-row tiles and Total CBM always agree.
+   - Keep the debounced `setItems(draftItems)` for *downstream* heavy work (recommender, packer), but unbind the lightweight CBM total from it.
+   - Same for `inputsTable` and `staticExtras` totals — derive from `draftItems`.
 
-In `cbm-calculator.tsx`, `unitStats` calls `packContainerAdvanced` per recommended container — but `ContainerLoadView` already does the same work via `multiPacks`. Replace `unitStats` with a lightweight CBM-only estimate (no 3D packing) for the badge counts in the suggestion banner. The exact placed/total count will be reconciled when the viewer renders.
+**3. Fix the "X of Y placed" badge mismatch**
+   - When `recommendation` becomes worker-driven, derive `unitStats.placed` from the actual `AdvancedPackResult.placedCartons` per bucket (returned by the worker's `multi` call), not from the `× 0.85` heuristic. Cache the multi-pack results and reuse them in `ContainerLoadView` instead of re-packing.
 
-**2. Drop scenario count from 4 to 1 by default, gate the rest behind a user action**
+**4. Lighten input rendering**
+   - The whole row list re-renders on every keystroke because `draftItems` is a fresh array. Extract the row body into a memoised `<CbmRow>` component (`React.memo`) keyed by `it.id`, with stable callbacks via `useCallback`. With 10-20 rows this drops per-keystroke render cost to ~1 row instead of all rows.
+   - Tighten the debounce: 250ms for ≤10 items, 600ms for >10 (current 400/800 is too aggressive on small manifests, too loose on large).
 
-Most users only need the recommended "best" pack. Running 4 strategies on every keystroke commit is the dominant cost. Change `ContainerLoadView` so `scenarios` only contains `["row-back"]` initially. Add an explicit "Compare strategies" button that, when clicked, runs the remaining 3 strategies and reveals the comparison table. This cuts cost by 75% in the common case.
+### Files to change
 
-**3. Cap the placement scan inside `packContainerAdvanced`**
+- `src/components/freight/cbm-calculator.tsx` — gate recommender behind opt-in; switch totals to `draftItems`; extract memoised `<CbmRow>`; wire worker for recommendation; consume real per-bucket pack counts.
+- `src/lib/freight/container-recommender.ts` — expose a cheap CBM-only `recommendContainersFast(totalCbm, totalWeightKg)` for the pre-optimize banner (the legacy numeric overload already does this; surface it as a named export for clarity).
+- `src/lib/freight/packing-worker.ts` + `src/hooks/use-packing-worker.ts` — add a `recommend` request kind that runs `recommendContainers(items)` inside the worker, returning `{ recommendation, bucketPacks }` so the UI gets one round trip instead of three.
 
-In `packing-advanced.ts`, after a box has been placed near the back of the container, skip scanning the entire container length for the next box of the same size — start from the topmost active row. Two concrete bounds:
+### Expected outcome
 
-- After placing N boxes, track the max-X reached (`frontierX`) and limit each new box's scan to `min(C.l, frontierX + 2 × maxBoxLen)`. This is correct because the back-to-front scoring guarantees no better placement exists further forward.
-- Increase `PLACE_STEP_MM` from 50 to 100 when total cartons > 30. The snap-to-neighbour pass at the end already recovers sub-stride precision, so packing density is preserved.
-
-**4. Move the heavy packing call off the render path**
-
-Wrap each `useMemo` that calls `packContainerAdvanced`/`runAllScenarios` in a `useDeferredValue` of its inputs, so React can interrupt the calculation if the user keeps typing. This won't reduce CPU but it stops the "Page Unresponsive" browser dialog by keeping the event loop responsive between scheduling slices.
-
-**5. Increase the debounce window for very large manifests**
-
-In `cbm-calculator.tsx`, change the debounce from a flat 400ms to `400ms` for ≤20 cartons and `800ms` for >20 cartons. Lets the user finish typing a full quantity like "50" before a single pack run fires.
-
-### Files to edit
-
-- `src/lib/freight/packing-advanced.ts` — add frontier-bounded scan + adaptive `PLACE_STEP_MM`
-- `src/lib/freight/scenario-runner.ts` — accept a `strategiesToRun` parameter (default `["row-back"]`)
-- `src/components/freight/container-load-view.tsx` — gate the 3-extra-strategy run behind a "Compare strategies" toggle; wrap pack memos with `useDeferredValue`
-- `src/components/freight/cbm-calculator.tsx` — replace `unitStats`'s `packContainerAdvanced` call with a CBM/qty estimate; adaptive debounce window
-
-### Expected impact
-
-For 50 cartons × 55cm in a 40HC:
-- Single strategy + frontier scan + step 100mm: **~5–8M ops** (was ~85M per pack)
-- Total per commit: **~5M ops, 1 pack** (was ~500M ops, 6 packs)
-- Estimated render time on a typical laptop: **~150ms** (was 6+ seconds → "Page Unresponsive")
-
-Strategy comparison still available on demand via the new button — same UI, opt-in cost.
-
-### Notes
-
-- No UI removed. The strategy comparison table still works the same way once revealed.
-- `selectedStrategyId` state stays intact so once strategies are computed, "Load" still applies them.
-- The accuracy of `unitStats` badges in the suggestion card drops from "exact placed count" to "estimated by CBM" — the viewer's tabs still show exact counts. If exact counts matter at the suggestion-card stage, we can run those packs in a Web Worker as a follow-up.
+- Typing into Length/Width/Height/Qty stays smooth at 20+ items across 10 containers — no main-thread packing during edits.
+- "Total CBM" updates instantly with each keystroke and matches the sum of per-row CBM tiles exactly.
+- Container suggestion badges ("12 / 16 placed") match what the 3D viewer renders.
+- After clicking "Optimize loading", a brief "Calculating…" state appears while the worker runs, then everything settles — UI never freezes.
 
