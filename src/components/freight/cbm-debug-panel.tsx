@@ -122,6 +122,12 @@ interface TestResult {
   totalRenders: number;
   /** Render counts/jank broken down by which field was being typed. */
   fieldRenderStats: FieldRenderStats;
+  /** Per-row wall-clock + frame-cost timing (one entry per row). */
+  rowTimingStats: RowTimingStats[];
+  /** Field that produced the worst single-keystroke frame spike. */
+  worstFrameField: FieldKey | null;
+  /** Field with the highest cumulative frame-cost time. */
+  hottestField: FieldKey | null;
   /** Sum of per-row CBM tiles after the test completed. */
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
