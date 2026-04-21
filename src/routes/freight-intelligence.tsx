@@ -12,6 +12,8 @@ import {
   Mail,
   MapPin,
   ArrowRight,
+  Sparkles,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { nextId } from "@/lib/freight/ids";
