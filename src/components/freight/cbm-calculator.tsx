@@ -1064,3 +1064,223 @@ function ConfirmPackingModal({
     </Dialog>
   );
 }
+
+/* ---------------- CbmRow (memoised) ---------------- */
+
+interface CbmRowProps {
+  item: CbmItem;
+  idx: number;
+  color: string;
+  globalLenUnit: LengthUnit;
+  globalWtUnit: WeightUnit;
+  popoverOpen: boolean;
+  onPopoverOpenChange: (open: boolean) => void;
+  registerRef: (el: HTMLDivElement | null) => void;
+  allowRemove: boolean;
+  onUpdateDraft: (id: string, patch: Partial<CbmItem>) => void;
+  onUpdatePacking: (id: string, patch: Partial<CbmItem>) => void;
+  onDuplicate: (id: string) => void;
+  onRemove: (id: string) => void;
+  onSetLenUnit: (u: LengthUnit) => void;
+  onSetWtUnit: (u: WeightUnit) => void;
+  renderPopover: () => React.ReactNode;
+}
+
+/**
+ * Single row of the CBM calculator manifest.
+ *
+ * Memoised so that with 20+ items, typing into row N only re-renders row N
+ * instead of the entire list. Identity-stable callbacks from the parent are
+ * mandatory — wrap any handler passed in with `useCallback`.
+ */
+const CbmRow = memo(function CbmRow({
+  item: it,
+  idx,
+  color,
+  globalLenUnit,
+  globalWtUnit,
+  popoverOpen,
+  onPopoverOpenChange,
+  registerRef,
+  allowRemove,
+  onUpdateDraft,
+  onUpdatePacking,
+  onDuplicate,
+  onRemove,
+  onSetLenUnit,
+  onSetWtUnit,
+  renderPopover,
+}: CbmRowProps) {
+  const rowLen = it.lenUnit ?? globalLenUnit;
+  const rowWt = it.wtUnit ?? globalWtUnit;
+  const rowCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
+  const confirmed = it.packingConfirmed === true;
+
+  const showLen = (cm: number) => {
+    const v = cmTo(cm, rowLen);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const showWt = (kg: number) => {
+    const v = kgTo(kg, rowWt);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const setLen = (key: "length" | "width" | "height") => (n: number) =>
+    onUpdateDraft(it.id, { [key]: Number.isFinite(n) ? toCm(n, rowLen) : 0 } as Partial<CbmItem>);
+  const setWt = (n: number) =>
+    onUpdateDraft(it.id, { weight: Number.isFinite(n) ? toKg(n, rowWt) : 0 });
+
+  return (
+    <Card
+      ref={registerRef}
+      className="border-2 p-3 transition-shadow"
+      style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="size-3 rounded-sm border border-black/10"
+            style={{ background: color }}
+            aria-hidden
+          />
+          <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <UnitSelector id={`cbm-len-unit-${it.id}`} value={rowLen} onChange={onSetLenUnit} compact />
+            <WeightUnitSelector id={`cbm-wt-unit-${it.id}`} value={rowWt} onChange={onSetWtUnit} compact />
+            <Select
+              value={it.packageType ?? "carton"}
+              onValueChange={(v) => onUpdatePacking(it.id, { packageType: v as PackageType })}
+            >
+              <SelectTrigger
+                className="h-7 w-auto gap-1 rounded-full border-brand-navy/25 bg-muted/40 px-2.5 py-0 text-[11px] font-medium text-brand-navy shadow-none focus:ring-1"
+                aria-label={`Item ${idx + 1} package type`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Pkg
+                </span>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PACKAGE_TYPES.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <Popover open={popoverOpen} onOpenChange={onPopoverOpenChange}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  confirmed
+                    ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
+                    : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
+                )}
+              >
+                {confirmed ? (
+                  <CheckCircle2 className="size-3.5 shrink-0" />
+                ) : (
+                  <Settings2 className="size-3.5 shrink-0" />
+                )}
+                <span className="truncate">
+                  {confirmed ? buildSummary(it) : "Packing options"}
+                </span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-4">
+              {renderPopover()}
+            </PopoverContent>
+          </Popover>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-7"
+            onClick={() => onDuplicate(it.id)}
+            aria-label="Duplicate"
+          >
+            <Copy className="size-3.5" />
+          </Button>
+          {allowRemove && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-7 text-destructive"
+              onClick={() => onRemove(it.id)}
+              aria-label="Remove"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <NumberField
+          compact
+          id={`l-${it.id}`}
+          label="Length"
+          suffix={rowLen}
+          required
+          value={showLen(it.length)}
+          onChange={setLen("length")}
+          hint={`Outer length of one carton in ${rowLen}.`}
+        />
+        <NumberField
+          compact
+          id={`w-${it.id}`}
+          label="Width"
+          suffix={rowLen}
+          required
+          value={showLen(it.width)}
+          onChange={setLen("width")}
+          hint={`Outer width in ${rowLen}.`}
+        />
+        <NumberField
+          compact
+          id={`h-${it.id}`}
+          label="Height"
+          suffix={rowLen}
+          required
+          value={showLen(it.height)}
+          onChange={setLen("height")}
+          hint={`Outer height in ${rowLen}.`}
+        />
+        <NumberField
+          compact
+          id={`q-${it.id}`}
+          label="Qty"
+          required
+          step={1}
+          value={it.qty}
+          onChange={(n) => onUpdateDraft(it.id, { qty: Math.max(1, Math.round(n)) })}
+          hint="Number of identical cartons."
+        />
+        <NumberField
+          compact
+          id={`wt-${it.id}`}
+          label="Weight"
+          suffix={rowWt}
+          required
+          value={showWt(it.weight)}
+          onChange={setWt}
+          hint={`Actual weight of ONE carton (gross) in ${rowWt}.`}
+        />
+        <div
+          className="flex flex-col justify-center rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-1.5"
+          aria-label={`Item ${idx + 1} CBM`}
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            CBM
+          </span>
+          <span className="text-lg font-bold leading-tight" style={{ color: "var(--brand-orange)" }}>
+            {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
+            <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
+          </span>
+        </div>
+      </div>
+    </Card>
+  );
+});
