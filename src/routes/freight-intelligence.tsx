@@ -676,23 +676,44 @@ function FreightIntelligencePage() {
         </section>
 
         {/* FAQ */}
-        <section className="mx-auto max-w-4xl px-3 pb-12 md:px-4">
+        <section className="mx-auto max-w-7xl px-3 pb-12 md:px-4">
           <h2 className="text-xl font-bold text-brand-navy md:text-2xl">Frequently asked questions</h2>
-          <Accordion type="single" collapsible className="mt-4">
-            {[
-              { q: "How is CBM calculated?", a: "CBM = Length × Width × Height ÷ 1,000,000 (cm to m³). For multiple cartons, multiply by quantity." },
-              { q: "Why is volumetric weight ÷5000 for sea and ÷6000 for air?", a: "Sea LCL freight uses a 1:1000 ratio between m³ and kg (so chargeable kg = CBM × 200). Airlines apply the IATA 6000 divisor for low-density cargo." },
-              { q: "What duty rate should I use for landed cost?", a: "Use the BCD (Basic Customs Duty) rate from your product's HSN code. Add IGST on (CIF + Duty). Default 10% / 18% are common, but always verify your HSN." },
-              { q: "How is the air vs sea comparison fair?", a: "We add the working-capital cost of having goods in transit (product value × daily rate × days) to each freight cost, so you compare the true cash impact." },
-              { q: "What counts as a free day at the port?", a: "Most Indian ports give 4–5 free days from container landing. After that, demurrage stacks daily and may double after a week." },
-              { q: "Are my saved calculations stored on a server?", a: "No. Saves and history live entirely in your browser's localStorage. Clearing your browser data deletes them." },
-            ].map((f) => (
-              <AccordionItem key={f.q} value={f.q}>
-                <AccordionTrigger className="text-left text-sm font-semibold text-brand-navy">{f.q}</AccordionTrigger>
-                <AccordionContent className="text-sm text-muted-foreground">{f.a}</AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          <div className="mt-4 grid gap-8 md:grid-cols-[1fr_320px]">
+            <Accordion type="single" collapsible>
+              {[
+                { q: "How is CBM calculated?", a: "CBM = Length × Width × Height ÷ 1,000,000 (cm to m³). For multiple cartons, multiply by quantity." },
+                { q: "Why is volumetric weight ÷5000 for sea and ÷6000 for air?", a: "Sea LCL freight uses a 1:1000 ratio between m³ and kg (so chargeable kg = CBM × 200). Airlines apply the IATA 6000 divisor for low-density cargo." },
+                { q: "What duty rate should I use for landed cost?", a: "Use the BCD (Basic Customs Duty) rate from your product's HSN code. Add IGST on (CIF + Duty). Default 10% / 18% are common, but always verify your HSN." },
+                { q: "How is the air vs sea comparison fair?", a: "We add the working-capital cost of having goods in transit (product value × daily rate × days) to each freight cost, so you compare the true cash impact." },
+                { q: "What counts as a free day at the port?", a: "Most Indian ports give 4–5 free days from container landing. After that, demurrage stacks daily and may double after a week." },
+                { q: "Are my saved calculations stored on a server?", a: "No. Saves and history live entirely in your browser's localStorage. Clearing your browser data deletes them." },
+              ].map((f) => (
+                <AccordionItem key={f.q} value={f.q}>
+                  <AccordionTrigger className="text-left text-sm font-semibold text-brand-navy">{f.q}</AccordionTrigger>
+                  <AccordionContent className="text-sm text-muted-foreground">{f.a}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+            <aside className="self-start rounded-2xl border border-brand-navy/10 bg-brand-navy-soft p-6">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-full bg-brand-orange/15 text-brand-orange">
+                  <BookOpen className="size-5" />
+                </div>
+                <h3 className="text-base font-bold text-brand-navy">Quick reference</h3>
+              </div>
+              <ul className="mt-4 space-y-2 text-sm text-brand-navy">
+                <li className="flex justify-between gap-3"><span className="text-muted-foreground">Sea LCL divisor</span><span className="font-semibold">÷1000</span></li>
+                <li className="flex justify-between gap-3"><span className="text-muted-foreground">Air IATA divisor</span><span className="font-semibold">÷6000</span></li>
+                <li className="flex justify-between gap-3"><span className="text-muted-foreground">20' GP usable</span><span className="font-semibold">~28 CBM</span></li>
+                <li className="flex justify-between gap-3"><span className="text-muted-foreground">40' GP usable</span><span className="font-semibold">~58 CBM</span></li>
+                <li className="flex justify-between gap-3"><span className="text-muted-foreground">40' HC usable</span><span className="font-semibold">~68 CBM</span></li>
+                <li className="flex justify-between gap-3"><span className="text-muted-foreground">Free days (India)</span><span className="font-semibold">4–5</span></li>
+              </ul>
+              <p className="mt-4 border-t border-brand-navy/10 pt-3 text-xs text-muted-foreground">
+                Always verify duty/HSN with your CHA.
+              </p>
+            </aside>
+          </div>
         </section>
 
         {/* FOOTER */}
