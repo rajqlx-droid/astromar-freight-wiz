@@ -153,6 +153,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   } | null>(null);
   const [optimizationRequested, setOptimizationRequested] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const openConfirmModal = useCallback(() => setConfirmModalOpen(true), []);
   const [activePack, setActivePack] = useState<
     import("@/lib/freight/packing-advanced").AdvancedPackResult | null
   >(null);
