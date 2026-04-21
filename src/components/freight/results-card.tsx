@@ -110,7 +110,7 @@ export function ResultsCard({ result, inputsTable, resolveExtras, extras, pdfDis
                 <div className="text-[10px] font-medium uppercase tracking-wide opacity-70">
                   {kpi.label}
                 </div>
-                <div className="mt-1 text-sm font-bold leading-tight sm:text-base">
+                <div className="mt-1 break-all text-xs font-bold leading-tight tabular-nums sm:text-sm">
                   {kpi.value}
                 </div>
               </div>
