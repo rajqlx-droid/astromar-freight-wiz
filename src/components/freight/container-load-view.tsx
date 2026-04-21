@@ -584,7 +584,7 @@ function SinglePlanBody({
           </div>
         )}
         {scenarios.length > 0 && (
-          <div className="rounded-lg border bg-card p-3">
+          <div key={`scenarios-${pack.container.id}`} className="rounded-lg border bg-card p-3">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h4 className="text-sm font-semibold text-brand-navy">Scenario Comparison</h4>
               <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
