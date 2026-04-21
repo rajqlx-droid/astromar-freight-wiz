@@ -17,7 +17,7 @@
  * Hidden behind a query flag (?debug=1) and a small floating toggle so it
  * never shows up in production traffic by accident.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bug, X, Play, RotateCcw, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -55,11 +55,28 @@ interface TestResult {
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
   headlineTotal: number;
-  /** Whether the two agree (within 0.0001 m³ rounding). */
+  /** What perRowSum *should* be given the deterministic TEST_ROWS dataset. */
+  expectedTotal: number;
+  /** Whether perRowSum and headlineTotal agree (within 0.0001 m³ rounding). */
   totalsMatch: boolean;
+  /** Whether perRowSum equals the deterministic expectedTotal — catches input loss. */
+  matchesExpected: boolean;
   /** Time from first keystroke to final headline-total settle (ms). */
   totalDurationMs: number;
 }
+
+/** Headless test report — pass/fail summary suitable for console + CI. */
+export interface HeadlessTestReport {
+  pass: boolean;
+  failures: string[];
+  result: TestResult;
+  /** ISO timestamp the run completed. */
+  completedAt: string;
+}
+
+/** Thresholds for pass/fail in headless mode. */
+const JANK_THRESHOLD_MS = 50; // Worst frame above this = fail
+const AVG_FRAME_THRESHOLD_MS = 16; // Average frame above this = fail (60fps budget)
 
 interface Props {
   info: CbmDebugInfo;
@@ -79,7 +96,8 @@ function isDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("debug") === "1") return true;
+    const flag = url.searchParams.get("debug");
+    if (flag === "1" || flag === "test") return true;
     return localStorage.getItem("freight.debug") === "1";
   } catch {
     return false;
@@ -132,15 +150,21 @@ export function CbmDebugPanel({ info }: Props) {
   const totalsMatchLive = Math.abs(perRowSum - info.headlineTotalCbm) < 0.0001;
 
   /* ------------------- Automated typing/load test ------------------- */
-  const runTest = async () => {
-    setRunning(true);
-    setResult(null);
-    cancelRef.current = false;
+  /**
+   * Returns a TestResult after simulating digit-by-digit typing across all 6
+   * test rows. Pure function of `info.setDraftItems` + measured frame timing —
+   * safe to call from both the manual button and the headless test mode.
+   */
+  const executeTest = async (
+    onProgress?: (msg: string) => void,
+  ): Promise<TestResult> => {
     const frameCosts: number[] = [];
     const t0 = performance.now();
 
-    // Seed empty rows first so the row count matches before we type.
-    const emptyRows: CbmItem[] = TEST_ROWS.map((_, i) => ({
+    // Working copy. We mutate this in place between keystrokes so each new
+    // setDraftItems() reflects ALL prior typing across ALL rows — not just
+    // the current row's current field.
+    const rows: CbmItem[] = TEST_ROWS.map((_, i) => ({
       id: `dbg-${Date.now()}-${i}`,
       length: 0,
       width: 0,
@@ -155,76 +179,76 @@ export function CbmDebugPanel({ info }: Props) {
       allowAxisRotation: false,
       packingConfirmed: false,
     }));
-    info.setDraftItems(emptyRows);
-    setProgress("Seeded 6 empty rows…");
-    // Yield so React commits the empty state before we start mutating.
+    info.setDraftItems(rows.map((r) => ({ ...r })));
+    onProgress?.("Seeded 6 empty rows…");
     await new Promise((r) => setTimeout(r, 50));
 
     let keystrokes = 0;
-    const fields: (keyof Pick<CbmItem, "length" | "width" | "height" | "qty" | "weight">)[] = [
-      "length",
-      "width",
-      "height",
-      "qty",
-      "weight",
-    ];
+    const fields = ["length", "width", "height", "qty", "weight"] as const;
 
-    // Type each field of each row, measuring the main-thread cost between
-    // setDraftItems() and the next paint.
     for (let rowIdx = 0; rowIdx < TEST_ROWS.length; rowIdx++) {
       if (cancelRef.current) break;
       const target = TEST_ROWS[rowIdx];
       for (const field of fields) {
-        const value = target[field];
-        // Simulate typing digit-by-digit so we get realistic keystroke counts.
-        const str = String(value);
+        if (cancelRef.current) break;
+        const str = String(target[field]);
         for (let d = 1; d <= str.length; d++) {
           if (cancelRef.current) break;
           const partial = parseInt(str.slice(0, d), 10) || 0;
+
+          // Patch the live row IN PLACE so subsequent keystrokes preserve
+          // every field we've already typed across every row.
+          rows[rowIdx] = { ...rows[rowIdx], [field]: partial };
+
           const before = performance.now();
-          info.setDraftItems(
-            emptyRows.map((row, i) =>
-              i === rowIdx ? { ...row, ...patchAccumulated(target, fields, field, d) } : row,
-            ),
-          );
-          // Wait for next animation frame to measure commit + render cost.
+          // Push a fresh array reference so React commits.
+          info.setDraftItems(rows.map((r) => ({ ...r })));
           await new Promise<void>((r) => requestAnimationFrame(() => r()));
           const cost = performance.now() - before;
           frameCosts.push(cost);
           keystrokes++;
-          // Apply the partial back to emptyRows so the next field builds on it.
-          emptyRows[rowIdx] = {
-            ...emptyRows[rowIdx],
-            [field]: partial,
-          };
-          setProgress(
+          onProgress?.(
             `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms`,
           );
         }
       }
     }
 
-    // Wait for the debounce window + a frame so the headline total settles.
+    // Wait for the debounce window + a frame so headline total settles.
     await new Promise((r) => setTimeout(r, info.debounceMs + 100));
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-    const finalSum = emptyRows.reduce(
+    const finalSum = rows.reduce(
       (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
+      0,
+    );
+    const expected = TEST_ROWS.reduce(
+      (a, t) => a + (t.length * t.width * t.height * t.qty) / 1_000_000,
       0,
     );
     const worst = frameCosts.reduce((a, b) => Math.max(a, b), 0);
     const avg = frameCosts.length ? frameCosts.reduce((a, b) => a + b, 0) / frameCosts.length : 0;
 
-    setResult({
+    return {
       rowsFilled: TEST_ROWS.length,
       totalKeystrokes: keystrokes,
       worstFrameMs: worst,
       avgFrameMs: avg,
       perRowSum: finalSum,
       headlineTotal: info.headlineTotalCbm,
+      expectedTotal: expected,
       totalsMatch: Math.abs(finalSum - info.headlineTotalCbm) < 0.0001,
+      matchesExpected: Math.abs(finalSum - expected) < 0.0001,
       totalDurationMs: performance.now() - t0,
-    });
+    };
+  };
+
+  const runTest = async () => {
+    setRunning(true);
+    setResult(null);
+    cancelRef.current = false;
+    const r = await executeTest(setProgress);
+    setResult(r);
     setProgress("");
     setRunning(false);
   };
@@ -234,6 +258,76 @@ export function CbmDebugPanel({ info }: Props) {
     setRunning(false);
     setProgress("Cancelled");
   };
+
+  /**
+   * Headless test runner — produces a structured pass/fail report. Exposed
+   * globally as `window.__cbmHeadlessTest()` and auto-invoked when the URL
+   * has `?debug=test`. Console output is grouped and machine-readable so it
+   * can be scraped by CI / E2E tooling.
+   */
+  const runHeadless = useCallback(async (): Promise<HeadlessTestReport> => {
+    const result = await executeTest(setProgress);
+    const failures: string[] = [];
+    if (!result.matchesExpected) {
+      failures.push(
+        `Input data loss: per-row sum ${result.perRowSum.toFixed(4)} m³ ≠ expected ${result.expectedTotal.toFixed(4)} m³`,
+      );
+    }
+    if (!result.totalsMatch) {
+      failures.push(
+        `Totals mismatch: per-row sum ${result.perRowSum.toFixed(4)} m³ ≠ headline ${result.headlineTotal.toFixed(4)} m³`,
+      );
+    }
+    if (result.worstFrameMs > JANK_THRESHOLD_MS) {
+      failures.push(
+        `Worst-frame jank: ${result.worstFrameMs.toFixed(1)}ms exceeds ${JANK_THRESHOLD_MS}ms budget`,
+      );
+    }
+    if (result.avgFrameMs > AVG_FRAME_THRESHOLD_MS) {
+      failures.push(
+        `Average frame jank: ${result.avgFrameMs.toFixed(1)}ms exceeds 60fps budget (${AVG_FRAME_THRESHOLD_MS}ms)`,
+      );
+    }
+    const report: HeadlessTestReport = {
+      pass: failures.length === 0,
+      failures,
+      result,
+      completedAt: new Date().toISOString(),
+    };
+    setResult(result);
+    setProgress("");
+    // Structured console output for CI / E2E.
+    /* eslint-disable no-console */
+    console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
+    console.log("Result:", result);
+    if (failures.length) console.warn("Failures:", failures);
+    console.log("Report:", report);
+    console.groupEnd();
+    /* eslint-enable no-console */
+    return report;
+  }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Expose the headless runner globally + auto-run on ?debug=test.
+  useEffect(() => {
+    if (!enabled) return;
+    if (typeof window === "undefined") return;
+    (window as unknown as { __cbmHeadlessTest?: () => Promise<HeadlessTestReport> }).__cbmHeadlessTest =
+      runHeadless;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("debug") === "test") {
+        // Defer so the calculator has time to mount + initial render.
+        const t = setTimeout(() => {
+          setOpen(true);
+          setRunning(true);
+          runHeadless().finally(() => setRunning(false));
+        }, 600);
+        return () => clearTimeout(t);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [enabled, runHeadless]);
 
   if (!enabled) return null;
 
@@ -393,9 +487,9 @@ export function CbmDebugPanel({ info }: Props) {
                   label="Worst frame"
                   value={`${result.worstFrameMs.toFixed(1)} ms`}
                   tone={
-                    result.worstFrameMs > 50
+                    result.worstFrameMs > JANK_THRESHOLD_MS
                       ? "bad"
-                      : result.worstFrameMs > 16
+                      : result.worstFrameMs > AVG_FRAME_THRESHOLD_MS
                         ? "warn"
                         : "good"
                   }
@@ -404,15 +498,25 @@ export function CbmDebugPanel({ info }: Props) {
                 <Row
                   label="Avg frame"
                   value={`${result.avgFrameMs.toFixed(1)} ms`}
-                  tone={result.avgFrameMs > 16 ? "warn" : "good"}
+                  tone={result.avgFrameMs > AVG_FRAME_THRESHOLD_MS ? "warn" : "good"}
                 />
                 <Row
                   label="Per-row sum"
                   value={`${result.perRowSum.toFixed(4)} m³`}
                 />
                 <Row
+                  label="Expected total"
+                  value={`${result.expectedTotal.toFixed(4)} m³`}
+                  hint="Deterministic from TEST_ROWS"
+                />
+                <Row
                   label="Headline total"
                   value={`${result.headlineTotal.toFixed(4)} m³`}
+                />
+                <Row
+                  label="Inputs preserved"
+                  value={result.matchesExpected ? "✓ yes" : "✗ NO (data loss)"}
+                  tone={result.matchesExpected ? "good" : "bad"}
                 />
                 <Row
                   label="Totals match"
@@ -427,6 +531,11 @@ export function CbmDebugPanel({ info }: Props) {
             )}
           </section>
 
+          <p className="text-[10px] text-muted-foreground">
+            Headless mode:{" "}
+            <code className="rounded bg-muted px-1">?debug=test</code> · or call{" "}
+            <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
+          </p>
           <p className="text-[10px] text-muted-foreground">
             Toggle off:{" "}
             <code className="rounded bg-muted px-1">localStorage.removeItem(&apos;freight.debug&apos;)</code>
@@ -476,20 +585,6 @@ function Row({
  * including `currentField` at digit count `digits`. Earlier fields use their
  * full target value; later fields stay at 0.
  */
-function patchAccumulated(
-  target: { length: number; width: number; height: number; qty: number; weight: number },
-  fields: ("length" | "width" | "height" | "qty" | "weight")[],
-  currentField: "length" | "width" | "height" | "qty" | "weight",
-  digits: number,
-): Partial<CbmItem> {
-  const patch: Partial<CbmItem> = {};
-  for (const f of fields) {
-    if (f === currentField) {
-      const str = String(target[f]);
-      patch[f] = parseInt(str.slice(0, digits), 10) || 0;
-      break;
-    }
-    patch[f] = target[f];
-  }
-  return patch;
-}
+/* (patchAccumulated helper removed — the test now mutates a working `rows`
+   array in place per keystroke, which is correct and simpler.) */
+
