@@ -62,7 +62,7 @@ import {
   createCbmSyncRecorder,
   NOOP_RECORDER,
   type CbmSyncRecorder,
-} from "@/lib/freight/__dev__/cbm-sync-metrics";
+} from "@/lib/freight/cbm-sync-metrics";
 
 type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
 type WeightUnit = "kg" | "g" | "lb";

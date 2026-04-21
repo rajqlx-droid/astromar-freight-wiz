@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createCbmSyncRecorder } from "@/lib/freight/__dev__/cbm-sync-metrics";
+import { createCbmSyncRecorder } from "@/lib/freight/cbm-sync-metrics";
 
 describe("createCbmSyncRecorder", () => {
   it("starts with zeroed metrics", () => {
