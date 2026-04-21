@@ -354,8 +354,8 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   return (
     <div className="space-y-6">
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-      <div className="space-y-3">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+      <div className="space-y-3 lg:col-span-5">
         {items.map((it, idx) => {
           const color = ITEM_COLORS[idx % ITEM_COLORS.length];
           const confirmed = it.packingConfirmed === true;
@@ -559,7 +559,9 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Card>
         )}
       </div>
-      <div className="xl:sticky xl:top-[140px] xl:self-start">
+      <div className="space-y-6 lg:col-span-7">
+      <div className="lg:sticky lg:top-[140px] lg:self-start">
+      {/* sticky wrapper preserved for results card on desktop */}
       <ResultsCard
         result={result}
         inputsTable={inputsTable}
@@ -679,44 +681,44 @@ export function CbmCalculator({ items, setItems }: Props) {
         }}
       />
       </div>
-    </div>
 
-    {/* Full-width optimization plan — sits below the inputs+results grid so the
-        Container Load Optimizer (3D viewer, load report) gets the entire page width. */}
-    {showOptimization && (
-      <div className="space-y-3">
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            onClick={() => setConfirmModalOpen(true)}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
-          >
-            <Pencil className="size-3" /> Edit packing options
-          </button>
+      {/* Optimization plan — now part of the right column so the 3D viewer sits
+          beside the inputs on lg+ screens, stacked below on mobile. */}
+      {showOptimization && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setConfirmModalOpen(true)}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-brand-navy/70 hover:text-brand-navy hover:underline"
+            >
+              <Pencil className="size-3" /> Edit packing options
+            </button>
+          </div>
+          <ContainerSuggestion
+            recommendation={recommendation}
+            currentChoice={forcedChoice ?? "auto"}
+            onApply={(id) => setForcedChoice(id)}
+            activeUnitIdx={activeUnitIdx}
+            onUnitSelect={handleUnitSelect}
+            unitStats={unitStats}
+          />
+          <ContainerLoadView
+            items={items}
+            recommendation={recommendation}
+            forcedChoice={forcedChoice}
+            onChoiceChange={setForcedChoice}
+            activeUnitIdx={activeUnitIdx}
+            onActiveUnitChange={setActiveUnitIdx}
+            onReady={(h) => {
+              loadHandleRef.current = h;
+              setActivePack(h.getActivePack());
+            }}
+          />
         </div>
-        <ContainerSuggestion
-          recommendation={recommendation}
-          currentChoice={forcedChoice ?? "auto"}
-          onApply={(id) => setForcedChoice(id)}
-          activeUnitIdx={activeUnitIdx}
-          onUnitSelect={handleUnitSelect}
-          unitStats={unitStats}
-        />
-        <ContainerLoadView
-          items={items}
-          recommendation={recommendation}
-          forcedChoice={forcedChoice}
-          onChoiceChange={setForcedChoice}
-          activeUnitIdx={activeUnitIdx}
-          onActiveUnitChange={setActiveUnitIdx}
-          onReady={(h) => {
-            loadHandleRef.current = h;
-            // Pull the active pack into state so the Density KPI can render.
-            setActivePack(h.getActivePack());
-          }}
-        />
+      )}
       </div>
-    )}
+    </div>
 
     {/* Confirm packing options modal */}
     <ConfirmPackingModal
