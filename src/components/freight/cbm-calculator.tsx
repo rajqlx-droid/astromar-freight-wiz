@@ -169,9 +169,10 @@ export function CbmCalculator({ items, setItems }: Props) {
   //   - Pre-optimize (or while typing): run the cheap CBM-only recommender
   //     against `draftItems` so the banner updates instantly with no main-
   //     thread packing per keystroke.
-  //   - Post-optimize (showOptimization === true): run the geometry-aware
-  //     recommender inside the Web Worker so the heavy 3D packs don't block
-  //     input. Falls back to the fast version until the worker resolves.
+  //   - Post-optimize (showOptimization === true, set further below): run the
+  //     geometry-aware recommender inside the Web Worker so the heavy 3D packs
+  //     don't block input. Falls back to the fast version until the worker
+  //     resolves.
   const worker = usePackingWorker();
   const fastRecommendation = useMemo<ContainerRecommendation>(() => {
     let cbm = 0;
@@ -187,29 +188,46 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   const recommendation: ContainerRecommendation = workerRecommendation ?? fastRecommendation;
 
+  // Active container bucket index for the multi-container case. Shared between
+  // the suggestion banner cards and the 3D viewer's tabbed view so clicking
+  // a card swaps the visible container. Persisted across refresh / tab switch.
+  const ACTIVE_UNIT_KEY = "freight.activeUnitIdx";
+  const [activeUnitIdx, setActiveUnitIdx] = useState<number>(() => {
+    if (typeof window === "undefined") return 0;
+    try {
+      const raw = localStorage.getItem(ACTIVE_UNIT_KEY);
+      const n = raw == null ? 0 : parseInt(raw, 10);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    } catch {
+      return 0;
+    }
+  });
+
   // Per-unit placed/total counts — drives the "12/16 placed" badges.
   // When we have real bucket packs from the worker, use exact placedCartons.
-  // Otherwise fall back to the cheap CBM × 0.85 estimate.
+  // Otherwise show a rough CBM-based fullness proxy.
   const unitStats = useMemo(() => {
     if (!recommendation.isMulti) return undefined;
     if (workerBucketPacks.length === recommendation.units.length) {
       return recommendation.units.map((_, i) => {
         const pack = workerBucketPacks[i];
-        const total = pack.perItem.reduce((s, p) => s + p.requested, 0);
+        const total = pack.perItem.reduce((s, p) => s + p.planned, 0);
         const placed = pack.placedCartons;
         return { placed, total };
       });
     }
-    // Fallback: rough CBM-based estimate (only used briefly while worker is busy).
+    // Fast path fallback: we don't yet know per-bucket carton counts, so
+    // approximate placed/total as fillCbm / usableCbm — keeps badges visible
+    // while the worker is busy without lying about exact counts.
     return recommendation.units.map((u) => {
       const containerCbm = (u.container.inner.l * u.container.inner.w * u.container.inner.h) / 1_000_000_000;
       const usable = containerCbm * 0.85;
-      const total = Math.max(0, Math.round((u.fillCbm / Math.max(0.0001, u.fillCbm)) * 0));
-      // We don't have real bucket totals in the fast path — show approximate fullness instead.
-      const placedFraction = u.fillCbm > 0 ? Math.min(1, usable / u.fillCbm) : 1;
-      return { placed: Math.round(total * placedFraction), total };
+      const total = Math.max(1, Math.round(u.fillCbm * 10));
+      const placed = Math.min(total, Math.round((Math.min(u.fillCbm, usable) / Math.max(0.0001, u.fillCbm)) * total));
+      return { placed, total };
     });
   }, [recommendation, workerBucketPacks]);
+
 
 
   // Clamp persisted idx if it's now out of range (e.g. switched single↔multi
