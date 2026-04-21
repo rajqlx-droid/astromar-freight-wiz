@@ -55,6 +55,7 @@ import { usePackingWorker } from "@/hooks/use-packing-worker";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
 import { ContainerSuggestion } from "@/components/freight/container-suggestion";
+import { CbmDebugPanel } from "@/components/freight/cbm-debug-panel";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
 
@@ -763,6 +764,18 @@ export function CbmCalculator({ items, setItems }: Props) {
     >
       {liveMessage}
     </div>
+    <CbmDebugPanel
+      info={{
+        draftItems,
+        committedItems: items,
+        debounceMs: draftItems.length > 10 ? 600 : 250,
+        workerPending: worker.pending,
+        showOptimization,
+        headlineTotalCbm: baseResult.totalCbm,
+        recommendationSource: workerRecommendation ? "worker" : "fast",
+        setDraftItems,
+      }}
+    />
     </div>
   );
 }
