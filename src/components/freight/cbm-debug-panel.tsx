@@ -96,7 +96,8 @@ function isDebugEnabled(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const url = new URL(window.location.href);
-    if (url.searchParams.get("debug") === "1") return true;
+    const flag = url.searchParams.get("debug");
+    if (flag === "1" || flag === "test") return true;
     return localStorage.getItem("freight.debug") === "1";
   } catch {
     return false;
