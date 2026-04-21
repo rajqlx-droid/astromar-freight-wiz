@@ -381,6 +381,7 @@ export function packContainerAdvanced(
 
     // Snap-to-neighbour: slide the chosen placement toward -X (back wall) then
     // -Y (left wall) to close any sub-stride gap left by the 50mm scan.
+    const snapGapRule = getGapRule(c.packageType);
     const snapAxis = (axis: "x" | "y") => {
       const tryAt = (nx: number, ny: number) => {
         const ev = evaluatePlacement(nx, ny, bestPick!.orient.l, bestPick!.orient.w, {
@@ -402,6 +403,25 @@ export function packContainerAdvanced(
             return null;
           }
         }
+        // Re-check inter-item minGap — without this the snap pass slides
+        // boxes flush against neighbours, eliminating the clearance the
+        // initial placement enforced (visible as overlapping drums/pallets).
+        const ol = bestPick!.orient.l;
+        const ow = bestPick!.orient.w;
+        const oh = bestPick!.orient.h;
+        const checkRange = snapGapRule.minGap * 3;
+        for (const pb of placedInternal) {
+          if (Math.abs(pb.x - nx) > ol + checkRange) continue;
+          if (Math.abs(pb.y - ny) > ow + checkRange) continue;
+          const xOv = nx < pb.x + pb.l + snapGapRule.minGap && nx + ol + snapGapRule.minGap > pb.x;
+          const yOv = ny < pb.y + pb.w + snapGapRule.minGap && ny + ow + snapGapRule.minGap > pb.y;
+          const zOv = ev.z < pb.z + pb.h && ev.z + oh > pb.z;
+          if (xOv && yOv && zOv) return null;
+        }
+        // Wall-min clearance must also hold after the snap.
+        if (nx > 0 && nx < snapGapRule.wallMin) return null;
+        if (ny > 0 && ny < snapGapRule.wallMin) return null;
+        if (ny + ow < C.w && ny + ow > C.w - snapGapRule.wallMin) return null;
         return ev;
       };
 
