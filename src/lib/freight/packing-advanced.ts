@@ -49,6 +49,9 @@ export interface AdvancedPackResult {
   usedCbm: number;
   /** placedCargoCbm / usedCbm × 100 — packing density inside the occupied volume. */
   densityPct: number;
+  cogLateralOffsetPct: number;
+  nearCeilingPlacedIdxs: Set<number>;
+  floorCoveragePct: number;
 }
 
 const RENDER_CAP = 500;
