@@ -1,5 +1,5 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp } from "lucide-react";
+import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { LoaderHUD } from "./loader-hud";
 import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
 import { Card } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import {
   type ContainerPreset,
   type PlacedBox,
 } from "@/lib/freight/packing";
-import { packContainerAdvanced, type AdvancedPackResult } from "@/lib/freight/packing-advanced";
+import { type AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import {
   splitItemsAcrossContainers,
   type ContainerRecommendation,
@@ -26,9 +26,10 @@ import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
-import { runAllScenarios, type ScenarioResult } from "@/lib/freight/scenario-runner";
+import { type ScenarioResult } from "@/lib/freight/scenario-runner";
 import { computeComplianceReport } from "@/lib/freight/compliance";
 import { type ContainerId } from "@/lib/freight/container-ids";
+import { usePackingWorker } from "@/hooks/use-packing-worker";
 
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
