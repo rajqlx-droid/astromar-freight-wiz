@@ -45,11 +45,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
-import { ITEM_COLORS } from "@/lib/freight/packing";
+import { CONTAINERS, ITEM_COLORS } from "@/lib/freight/packing";
 import {
+  analyseGeometricCeiling,
   recommendContainers,
   recommendContainersFast,
   type ContainerRecommendation,
+  type GeometricCeilingReport,
 } from "@/lib/freight/container-recommender";
 import { usePackingWorker } from "@/hooks/use-packing-worker";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
