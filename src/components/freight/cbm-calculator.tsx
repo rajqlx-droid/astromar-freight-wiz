@@ -249,15 +249,17 @@ export function CbmCalculator({ items, setItems }: Props) {
   };
 
   // Items that have real dimensions but haven't had packing options confirmed yet.
+  // Read from draftItems so the optimize CTA reflects what the user just typed,
+  // not the debounced parent state (which lags 400-800ms behind).
   const unconfirmed = useMemo(
     () =>
-      items.filter(
+      draftItems.filter(
         (it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0 && !it.packingConfirmed,
       ),
-    [items],
+    [draftItems],
   );
-  const allConfirmed = unconfirmed.length === 0 && items.some((it) => it.length > 0);
-  const hasAnyDims = items.some((it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0);
+  const allConfirmed = unconfirmed.length === 0 && draftItems.some((it) => it.length > 0);
+  const hasAnyDims = draftItems.some((it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0);
   const showOptimization = optimizationRequested && allConfirmed;
 
   const update = (id: string, patch: Partial<CbmItem>) => {
@@ -552,6 +554,9 @@ export function CbmCalculator({ items, setItems }: Props) {
                   className="text-white shadow-sm hover:opacity-90"
                   style={{ background: "var(--brand-orange)" }}
                   onClick={() => {
+                    // Flush any pending debounced edits so the optimizer sees
+                    // the latest typed values immediately (not 400-800ms later).
+                    setItems(draftItems);
                     if (allConfirmed) {
                       setOptimizationRequested(true);
                     } else {
