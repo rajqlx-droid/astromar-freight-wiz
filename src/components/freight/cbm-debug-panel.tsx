@@ -290,6 +290,7 @@ export function CbmDebugPanel({ info }: Props) {
     await new Promise((r) => setTimeout(r, 50));
 
     let keystrokes = 0;
+    let lastKeystrokeT = 0;
     const fields = ["length", "width", "height", "qty", "weight"] as const;
 
     for (let rowIdx = 0; rowIdx < TEST_ROWS.length; rowIdx++) {
