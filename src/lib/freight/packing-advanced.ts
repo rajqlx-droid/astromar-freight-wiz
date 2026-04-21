@@ -270,11 +270,6 @@ export function packContainerAdvanced(
           });
           if (!ev) continue;
 
-          // Height fit?
-          if (ev.z + o.h > C.h) {
-            lastReason ||= "Container full — exceeds height after stacking";
-            continue;
-          }
           if (x + o.l > C.l - DOOR_RESERVE_MM) continue;
           if (ev.z + o.h > C.h - CEILING_RESERVE_MM) continue;
           // Non-stackable must rest on the floor.
