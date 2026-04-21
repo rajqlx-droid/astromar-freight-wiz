@@ -476,10 +476,40 @@ function SceneContents({
         position={[Cm.l, Cm.h * 3, Cm.w * 2]}
         intensity={1.1}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
+        shadow-bias={-0.0005}
+        shadow-camera-near={0.1}
+        shadow-camera-far={Math.max(Cm.l, Cm.w) * 8}
+        shadow-camera-left={-Cm.l}
+        shadow-camera-right={Cm.l}
+        shadow-camera-top={Cm.h * 2}
+        shadow-camera-bottom={-0.5}
       />
       <hemisphereLight intensity={0.35} groundColor={"#ddd"} />
+
+      <InvalidateOnChange
+        deps={[
+          preset,
+          recording ? frame : -1,
+          flyInPlacedSet ? flyInPlacedSet.size : 0,
+          flyInKey,
+          activePalletIdx ?? -1,
+          nextPalletIdx ?? -1,
+          followCam ? 1 : 0,
+          gapHeatmapRow ? 1 : 0,
+          showForkliftToken ? 1 : 0,
+          visiblePlacedSet ? visiblePlacedSet.size : -1,
+          hideDoors ? 1 : 0,
+        ]}
+        animate={
+          !!recording ||
+          followCam ||
+          (flyInPlacedSet?.size ?? 0) > 0 ||
+          nextPalletIdx != null ||
+          showForkliftToken
+        }
+      />
 
       <OrbitControls
         ref={controlsRef}
@@ -624,27 +654,30 @@ function ContainerShell({
   const wallColor = "#2c4a6b";
   const doorColor = "#234058";
 
-  const plywoodTex = useMemo(() => {
-    const t = makePlywoodTexture();
-    t.repeat.set(Math.max(2, Cm.l / 1.2), Math.max(2, Cm.w / 1.2));
-    return t;
-  }, [Cm.l, Cm.w]);
+  // Cached, color-keyed textures. The texture data itself is reused across
+  // every container; only `repeat` depends on dimensions, so we mutate it in
+  // an effect (no GPU upload, no GC churn on container switch).
+  const plywoodTex = useMemo(() => makePlywoodTexture(), []);
+  const wallTexX = useMemo(() => makeCorrugatedTexture(wallColor), [wallColor]);
+  const wallTexZ = useMemo(() => makeCorrugatedTexture(wallColor), [wallColor]);
+  const doorTex = useMemo(() => makeCorrugatedTexture(doorColor), [doorColor]);
 
-  const wallTexX = useMemo(() => {
-    const t = makeCorrugatedTexture(wallColor);
-    t.repeat.set(Math.max(4, Cm.l / 0.3), Math.max(2, Cm.h / 1.5));
-    return t;
-  }, [Cm.l, Cm.h]);
-  const wallTexZ = useMemo(() => {
-    const t = makeCorrugatedTexture(wallColor);
-    t.repeat.set(Math.max(2, Cm.w / 0.3), Math.max(2, Cm.h / 1.5));
-    return t;
-  }, [Cm.w, Cm.h]);
-  const doorTex = useMemo(() => {
-    const t = makeCorrugatedTexture(doorColor);
-    t.repeat.set(Math.max(2, Cm.w / 0.6), Math.max(2, Cm.h / 1.5));
-    return t;
-  }, [Cm.w, Cm.h]);
+  useEffect(() => {
+    plywoodTex.repeat.set(Math.max(2, Cm.l / 1.2), Math.max(2, Cm.w / 1.2));
+    plywoodTex.needsUpdate = true;
+  }, [plywoodTex, Cm.l, Cm.w]);
+  useEffect(() => {
+    wallTexX.repeat.set(Math.max(4, Cm.l / 0.3), Math.max(2, Cm.h / 1.5));
+    wallTexX.needsUpdate = true;
+  }, [wallTexX, Cm.l, Cm.h]);
+  useEffect(() => {
+    wallTexZ.repeat.set(Math.max(2, Cm.w / 0.3), Math.max(2, Cm.h / 1.5));
+    wallTexZ.needsUpdate = true;
+  }, [wallTexZ, Cm.w, Cm.h]);
+  useEffect(() => {
+    doorTex.repeat.set(Math.max(2, Cm.w / 0.6), Math.max(2, Cm.h / 1.5));
+    doorTex.needsUpdate = true;
+  }, [doorTex, Cm.w, Cm.h]);
 
   const FRAME = "#1a2433";
   const frameThk = 0.06;
@@ -851,10 +884,10 @@ function WarehouseAmbience({ Cm }: { Cm: { l: number; w: number; h: number } }) 
   const stacks: Array<{ pos: [number, number, number]; count: number }> = [
     { pos: [-Cm.l / 2 - 1.6, 0, -Cm.w / 2 - 1.4], count: 5 },
     { pos: [-Cm.l / 2 - 1.6, 0, Cm.w / 2 + 1.4], count: 4 },
-    { pos: [-Cm.l / 2 - 3.0, 0, -Cm.w / 2 - 1.6], count: 6 },
+    { pos: [-Cm.l / 2 - 3.0, 0, -Cm.w / 2 - 1.6], count: 3 },
     // Loading-side feeder stacks (near door, +x). Forklift picks from here.
-    { pos: [Cm.l / 2 + 4.5, 0, -Cm.w / 2 - 1.4], count: 4 },
-    { pos: [Cm.l / 2 + 4.5, 0, Cm.w / 2 + 1.4], count: 4 },
+    { pos: [Cm.l / 2 + 4.5, 0, -Cm.w / 2 - 1.4], count: 3 },
+    { pos: [Cm.l / 2 + 4.5, 0, Cm.w / 2 + 1.4], count: 3 },
   ];
 
   // Traffic cones flanking the door (door is at +Cl/2). Two pairs forming a lane.
@@ -1159,14 +1192,12 @@ function CargoBox({
   const stageOffsetX = Math.max(2, containerL * 0.55);
   const stageOffsetY = Math.max(1.2, containerH * 0.7);
 
+  // Only subscribe to the per-frame loop while this box is actively flying in.
+  // Idle boxes (the common case after load) register zero useFrame callbacks.
   useFrame((_state, delta) => {
+    if (!flyIn) return;
     const g = groupRef.current;
     if (!g) return;
-    if (!flyIn) {
-      // Snap to rest pose.
-      g.position.set(cx, cy + palletLift, cz);
-      return;
-    }
     if (animStartRef.current === null) animStartRef.current = 0;
     animStartRef.current += delta;
     const t = Math.min(1, animStartRef.current / FLY_DURATION);
