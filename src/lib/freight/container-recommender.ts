@@ -15,6 +15,7 @@
 import type { CbmItem } from "./calculators";
 import { CONTAINERS, type ContainerPreset } from "./packing";
 import { packContainerAdvanced } from "./packing-advanced";
+import { CEILING_RESERVE_MM, getGapRule } from "./gap-rules";
 
 /**
  * Usable CBM by container — used as a fast pre-filter before running the
