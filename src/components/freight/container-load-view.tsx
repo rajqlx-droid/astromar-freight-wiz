@@ -43,9 +43,9 @@ interface Props {
   /** Smart recommendation from the calculator. Drives multi-container tabbed view. */
   recommendation?: ContainerRecommendation;
   /** Manually-applied choice that overrides "auto". */
-  forcedChoice?: "20gp" | "40gp" | "40hc" | null;
+  forcedChoice?: "20gp" | "40gp" | "40hc" | "45hc" | "lcl" | "reefer" | null;
   /** Notify parent when user picks a container pill. */
-  onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | null) => void;
+  onChoiceChange?: (id: "20gp" | "40gp" | "40hc" | "45hc" | "lcl" | "reefer" | null) => void;
   /** Expose snapshot capture + active pack so parent (PDF flow) can use them. */
   onReady?: (handle: {
     capture: () => Promise<{ iso: string; front: string; side: string } | null>;
@@ -59,7 +59,7 @@ interface Props {
   onActiveUnitChange?: (idx: number) => void;
 }
 
-type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc";
+type ContainerChoice = "auto" | "20gp" | "40gp" | "40hc" | "45hc" | "lcl" | "reefer";
 
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = Math.sin(Math.PI / 6);
