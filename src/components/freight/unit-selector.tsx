@@ -4,6 +4,25 @@
  */
 import { useEffect, useState, type ChangeEvent } from "react";
 
+/**
+ * Tracks whether we've mounted on the client. Used to defer rendering native
+ * `<select>` elements that are otherwise mutated by form-styling browser
+ * extensions (BetterCheckout `bb-*`, Honey, Bitwarden, etc.). Those
+ * extensions wrap selects in custom DOM BEFORE React hydrates, which
+ * triggers a fatal hydration mismatch and disables every event handler in
+ * the calculator (PDF export, optimize, etc.).
+ *
+ * By rendering an inert placeholder shell on SSR + first client render, then
+ * swapping to the real <select> after mount, we ensure SSR HTML matches
+ * client HTML exactly and extensions can only mutate AFTER hydration is
+ * complete (where their changes are harmless).
+ */
+function useHasMounted(): boolean {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
+}
+
 /* -------- Length -------- */
 export type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
 
