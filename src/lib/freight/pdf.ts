@@ -250,6 +250,9 @@ export function downloadResultPdf(
   extras?: PdfExtras,
 ) {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
+  // Force zero character spacing — jsPDF's default Helvetica-Bold otherwise
+  // injects stray gaps between certain letter pairs (e.g. "Sm art", "K ey").
+  doc.setCharSpace(0);
   const pageWidth = doc.internal.pageSize.getWidth();
 
   // Header band
@@ -419,8 +422,10 @@ export function downloadResultPdf(
   y = (doc.lastAutoTable?.finalY ?? y) + 16;
 
   // Analytics — stacked bar breakdown and/or grouped comparison.
+  // Use a higher Y threshold (770pt is near A4 bottom of 842pt) so the
+  // composition bar fits on the same page as the Result table when possible.
   if (extras?.analytics?.breakdown && extras.analytics.breakdown.segments.length) {
-    if (y > 680) {
+    if (y > 760) {
       doc.addPage();
       y = 60;
     }
@@ -434,7 +439,7 @@ export function downloadResultPdf(
     y += 6;
   }
   if (extras?.analytics?.comparison && extras.analytics.comparison.rows.length) {
-    if (y > 660) {
+    if (y > 740) {
       doc.addPage();
       y = 60;
     }
