@@ -15,6 +15,7 @@
 
 import type { CbmItem, PackageType } from "./calculators";
 import { CONTAINERS, ITEM_COLORS, type ContainerPreset, type PlacedBox } from "./packing";
+import { getGapRule, DOOR_RESERVE_MM, CEILING_RESERVE_MM } from "./gap-rules";
 
 export interface ItemPlacementStat {
   itemIdx: number;
