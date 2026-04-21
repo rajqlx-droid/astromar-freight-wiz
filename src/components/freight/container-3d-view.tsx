@@ -1415,19 +1415,19 @@ function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onFloor, onPointerOv
         />
       </mesh>
       <mesh position={[0, hm / 2 - 0.005, 0]}>
-        <cylinderGeometry args={[radius * 1.02, radius * 1.02, 0.025, 20]} />
+        <cylinderGeometry args={[radius * 0.99, radius * 0.99, 0.025, 20]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.4} metalness={0.7} />
       </mesh>
       <mesh position={[0, -hm / 2 + 0.005, 0]}>
-        <cylinderGeometry args={[radius * 1.02, radius * 1.02, 0.025, 20]} />
+        <cylinderGeometry args={[radius * 0.99, radius * 0.99, 0.025, 20]} />
         <meshStandardMaterial color="#1a1a1a" roughness={0.4} metalness={0.7} />
       </mesh>
       <mesh position={[0, hm / 6, 0]}>
-        <cylinderGeometry args={[radius * 1.015, radius * 1.015, 0.018, 20]} />
+        <cylinderGeometry args={[radius * 0.985, radius * 0.985, 0.018, 20]} />
         <meshStandardMaterial color="#2a2a2a" roughness={0.5} metalness={0.65} />
       </mesh>
       <mesh position={[0, -hm / 6, 0]}>
-        <cylinderGeometry args={[radius * 1.015, radius * 1.015, 0.018, 20]} />
+        <cylinderGeometry args={[radius * 0.985, radius * 0.985, 0.018, 20]} />
         <meshStandardMaterial color="#2a2a2a" roughness={0.5} metalness={0.65} />
       </mesh>
       {onFloor && (
@@ -1501,11 +1501,11 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, o
         [lm / 2 - slatThk / 2, wm / 2 - slatThk / 2],
       ].map(([x, z], i) => (
         <mesh key={`s-${i}`} position={[x, 0, z]}>
-          <boxGeometry args={[slatThk, hm * 1.005, slatThk]} />
+          <boxGeometry args={[slatThk, hm * 0.998, slatThk]} />
           <meshStandardMaterial color={slatColor} roughness={0.85} />
         </mesh>
       ))}
-      {[wm / 2 + 0.001, -wm / 2 - 0.001].map((z, i) => (
+      {[wm / 2 - 0.003, -wm / 2 + 0.003].map((z, i) => (
         <mesh key={`hb-${i}`} position={[0, 0, z]}>
           <boxGeometry args={[lm * 0.95, hm * 0.08, 0.005]} />
           <meshStandardMaterial color={slatColor} roughness={0.85} />
