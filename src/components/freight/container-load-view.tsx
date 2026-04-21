@@ -75,6 +75,7 @@ export function ContainerLoadView({
   onActiveUnitChange,
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
+  const [selectedStrategyId, setSelectedStrategyId] = useState<import("@/lib/freight/scenario-runner").StrategyId | null>(null);
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
   const setChoice = (c: ContainerChoice) => {
     setInternalChoice(c);
