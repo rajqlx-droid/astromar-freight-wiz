@@ -540,10 +540,10 @@ function FreightIntelligencePage() {
                 {/* Optimization Plan promo banner — CBM only, slots between title and action stack on desktop */}
                 {active === "cbm" && (
                   <div
-                    className="no-print relative ml-2 hidden flex-1 overflow-hidden rounded-xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy via-brand-navy to-[#1a2f5a] px-3 py-2 text-white shadow-sm md:flex md:items-center md:gap-3"
+                    className="no-print relative hidden flex-1 overflow-hidden rounded-xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy via-brand-navy to-[#1a2f5a] px-5 py-3.5 text-white shadow-sm md:flex md:items-center md:gap-5"
                   >
-                    <div aria-hidden className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 select-none lg:block">
-                      <svg width="70" height="50" viewBox="0 0 120 80" fill="none">
+                    <div aria-hidden className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 select-none lg:block">
+                      <svg width="80" height="56" viewBox="0 0 120 80" fill="none">
                         <g opacity="0.85">
                           <path d="M70 18 L92 28 L92 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.35" />
                           <path d="M70 18 L48 28 L48 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.55" />
@@ -551,11 +551,11 @@ function FreightIntelligencePage() {
                         </g>
                       </svg>
                     </div>
-                    <div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 lg:pr-16">
-                      <Sparkles className="size-4 shrink-0 text-brand-orange" />
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-bold leading-tight">Get your container optimization plan</p>
-                        <p className="truncate text-[11px] text-white/70">Enter cargo → 3D + 2D loading visuals</p>
+                    <div className="relative z-10 flex min-w-0 flex-1 items-center gap-3 lg:pr-20">
+                      <Sparkles className="size-5 shrink-0 text-brand-orange" />
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="truncate text-sm font-bold leading-tight">Get your container optimization plan</p>
+                        <p className="truncate text-xs text-white/70">Enter cargo → 3D + 2D loading visuals</p>
                       </div>
                     </div>
                     <button
@@ -565,10 +565,10 @@ function FreightIntelligencePage() {
                           .getElementById("cbm-optimize-cta")
                           ?.scrollIntoView({ behavior: "smooth", block: "center" })
                       }
-                      className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-orange px-2.5 py-1.5 text-[11px] font-semibold text-white shadow-sm transition-colors hover:bg-brand-orange/90"
+                      className="relative z-10 inline-flex shrink-0 items-center gap-1.5 rounded-md bg-brand-orange px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-orange/90"
                     >
                       View plan
-                      <ArrowRight className="size-3" />
+                      <ArrowRight className="size-3.5" />
                     </button>
                   </div>
                 )}
