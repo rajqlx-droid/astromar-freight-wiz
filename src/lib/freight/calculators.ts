@@ -102,6 +102,12 @@ export interface AirItem {
   height: number;
   qty: number;
   weight: number;
+  /** Per-item volumetric divisor (IATA std 6000, courier 5000). */
+  divisor?: number;
+  /** Per-item display unit for L/W/H. */
+  lenUnit?: "cm" | "mm" | "m" | "in" | "ft";
+  /** Per-item display unit for weight. */
+  wtUnit?: "kg" | "g" | "lb";
 }
 
 export const emptyAirItem = (seedIndex?: number): AirItem => ({
@@ -111,14 +117,20 @@ export const emptyAirItem = (seedIndex?: number): AirItem => ({
   height: 0,
   qty: 1,
   weight: 0,
+  divisor: 6000,
+  lenUnit: "cm",
+  wtUnit: "kg",
 });
 
-export function calcAir(items: AirItem[], divisor = 6000): CalcResult {
+export function calcAir(items: AirItem[], fallbackDivisor = 6000): CalcResult {
   let volWeight = 0;
   let actualWeight = 0;
   let totalQty = 0;
+  const divisorsUsed = new Set<number>();
   for (const it of items) {
-    const v = (it.length * it.width * it.height) / divisor;
+    const div = it.divisor && it.divisor > 0 ? it.divisor : fallbackDivisor;
+    divisorsUsed.add(div);
+    const v = (it.length * it.width * it.height) / div;
     volWeight += v * it.qty;
     actualWeight += it.weight * it.qty;
     totalQty += it.qty;
@@ -127,6 +139,10 @@ export function calcAir(items: AirItem[], divisor = 6000): CalcResult {
   const diff = chargeable - actualWeight;
   const pct = actualWeight > 0 ? (diff / actualWeight) * 100 : 0;
   const warn = volWeight > actualWeight && actualWeight > 0;
+  const divLabel =
+    divisorsUsed.size === 1
+      ? `÷${[...divisorsUsed][0]}`
+      : `mixed: ${[...divisorsUsed].join(", ")}`;
 
   return {
     type: "air",
@@ -134,7 +150,7 @@ export function calcAir(items: AirItem[], divisor = 6000): CalcResult {
     items: [
       { label: "Total Items", value: fmtInt(totalQty) },
       { label: "Actual Weight", value: `${fmt(actualWeight)} kg` },
-      { label: `Volumetric Weight (÷${divisor})`, value: `${fmt(volWeight)} kg` },
+      { label: `Volumetric Weight (${divLabel})`, value: `${fmt(volWeight)} kg` },
       { label: "Chargeable Weight", value: `${fmt(chargeable)} kg`, highlight: true },
       {
         label: "Cost Impact",
