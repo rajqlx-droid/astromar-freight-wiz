@@ -67,7 +67,7 @@ export interface PackResult {
   utilizationPct: number; // cargoCbm / capCbm
 }
 
-const RENDER_CAP = 200;
+const RENDER_CAP = 500;
 const CELL_MM = 100;
 const SUPPORT_MIN_RATIO = 0.9;
 const PLACE_STEP_MM = 100;
