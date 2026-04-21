@@ -58,19 +58,45 @@ export interface KeystrokeTrace {
   frameMs: number;
   /** React render commits observed during this keystroke. */
   renderCount: number;
+  /** Wall-clock time relative to test start (ms). */
+  tSinceStartMs: number;
+  /** Wall-clock gap from the previous keystroke (ms). 0 for the first one. */
+  deltaSinceLastMs: number;
 }
+
+type FieldKey = "length" | "width" | "height" | "qty" | "weight";
 
 /** Per-field render aggregation across all rows in a single test run. */
 export type FieldRenderStats = Record<
-  "length" | "width" | "height" | "qty" | "weight",
+  FieldKey,
   {
     keystrokes: number;
     totalRenders: number;
     avgRenders: number;
     worstRenderSpike: number;
     worstFrameMs: number;
+    /** Sum of frame costs across all keystrokes for this field (ms). */
+    totalFrameMs: number;
+    /** Average frame cost per keystroke for this field (ms). */
+    avgFrameMs: number;
+    /** Wall-clock time spent typing into this field (ms). */
+    totalWallMs: number;
   }
 >;
+
+/** Per-row timing aggregate — total wall-clock + frame cost for the row. */
+export interface RowTimingStats {
+  rowIdx: number;
+  keystrokes: number;
+  /** Wall-clock duration from this row's first to last keystroke (ms). */
+  wallMs: number;
+  /** Sum of measured frame costs across the row's keystrokes (ms). */
+  totalFrameMs: number;
+  /** Worst single-keystroke frame cost in this row (ms). */
+  worstFrameMs: number;
+  /** Total React render commits attributed to this row. */
+  totalRenders: number;
+}
 
 /** Per-row expected vs actual snapshot, attached on calculation mismatch. */
 export interface RowFieldDiff {
