@@ -604,7 +604,7 @@ function FreightIntelligencePage() {
                             size="sm"
                             variant="ghost"
                             aria-label="View history"
-                            className="h-7 justify-start gap-1.5 rounded-md px-2 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
+                            className="h-8 justify-start gap-2 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
                           >
                             <HistoryIcon className="size-3.5" />
                             <span className="hidden sm:inline">History</span>
