@@ -1,42 +1,41 @@
 
 
-## Goal
+## Implement: Always-visible Optimize CTA + 3D Loading Plan discovery chip
 
-In the **Air Volume Weight** PDF, collapse each item's two-row "Inputs" entry into a **single row** so 4 items produce 4 rows instead of 8.
+### 1. `src/components/freight/cbm-calculator.tsx`
 
-## Current behavior
+- Add stable anchor `id="cbm-optimize-cta"` to the "Get container optimization plan" card wrapper.
+- Remove the `hasAnyDims &&` part of the gate at line 421 so the card always renders when `!showOptimization`.
+- Disable the **Optimize loading** button when `!hasAnyDims`, and wrap it in a `Tooltip` showing "Enter cargo dimensions first" so users understand why it's greyed out.
+- No changes to packing logic, the 3D viewer, or PDF export.
 
-In `src/components/freight/air-calculator.tsx` (lines 55–59), `inputsTable` emits **two rows per item**:
+### 2. `src/routes/freight-intelligence.tsx`
 
-```
-Item 1 L×W×H (cm)              | 51 × 34 × 26
-Item 1 Qty / Actual Weight     | 6 pcs / 18.83 kg
-Item 2 L×W×H (cm)              | 47 × 35 × 27
-Item 2 Qty / Actual Weight     | 12 pcs / 9.36 kg
+- Beside the `"Load Optimizer Calculator"` heading (rendered only when `active === "cbm"`), add a small clickable pill:
+  - Icon: `Sparkles` (lucide) + label `"3D Loading Plan"` + `ChevronDown` arrow.
+  - Style: `rounded-full h-7 px-3 bg-brand-orange/10 text-brand-orange hover:bg-brand-orange/20 text-xs font-medium`.
+  - On click: `document.getElementById("cbm-optimize-cta")?.scrollIntoView({ behavior: "smooth", block: "center" })`.
+  - Responsive: full label on `sm+`, icon-only (`Sparkles` + `ChevronDown`) on smaller screens to keep the 948px header tidy.
+- Pill renders only on the CBM tab; other tabs stay unchanged.
+
+### Visual result
+
+```text
+Load Optimizer Calculator   [✨ 3D Loading Plan ↓]   ← new pill (CBM tab only)
+CBM / Load Simulator
 ...
+[ Item 1 ... ]
+┌─ Get container optimization plan ─────────────┐    ← always visible now
+│ See exactly how your cargo fits in 20'/40'…   │
+│ [ Optimize loading ▶ ]   (disabled + tooltip  │
+│                           until dims entered) │
+└───────────────────────────────────────────────┘
 ```
 
-## New behavior
+### Files touched
+- `src/components/freight/cbm-calculator.tsx` — gate change, anchor id, disabled state + tooltip on Optimize button.
+- `src/routes/freight-intelligence.tsx` — header pill beside "Load Optimizer Calculator" with smooth scroll-to-anchor.
 
-One row per item, with all dims + qty + actual weight + per-unit volumetric weight in a single value cell:
-
-```
-Item 1   | 51×34×26 cm · 6 pcs · 18.83 kg actual · 7.51 kg vol/pc
-Item 2   | 47×35×27 cm · 12 pcs · 9.36 kg actual · 7.40 kg vol/pc
-Item 3   | 61×40×31 cm · 16 pcs · 7.00 kg actual · 12.61 kg vol/pc
-Item 4   | 66×40×31 cm · 16 pcs · 7.00 kg actual · 13.64 kg vol/pc
-```
-
-This keeps every input piece visible while halving the table height. The label column becomes simply `Item N`, and the value column packs L×W×H, qty, actual weight, and the per-piece volumetric weight (computed as `L×W×H / divisor`) separated by middle-dot dividers.
-
-## Files touched
-
-- `src/components/freight/air-calculator.tsx` — rewrite the `inputsTable = items.flatMap(...)` block to produce one row per item with combined value string.
-
-No changes needed in `pdf.ts` (autoTable already renders whatever rows it gets), no changes in `results-card.tsx`, no logic/calculation changes — purely a row-formatting refactor in the air calculator's input summary.
-
-## Notes
-
-- Other calculators (Sea, Export, Landed, CBM, Risk) are untouched — only the Air calculator's PDF input table changes.
-- Heading rows of the auto-table (`Input | Value`) and all KPI tiles, results, and analytics charts remain identical.
+### Out of scope
+- 3D viewer behavior, packing algorithm, PDF export, other calculator tabs.
 
