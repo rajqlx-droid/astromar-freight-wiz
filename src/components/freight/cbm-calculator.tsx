@@ -72,6 +72,14 @@ const isRigidUnit = (t?: PackageType) => t === "crate" || t === "pallet";
 export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
   const [wtUnit, setWtUnit] = usePersistentWeightUnit();
+  const [draftItems, setDraftItems] = useState<CbmItem[]>(items);
+  useEffect(() => {
+    setDraftItems(items);
+  }, [items]);
+  useEffect(() => {
+    const t = setTimeout(() => setItems(draftItems), 400);
+    return () => clearTimeout(t);
+  }, [draftItems, setItems]);
   const [forcedChoice, setForcedChoice] = useState<import("@/lib/freight/container-ids").ContainerId | null>(null);
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -284,16 +292,20 @@ export function CbmCalculator({ items, setItems }: Props) {
     const v = cmTo(cm, unit);
     return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
   };
+  /** Draft-only update: writes to local state, debounced flush sends to parent. */
+  const updateDraft = (id: string, patch: Partial<CbmItem>) => {
+    setDraftItems(draftItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+  };
   const setLen =
     (id: string, key: "length" | "width" | "height", unit: typeof lenUnit) => (n: number) =>
-      update(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<CbmItem>);
+      updateDraft(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<CbmItem>);
 
   const showWt = (kg: number, unit: typeof wtUnit) => {
     const v = kgTo(kg, unit);
     return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
   };
   const setWt = (id: string, unit: typeof wtUnit) => (n: number) =>
-    update(id, { weight: Number.isFinite(n) ? toKg(n, unit) : 0 });
+    updateDraft(id, { weight: Number.isFinite(n) ? toKg(n, unit) : 0 });
 
   /** Update Item 1's per-row unit AND the global default (so new rows inherit). */
   const setRowLenUnit = (it: CbmItem, idx: number) => (u: typeof lenUnit) => {
@@ -472,7 +484,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                       <NumberField compact id={`l-${it.id}`} label="Length" suffix={rowLen} required value={showLen(it.length, rowLen)} onChange={setLen(it.id, "length", rowLen)} hint={`Outer length of one carton in ${rowLen}.`} />
                       <NumberField compact id={`w-${it.id}`} label="Width" suffix={rowLen} required value={showLen(it.width, rowLen)} onChange={setLen(it.id, "width", rowLen)} hint={`Outer width in ${rowLen}.`} />
                       <NumberField compact id={`h-${it.id}`} label="Height" suffix={rowLen} required value={showLen(it.height, rowLen)} onChange={setLen(it.id, "height", rowLen)} hint={`Outer height in ${rowLen}.`} />
-                      <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => update(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
+                      <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => updateDraft(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
                       <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
                       <div
                         className="flex flex-col justify-center rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-1.5"

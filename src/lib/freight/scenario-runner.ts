@@ -74,9 +74,15 @@ export function runAllScenarios(
 
   ];
 
+  const totalQty = items.reduce((s, i) => s + i.qty, 0);
+  const scaleFactor = totalQty > 300 ? 300 / totalQty : 1;
+  const safeItems = scaleFactor < 1
+    ? items.map(i => ({ ...i, qty: Math.max(1, Math.round(i.qty * scaleFactor)) }))
+    : items;
+
   const results = strategies.map((s) => {
 
-    const sorted = sortByStrategy(items, s.id);
+    const sorted = sortByStrategy(safeItems, s.id);
 
     const pack = packContainerAdvanced(sorted, container);
 

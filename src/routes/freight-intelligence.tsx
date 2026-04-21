@@ -339,6 +339,15 @@ function FreightIntelligencePage() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="min-h-screen bg-background">
+        <div style={{ width:"100%", background:"#1B3A6B", padding:"7px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:50 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+            <span style={{ color:"#ffffff", fontWeight:700, fontSize:"13px", letterSpacing:"0.04em" }}>ASTROMAR</span>
+            <span style={{ color:"rgba(255,255,255,0.45)", fontSize:"11px" }}>Free Container Load Optimiser</span>
+          </div>
+          <a href="https://www.astromar.com" target="_blank" rel="noopener noreferrer" style={{ color:"rgba(255,255,255,0.75)", fontSize:"11px", textDecoration:"none", border:"1px solid rgba(255,255,255,0.2)", padding:"3px 10px", borderRadius:"6px", whiteSpace:"nowrap" }}>
+            Astromar.com →
+          </a>
+        </div>
         {/* SKIP LINKS — visible only on keyboard focus */}
         <a
           href="#main-content"
