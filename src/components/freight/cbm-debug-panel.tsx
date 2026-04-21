@@ -142,8 +142,35 @@ interface TestResult {
   totalDurationMs: number;
 }
 
+/**
+ * Top-level CI summary — flat, primitive-only fields. Designed so a CI script
+ * can grep one section without traversing the nested `result`. Mirror of the
+ * most actionable numbers in `result` plus a few derived counts.
+ */
+export interface HeadlessTestSummary {
+  pass: boolean;
+  failureCount: number;
+  /** Number of "calculation mismatch" failures (input loss or totals mismatch). */
+  mismatchCount: number;
+  /** Number of "performance" failures (frame jank or render storm). */
+  perfFailureCount: number;
+  worstFrameMs: number;
+  avgFrameMs: number;
+  worstRenderSpike: number;
+  avgRendersPerKeystroke: number;
+  totalRenders: number;
+  totalKeystrokes: number;
+  totalDurationMs: number;
+  /** The field that produced the worst single-keystroke frame, or null. */
+  worstFrameField: FieldKey | null;
+  /** The field with the highest cumulative frame cost, or null. */
+  hottestField: FieldKey | null;
+}
+
 /** Headless test report — pass/fail summary suitable for console + CI. */
 export interface HeadlessTestReport {
+  /** Flat CI-friendly summary — read this first in scripts. */
+  summary: HeadlessTestSummary;
   pass: boolean;
   failures: string[];
   result: TestResult;
