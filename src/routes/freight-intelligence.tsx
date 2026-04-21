@@ -540,21 +540,47 @@ function FreightIntelligencePage() {
                 {/* Optimization Plan promo banner — CBM only, slots between title and action stack on desktop */}
                 {active === "cbm" && (
                   <div
-                    className="no-print relative hidden flex-1 overflow-hidden rounded-xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy via-brand-navy to-[#1a2f5a] px-5 py-3.5 text-white shadow-sm md:flex md:items-center md:gap-5"
+                    className="no-print group/ad relative hidden flex-1 overflow-hidden rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-navy via-[#0f2451] to-[#1a3470] px-5 py-3.5 text-white shadow-[0_4px_20px_-4px_rgba(10,30,80,0.4)] ring-1 ring-inset ring-white/5 md:flex md:items-center md:gap-5"
                   >
+                    {/* Subtle dot pattern overlay */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 opacity-[0.07]"
+                      style={{
+                        backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)",
+                        backgroundSize: "16px 16px",
+                      }}
+                    />
+                    {/* Diagonal shine sweep on hover */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-all duration-700 group-hover/ad:left-full group-hover/ad:opacity-100"
+                    />
+                    {/* Glow blob behind icon */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute -left-6 top-1/2 size-24 -translate-y-1/2 rounded-full bg-brand-orange/20 blur-2xl"
+                    />
+                    {/* Container icon decoration */}
                     <div aria-hidden className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 select-none lg:block">
                       <svg width="80" height="56" viewBox="0 0 120 80" fill="none">
-                        <g opacity="0.85">
-                          <path d="M70 18 L92 28 L92 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.35" />
-                          <path d="M70 18 L48 28 L48 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.55" />
-                          <path d="M70 18 L92 28 L70 38 L48 28 Z" fill="var(--brand-orange)" opacity="0.75" />
+                        <g opacity="0.9">
+                          <path d="M70 18 L92 28 L92 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.4" />
+                          <path d="M70 18 L48 28 L48 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.6" />
+                          <path d="M70 18 L92 28 L70 38 L48 28 Z" fill="var(--brand-orange)" opacity="0.85" />
                         </g>
                       </svg>
                     </div>
                     <div className="relative z-10 flex min-w-0 flex-1 items-center gap-3 lg:pr-20">
-                      <Sparkles className="size-5 shrink-0 text-brand-orange" />
+                      <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 ring-1 ring-brand-orange/30">
+                        <Sparkles className="size-4 text-brand-orange" />
+                        <span className="absolute -right-0.5 -top-0.5 size-2 animate-pulse rounded-full bg-brand-orange shadow-[0_0_8px_rgba(255,127,42,0.8)]" />
+                      </div>
                       <div className="min-w-0 space-y-0.5">
-                        <p className="truncate text-sm font-bold leading-tight">Get your container optimization plan</p>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-sm bg-brand-orange/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-orange ring-1 ring-brand-orange/30">Free</span>
+                          <p className="truncate text-sm font-bold leading-tight">Get your container optimization plan</p>
+                        </div>
                         <p className="truncate text-xs text-white/70">Enter cargo → 3D + 2D loading visuals</p>
                       </div>
                     </div>
@@ -565,10 +591,10 @@ function FreightIntelligencePage() {
                           .getElementById("cbm-optimize-cta")
                           ?.scrollIntoView({ behavior: "smooth", block: "center" })
                       }
-                      className="relative z-10 inline-flex shrink-0 items-center gap-1.5 rounded-md bg-brand-orange px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-orange/90"
+                      className="relative z-10 inline-flex shrink-0 items-center gap-1.5 rounded-md bg-brand-orange px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_12px_-2px_rgba(255,127,42,0.5)] transition-all hover:scale-[1.03] hover:bg-brand-orange/90 hover:shadow-[0_6px_16px_-2px_rgba(255,127,42,0.65)]"
                     >
                       View plan
-                      <ArrowRight className="size-3.5" />
+                      <ArrowRight className="size-3.5 transition-transform" />
                     </button>
                   </div>
                 )}
