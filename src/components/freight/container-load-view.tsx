@@ -66,6 +66,31 @@ type ContainerChoice = "auto" | ContainerId;
 const COS30 = Math.cos(Math.PI / 6);
 const SIN30 = Math.sin(Math.PI / 6);
 
+/**
+ * Empty placeholder pack — used while the worker is computing the first real
+ * result so downstream UI (3D viewer, panels) can render without crashing.
+ */
+function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
+  return {
+    container,
+    placed: [],
+    totalCartons: 0,
+    placedCartons: 0,
+    truncated: false,
+    cargoCbm: 0,
+    weightKg: 0,
+    utilizationPct: 0,
+    weightUtilizationPct: 0,
+    perItem: [],
+    cogOffsetPct: 0,
+    usedCbm: 0,
+    densityPct: 0,
+    cogLateralOffsetPct: 0,
+    nearCeilingPlacedIdxs: new Set<number>(),
+    floorCoveragePct: 0,
+  };
+}
+
 export function ContainerLoadView({
   items,
   recommendation,
