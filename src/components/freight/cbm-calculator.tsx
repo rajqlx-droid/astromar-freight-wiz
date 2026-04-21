@@ -383,33 +383,33 @@ export function CbmCalculator({ items, setItems }: Props) {
   /** Toggle a packing flag and auto-confirm the row in one shot. */
   const updatePacking = useCallback(
     (id: string, patch: Partial<CbmItem>) => {
-      setItems(
+      pushItems(
         items.map((it) => (it.id === id ? { ...it, ...patch, packingConfirmed: true } : it)),
       );
     },
-    [items, setItems],
+    [items, pushItems],
   );
   const remove = useCallback(
-    (id: string) => setItems(items.filter((it) => it.id !== id)),
-    [items, setItems],
+    (id: string) => pushItems(items.filter((it) => it.id !== id)),
+    [items, pushItems],
   );
   const duplicate = useCallback(
     (id: string) => {
       const src = items.find((it) => it.id === id);
       if (!src) return;
-      setItems([...items, { ...src, id: nextId("cbm") }]);
+      pushItems([...items, { ...src, id: nextId("cbm") }]);
     },
-    [items, setItems],
+    [items, pushItems],
   );
-  const add = useCallback(() => setItems([...items, emptyCbmItem()]), [items, setItems]);
-  const clear = useCallback(() => setItems([emptyCbmItem(0)]), [setItems]);
+  const add = useCallback(() => pushItems([...items, emptyCbmItem()]), [items, pushItems]);
+  const clear = useCallback(() => pushItems([emptyCbmItem(0)]), [pushItems]);
 
   /** Copy one row's packing options to every other row & mark them all confirmed. */
   const applyToAll = useCallback(
     (sourceId: string) => {
       const src = items.find((it) => it.id === sourceId);
       if (!src) return;
-      setItems(
+      pushItems(
         items.map((it) => ({
           ...it,
           packageType: src.packageType,
@@ -422,7 +422,7 @@ export function CbmCalculator({ items, setItems }: Props) {
         })),
       );
     },
-    [items, setItems],
+    [items, pushItems],
   );
 
   /** Update the row's per-row unit AND, for Item 1, also the global default. */
