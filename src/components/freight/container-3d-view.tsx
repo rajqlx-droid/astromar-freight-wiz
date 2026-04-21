@@ -234,13 +234,16 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     >
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
+        frameloop="demand"
         gl={{ preserveDrawingBuffer: true, antialias: true }}
         camera={{ position: [Cm.l * 0.9, Cm.h * 1.4, Cm.w * 1.6], fov: 35 }}
         onCreated={({ gl, scene, camera }) => {
           glRef.current = gl;
           sceneRef.current = scene;
           cameraRef.current = camera as THREE.PerspectiveCamera;
+          gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.toneMapping = THREE.NoToneMapping;
           scene.background = makeSkyTexture();
           scene.fog = new THREE.Fog(0xb8c2cc, Cm.l * 4, Cm.l * 14);
         }}
