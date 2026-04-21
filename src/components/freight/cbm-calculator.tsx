@@ -564,7 +564,7 @@ export function CbmCalculator({ items, setItems }: Props) {
                   onClick={() => {
                     // Flush any pending debounced edits so the optimizer sees
                     // the latest typed values immediately (not 400-800ms later).
-                    setItems(draftItems);
+                    pushItems(draftItems);
                     if (allConfirmed) {
                       setOptimizationRequested(true);
                     } else {
@@ -767,7 +767,7 @@ export function CbmCalculator({ items, setItems }: Props) {
       onApplyToAll={applyToAll}
       onConfirm={() => {
         // Mark every dimensioned row as confirmed and unlock optimization.
-        setItems(
+        pushItems(
           items.map((it) =>
             it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0
               ? { ...it, packingConfirmed: true }
