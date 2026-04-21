@@ -476,6 +476,11 @@ export function packContainerAdvanced(
   }
   const cog = totWeight > 0 ? weightedX / totWeight : C.l / 2;
   const cogOffsetPct = (cog - C.l / 2) / (C.l / 2);
+  let weightedY = 0;
+  for (const p of placed) {
+    weightedY += (p.y + p.w / 2) * (items[p.itemIdx]?.weight ?? 0);
+  }
+  const cogLateralOffsetPct = totWeight > 0 ? (weightedY / totWeight - C.w / 2) / (C.w / 2) : 0;
 
   const perItem: ItemPlacementStat[] = items.map((it, idx) => {
     const planned = perItemPlanned[idx];
