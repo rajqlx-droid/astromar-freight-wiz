@@ -395,6 +395,30 @@ function makePlywoodTexture(): THREE.CanvasTexture {
   return _plywoodTex;
 }
 
+/* --------------- Demand-mode invalidator ---------------
+ * With `frameloop="demand"` the canvas only renders when something invalidates
+ * it. OrbitControls already calls invalidate() on every drag/zoom, but we also
+ * need to invalidate on prop changes (preset switch, fly-in, recording frame,
+ * heatmap toggle, etc) and to keep ticking while an animation is in flight.
+ * When idle, this component does nothing — CPU usage drops to ~0.
+ */
+function InvalidateOnChange({
+  deps,
+  animate,
+}: {
+  deps: Array<number | string | boolean | null | undefined>;
+  animate: boolean;
+}) {
+  const { invalidate } = useThree();
+  useEffect(() => {
+    invalidate();
+  }, [invalidate, ...deps]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFrame(() => {
+    if (animate) invalidate();
+  });
+  return null;
+}
+
 /* --------------- Scene contents --------------- */
 
 function SceneContents({
