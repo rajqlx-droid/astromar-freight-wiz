@@ -156,6 +156,22 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [activePack, setActivePack] = useState<
     import("@/lib/freight/packing-advanced").AdvancedPackResult | null
   >(null);
+  // Stable handler for ContainerLoadView's onReady callback. CRITICAL: this
+  // MUST be referentially stable across renders — if it changes identity,
+  // ContainerLoadView's effect (which depends on `onReady`) re-fires and
+  // calls back here → setActivePack → re-render → new handler → loop forever
+  // (React error #185). useCallback with empty deps is correct because the
+  // setters and ref are stable.
+  const handleViewerReady = useCallback(
+    (h: {
+      capture: () => Promise<{ iso: string; front: string; side: string } | null>;
+      getActivePack: () => import("@/lib/freight/packing-advanced").AdvancedPackResult | null;
+    }) => {
+      loadHandleRef.current = h;
+      setActivePack(h.getActivePack());
+    },
+    [],
+  );
   // Headline result reads from `draftItems` so per-row CBM tiles and "Total CBM"
   // always agree mid-typing — no more 400-800ms lag between the two.
   const baseResult = useMemo(() => calcCbm(draftItems), [draftItems]);
