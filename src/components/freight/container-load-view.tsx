@@ -26,6 +26,8 @@ import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
+import { runAllScenarios, type ScenarioResult } from "@/lib/freight/scenario-runner";
+import { computeComplianceReport } from "@/lib/freight/compliance";
 
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
@@ -350,6 +352,11 @@ function SinglePlanBody({
     () => buildPalletSequence(pack, rows),
     [pack, rows],
   );
+  const scenarios = useMemo<ScenarioResult[]>(
+    () => (items.length > 0 ? runAllScenarios(items, pack.container) : []),
+    [items, pack.container],
+  );
+  const compliance = useMemo(() => computeComplianceReport(pack), [pack]);
 
   // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
@@ -491,6 +498,7 @@ function SinglePlanBody({
                     nextPalletIdx={nextPalletIdx}
                     followCam={isPlaying}
                     showForkliftToken={showForkliftToken && currentStep != null}
+                    nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
                     overlay={
                       stepMode ? (
                         <LoaderHUD
@@ -506,6 +514,7 @@ function SinglePlanBody({
                           onSpeedChange={setSpeed}
                           showForklift={showForkliftToken}
                           onToggleForklift={() => setShowForkliftToken((v) => !v)}
+                          pack={pack}
                         />
                       ) : null
                     }
