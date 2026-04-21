@@ -580,6 +580,7 @@ function FreightIntelligencePage() {
                     />
                     <TooltipContent side="left" className="sm:hidden">Compare calculators</TooltipContent>
                   </Tooltip>
+                  <div aria-hidden className="mx-1 h-px bg-brand-navy/15" />
                   <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
                     <Tooltip>
                       <TooltipTrigger asChild>
