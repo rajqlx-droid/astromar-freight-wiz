@@ -287,6 +287,9 @@ export function ContainerLoadView({
                 view3DRef={view3DRef}
                 isActive={activeTab === String(i)}
                 viewerCollapsed={viewerCollapsed}
+                scenarios={scenarios}
+                selectedStrategyId={selectedStrategyId}
+                setSelectedStrategyId={setSelectedStrategyId}
                 rollup={{
                   totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
                   totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
