@@ -1031,3 +1031,145 @@ function Row({
 /* (patchAccumulated helper removed — the test now mutates a working `rows`
    array in place per keystroke, which is correct and simpler.) */
 
+/**
+ * Heatmap visualization — shows worst-frame magnitude per field, scaled
+ * relative to the slowest field. Makes it obvious at a glance which input
+ * (length/width/height/qty/weight) is responsible for the worst spikes.
+ */
+function FieldHeatmap({
+  fieldStats,
+  worstField,
+}: {
+  fieldStats: FieldRenderStats;
+  worstField: FieldKey | null;
+}) {
+  const fields = Object.keys(fieldStats) as FieldKey[];
+  const maxWorst = fields.reduce((a, k) => Math.max(a, fieldStats[k].worstFrameMs), 0);
+  return (
+    <div className="mt-2 space-y-1 border-t border-border pt-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Worst-frame heatmap
+        </div>
+        {worstField && (
+          <Badge variant="outline" className="font-mono text-[10px]">
+            hottest: {worstField}
+          </Badge>
+        )}
+      </div>
+      <div className="space-y-1">
+        {fields.map((f) => {
+          const s = fieldStats[f];
+          const ratio = maxWorst > 0 ? s.worstFrameMs / maxWorst : 0;
+          // Clamp visible bar to a 6% floor so empty cells are still visible.
+          const widthPct = Math.max(ratio * 100, s.worstFrameMs > 0 ? 6 : 0);
+          // Color ramp: green → amber → rose based on absolute ms threshold.
+          const barClass =
+            s.worstFrameMs > JANK_THRESHOLD_MS
+              ? "bg-rose-500"
+              : s.worstFrameMs > AVG_FRAME_THRESHOLD_MS
+                ? "bg-amber-500"
+                : "bg-emerald-500";
+          const isWorst = f === worstField;
+          return (
+            <div key={f} className="flex items-center gap-2 text-[10px]">
+              <div
+                className={cn(
+                  "w-14 font-mono",
+                  isWorst ? "font-semibold text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {f}
+              </div>
+              <div className="relative h-3 flex-1 overflow-hidden rounded bg-muted">
+                <div
+                  className={cn("h-full transition-all", barClass)}
+                  style={{ width: `${widthPct}%` }}
+                />
+              </div>
+              <div className="w-14 text-right font-mono text-muted-foreground">
+                {s.worstFrameMs.toFixed(1)}ms
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Build a two-section CSV report: per-keystroke trace followed by per-field
+ * aggregate stats. Easier than JSON for spreadsheet pivot tables.
+ */
+function buildCsvReport(trace: KeystrokeTrace[], fieldStats: FieldRenderStats): string {
+  const esc = (v: string | number) => {
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines: string[] = [];
+  lines.push("# section: trace");
+  lines.push(
+    [
+      "step",
+      "rowIdx",
+      "field",
+      "partial",
+      "frameMs",
+      "renderCount",
+      "tSinceStartMs",
+      "deltaSinceLastMs",
+    ].join(","),
+  );
+  for (const t of trace) {
+    lines.push(
+      [
+        t.step,
+        t.rowIdx,
+        t.field,
+        t.partial,
+        t.frameMs.toFixed(2),
+        t.renderCount,
+        t.tSinceStartMs.toFixed(2),
+        t.deltaSinceLastMs.toFixed(2),
+      ]
+        .map(esc)
+        .join(","),
+    );
+  }
+  lines.push("");
+  lines.push("# section: fieldRenderStats");
+  lines.push(
+    [
+      "field",
+      "keystrokes",
+      "totalRenders",
+      "avgRenders",
+      "worstRenderSpike",
+      "worstFrameMs",
+      "totalFrameMs",
+      "avgFrameMs",
+      "totalWallMs",
+    ].join(","),
+  );
+  for (const k of Object.keys(fieldStats) as (keyof FieldRenderStats)[]) {
+    const s = fieldStats[k];
+    lines.push(
+      [
+        k,
+        s.keystrokes,
+        s.totalRenders,
+        s.avgRenders.toFixed(3),
+        s.worstRenderSpike,
+        s.worstFrameMs.toFixed(2),
+        s.totalFrameMs.toFixed(2),
+        s.avgFrameMs.toFixed(2),
+        s.totalWallMs.toFixed(2),
+      ]
+        .map(esc)
+        .join(","),
+    );
+  }
+  return lines.join("\n");
+}
+
