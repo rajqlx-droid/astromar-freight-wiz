@@ -398,10 +398,11 @@ function SinglePlanBody({
   );
   const compliance = useMemo(() => {
     // Guard: only compute compliance when pack has placed items or zero cargo.
+    const hasCargo = pack.totalCartons > 0;
     if (!hasCargo) return computeComplianceReport(pack);
     if (pack.totalCartons === 0) return computeComplianceReport(pack);
     return computeComplianceReport(pack);
-  }, [pack, hasCargo]);
+  }, [pack]);
 
   // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
