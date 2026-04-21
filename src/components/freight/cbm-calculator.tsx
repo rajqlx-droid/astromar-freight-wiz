@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -164,9 +164,11 @@ export function CbmCalculator({ items, setItems }: Props) {
   }, [items, recommendation]);
 
   // Clamp activeUnitIdx if the recommendation shrinks.
-  if (activeUnitIdx > 0 && activeUnitIdx >= recommendation.units.length) {
-    setActiveUnitIdx(0);
-  }
+  useEffect(() => {
+    if (activeUnitIdx > 0 && activeUnitIdx >= recommendation.units.length) {
+      setActiveUnitIdx(0);
+    }
+  }, [activeUnitIdx, recommendation.units.length]);
 
   const handleUnitSelect = (idx: number) => {
     setActiveUnitIdx(idx);
