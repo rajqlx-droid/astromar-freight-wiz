@@ -225,7 +225,11 @@ export function CbmDebugPanel({ info }: Props) {
    */
   const executeTest = async (
     onProgress?: (msg: string) => void,
-  ): Promise<{ result: TestResult; trace: KeystrokeTrace[] }> => {
+  ): Promise<{
+    result: TestResult;
+    trace: KeystrokeTrace[];
+    finalRows: RowFieldDiff["actual"][];
+  }> => {
     const frameCosts: number[] = [];
     const renderCounts: number[] = [];
     const trace: KeystrokeTrace[] = [];
