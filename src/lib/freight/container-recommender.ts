@@ -199,6 +199,21 @@ function summarize(units: RecommendedUnit[]): string {
 }
 
 /**
+ * Cheap CBM-only recommendation — no geometry packing.
+ *
+ * Used during keystroke-by-keystroke editing to render the "you'll probably
+ * need ~X containers" banner without freezing the UI. Once the user clicks
+ * "Optimize loading", we switch to the geometry-aware {@link recommendContainers}
+ * (preferably inside a worker).
+ */
+export function recommendContainersFast(
+  totalCbm: number,
+  totalWeightKg: number,
+): ContainerRecommendation {
+  return recommendContainers(totalCbm, totalWeightKg);
+}
+
+/**
  * Main entry point. Pass cargo items so the recommender can validate
  * physical fit (not just CBM math).
  *

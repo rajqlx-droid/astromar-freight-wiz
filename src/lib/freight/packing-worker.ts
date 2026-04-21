@@ -6,13 +6,18 @@
  * Vite picks this up via `?worker` import in src/hooks/use-packing-worker.ts.
  *
  * Protocol:
- *   - Main → Worker: { id, kind: "pack" | "scenarios" | "multi", payload }
+ *   - Main → Worker: { id, kind: "pack" | "scenarios" | "multi" | "recommend", payload }
  *   - Worker → Main: { id, ok: true, result } | { id, ok: false, error }
  *
  * The id lets the hook drop responses for stale requests without a race.
  */
 import { packContainerAdvanced, type AdvancedPackResult } from "./packing-advanced";
 import { runAllScenarios, type ScenarioResult, type StrategyId } from "./scenario-runner";
+import {
+  recommendContainers,
+  splitItemsAcrossContainers,
+  type ContainerRecommendation,
+} from "./container-recommender";
 import type { CbmItem } from "./calculators";
 import type { ContainerPreset } from "./packing";
 
@@ -32,12 +37,23 @@ export type PackingRequest =
       kind: "multi";
       buckets: CbmItem[][];
       containers: ContainerPreset[];
+    }
+  | {
+      kind: "recommend";
+      items: CbmItem[];
     };
+
+export interface RecommendResponseResult {
+  recommendation: ContainerRecommendation;
+  /** Per-bucket pack results, aligned to recommendation.units. Empty for non-multi. */
+  bucketPacks: AdvancedPackResult[];
+}
 
 export type PackingResponse =
   | { kind: "pack"; result: AdvancedPackResult }
   | { kind: "scenarios"; result: ScenarioResult[] }
-  | { kind: "multi"; result: AdvancedPackResult[] };
+  | { kind: "multi"; result: AdvancedPackResult[] }
+  | { kind: "recommend"; result: RecommendResponseResult };
 
 interface IncomingMessage {
   id: number;
@@ -76,6 +92,21 @@ self.addEventListener("message", (event: MessageEvent<IncomingMessage>) => {
           ),
         };
         break;
+      case "recommend": {
+        const recommendation = recommendContainers(payload.items);
+        let bucketPacks: AdvancedPackResult[] = [];
+        if (recommendation.isMulti) {
+          const buckets = splitItemsAcrossContainers(payload.items, recommendation);
+          bucketPacks = recommendation.units.map((u, i) =>
+            packContainerAdvanced(buckets[i] ?? [], u.container),
+          );
+        }
+        response = {
+          kind: "recommend",
+          result: { recommendation, bucketPacks },
+        };
+        break;
+      }
       default: {
         const exhaust: never = payload;
         throw new Error(`Unknown request kind: ${JSON.stringify(exhaust)}`);

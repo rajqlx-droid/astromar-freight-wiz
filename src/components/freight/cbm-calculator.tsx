@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   Trash2,
@@ -45,12 +45,21 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
-import { ITEM_COLORS, totalCbm as sumCbm, totalWeight as sumWeight } from "@/lib/freight/packing";
-import { recommendContainers, splitItemsAcrossContainers } from "@/lib/freight/container-recommender";
+import { ITEM_COLORS } from "@/lib/freight/packing";
+import {
+  recommendContainers,
+  recommendContainersFast,
+  type ContainerRecommendation,
+} from "@/lib/freight/container-recommender";
+import { usePackingWorker } from "@/hooks/use-packing-worker";
+import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 
 import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { nextId } from "@/lib/freight/ids";
 import { cn } from "@/lib/utils";
+
+type LengthUnit = "cm" | "mm" | "m" | "in" | "ft";
+type WeightUnit = "kg" | "g" | "lb";
 
 interface Props {
   items: CbmItem[];
@@ -77,10 +86,11 @@ export function CbmCalculator({ items, setItems }: Props) {
     setDraftItems(items);
   }, [items]);
   useEffect(() => {
-    // Adaptive debounce: longer wait for large manifests so a "50" keystroke
-    // doesn't trigger a pack run mid-typing.
-    const totalQty = draftItems.reduce((s, it) => s + (it.qty || 0), 0);
-    const delay = totalQty > 20 ? 800 : 400;
+    // Adaptive debounce: tighter for small manifests (responsive feel),
+    // looser for large ones (avoids re-running heavy downstream work mid-typing).
+    // Lightweight per-row CBM and Total CBM tiles read from `draftItems`
+    // directly, so this delay only affects the geometry-aware recommender.
+    const delay = draftItems.length > 10 ? 600 : 250;
     const t = setTimeout(() => setItems(draftItems), delay);
     return () => clearTimeout(t);
   }, [draftItems, setItems]);
@@ -96,7 +106,9 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [activePack, setActivePack] = useState<
     import("@/lib/freight/packing-advanced").AdvancedPackResult | null
   >(null);
-  const baseResult = useMemo(() => calcCbm(items), [items]);
+  // Headline result reads from `draftItems` so per-row CBM tiles and "Total CBM"
+  // always agree mid-typing — no more 400-800ms lag between the two.
+  const baseResult = useMemo(() => calcCbm(draftItems), [draftItems]);
   // Append KPIs when an optimisation pack is available.
   // Utilization (volume) = cargo CBM ÷ container CBM (how full the container is).
   // Weight Utilization   = used weight ÷ container max payload (catches dense cargo
@@ -153,10 +165,28 @@ export function CbmCalculator({ items, setItems }: Props) {
       ],
     };
   }, [baseResult, activePack]);
-  // Geometry-aware: pass items so the recommender runs the actual 3D packer
-  // and refuses containers that physically can't hold every piece (e.g. tall
-  // non-stackable pallets in a 20ft GP).
-  const recommendation = useMemo(() => recommendContainers(items), [items]);
+  // Recommendation strategy:
+  //   - Pre-optimize (or while typing): run the cheap CBM-only recommender
+  //     against `draftItems` so the banner updates instantly with no main-
+  //     thread packing per keystroke.
+  //   - Post-optimize (showOptimization === true, set further below): run the
+  //     geometry-aware recommender inside the Web Worker so the heavy 3D packs
+  //     don't block input. Falls back to the fast version until the worker
+  //     resolves.
+  const worker = usePackingWorker();
+  const fastRecommendation = useMemo<ContainerRecommendation>(() => {
+    let cbm = 0;
+    let wt = 0;
+    for (const it of draftItems) {
+      cbm += ((it.length * it.width * it.height) / 1_000_000) * (it.qty || 0);
+      wt += (it.weight || 0) * (it.qty || 0);
+    }
+    return recommendContainersFast(cbm, wt);
+  }, [draftItems]);
+  const [workerRecommendation, setWorkerRecommendation] = useState<ContainerRecommendation | null>(null);
+  const [workerBucketPacks, setWorkerBucketPacks] = useState<AdvancedPackResult[]>([]);
+
+  const recommendation: ContainerRecommendation = workerRecommendation ?? fastRecommendation;
 
   // Active container bucket index for the multi-container case. Shared between
   // the suggestion banner cards and the 3D viewer's tabbed view so clicking
@@ -173,26 +203,32 @@ export function CbmCalculator({ items, setItems }: Props) {
     }
   });
 
-  // Per-unit placed/total counts — drives the "12/16 placed" badges on both
-  // the banner cards and the viewer tabs. Lightweight CBM-based estimate
-  // (the viewer tabs reconcile with exact 3D-pack counts when rendered).
+  // Per-unit placed/total counts — drives the "12/16 placed" badges.
+  // When we have real bucket packs from the worker, use exact placedCartons.
+  // Otherwise show a rough CBM-based fullness proxy.
   const unitStats = useMemo(() => {
     if (!recommendation.isMulti) return undefined;
-    const buckets = splitItemsAcrossContainers(items, recommendation);
-    return recommendation.units.map((u, i) => {
-      const bucket = buckets[i] ?? [];
-      const total = bucket.reduce((s, it) => s + (it.qty || 0), 0);
-      const cargoCbm = bucket.reduce(
-        (s, it) => s + ((it.length * it.width * it.height) / 1_000_000) * (it.qty || 0),
-        0,
-      );
+    if (workerBucketPacks.length === recommendation.units.length) {
+      return recommendation.units.map((_, i) => {
+        const pack = workerBucketPacks[i];
+        const total = pack.perItem.reduce((s, p) => s + p.planned, 0);
+        const placed = pack.placedCartons;
+        return { placed, total };
+      });
+    }
+    // Fast path fallback: we don't yet know per-bucket carton counts, so
+    // approximate placed/total as fillCbm / usableCbm — keeps badges visible
+    // while the worker is busy without lying about exact counts.
+    return recommendation.units.map((u) => {
       const containerCbm = (u.container.inner.l * u.container.inner.w * u.container.inner.h) / 1_000_000_000;
-      // Assume ~85% packing efficiency for the badge estimate.
-      const fitRatio = cargoCbm > 0 ? Math.min(1, (containerCbm * 0.85) / cargoCbm) : 1;
-      const placed = Math.round(total * fitRatio);
+      const usable = containerCbm * 0.85;
+      const total = Math.max(1, Math.round(u.fillCbm * 10));
+      const placed = Math.min(total, Math.round((Math.min(u.fillCbm, usable) / Math.max(0.0001, u.fillCbm)) * total));
       return { placed, total };
     });
-  }, [items, recommendation]);
+  }, [recommendation, workerBucketPacks]);
+
+
 
   // Clamp persisted idx if it's now out of range (e.g. switched single↔multi
   // or unit count shrank). Otherwise leave the user's last-viewed bucket alone
@@ -262,75 +298,113 @@ export function CbmCalculator({ items, setItems }: Props) {
   const hasAnyDims = draftItems.some((it) => it.length > 0 && it.width > 0 && it.height > 0 && it.qty > 0);
   const showOptimization = optimizationRequested && allConfirmed;
 
-  const update = (id: string, patch: Partial<CbmItem>) => {
-    setDraftItems(draftItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
-  };
+  // Once the user has clicked "Optimize loading", run the geometry-aware
+  // recommender inside the Web Worker. Re-runs on every committed `items`
+  // change. While in flight, the UI keeps showing the previous worker result
+  // (or the cheap fast recommendation if none yet) so badges don't flicker.
+  useEffect(() => {
+    if (!showOptimization) return;
+    if (items.length === 0) return;
+    let cancelled = false;
+    worker
+      .recommend(items)
+      .then((res) => {
+        if (cancelled) return;
+        setWorkerRecommendation(res.recommendation);
+        setWorkerBucketPacks(res.bucketPacks);
+      })
+      .catch(() => {
+        // Swallow — if the worker fails we keep the fast CBM recommendation
+        // visible rather than blanking the panel.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showOptimization, items, worker]);
+
+  // When the user un-confirms or wipes the manifest, drop stale worker results
+  // so the banner reverts to the cheap fast recommendation immediately.
+  useEffect(() => {
+    if (!showOptimization) {
+      setWorkerRecommendation(null);
+      setWorkerBucketPacks([]);
+    }
+  }, [showOptimization]);
+
+  // Stable callbacks: keep identity across renders so memoised <CbmRow> only
+  // re-renders when its own item changes, not when *any* item changes.
+  const update = useCallback(
+    (id: string, patch: Partial<CbmItem>) => {
+      setDraftItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    },
+    [],
+  );
+  const updateDraft = useCallback(
+    (id: string, patch: Partial<CbmItem>) => {
+      setDraftItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    },
+    [],
+  );
   /** Toggle a packing flag and auto-confirm the row in one shot. */
-  const updatePacking = (id: string, patch: Partial<CbmItem>) => {
-    setItems(
-      items.map((it) => (it.id === id ? { ...it, ...patch, packingConfirmed: true } : it)),
-    );
-  };
-  const remove = (id: string) => setItems(items.filter((it) => it.id !== id));
-  const duplicate = (id: string) => {
-    const src = items.find((it) => it.id === id);
-    if (!src) return;
-    setItems([...items, { ...src, id: nextId("cbm") }]);
-  };
-  const add = () => setItems([...items, emptyCbmItem()]);
-  const clear = () => setItems([emptyCbmItem(0)]);
+  const updatePacking = useCallback(
+    (id: string, patch: Partial<CbmItem>) => {
+      setItems(
+        items.map((it) => (it.id === id ? { ...it, ...patch, packingConfirmed: true } : it)),
+      );
+    },
+    [items, setItems],
+  );
+  const remove = useCallback(
+    (id: string) => setItems(items.filter((it) => it.id !== id)),
+    [items, setItems],
+  );
+  const duplicate = useCallback(
+    (id: string) => {
+      const src = items.find((it) => it.id === id);
+      if (!src) return;
+      setItems([...items, { ...src, id: nextId("cbm") }]);
+    },
+    [items, setItems],
+  );
+  const add = useCallback(() => setItems([...items, emptyCbmItem()]), [items, setItems]);
+  const clear = useCallback(() => setItems([emptyCbmItem(0)]), [setItems]);
 
   /** Copy one row's packing options to every other row & mark them all confirmed. */
-  const applyToAll = (sourceId: string) => {
-    const src = items.find((it) => it.id === sourceId);
-    if (!src) return;
-    setItems(
-      items.map((it) => ({
-        ...it,
-        packageType: src.packageType,
-        stackable: src.stackable,
-        fragile: src.fragile,
-        maxStackWeightKg: src.maxStackWeightKg,
-        allowSidewaysRotation: src.allowSidewaysRotation,
-        allowAxisRotation: src.allowAxisRotation,
-        packingConfirmed: true,
-      })),
-    );
-  };
+  const applyToAll = useCallback(
+    (sourceId: string) => {
+      const src = items.find((it) => it.id === sourceId);
+      if (!src) return;
+      setItems(
+        items.map((it) => ({
+          ...it,
+          packageType: src.packageType,
+          stackable: src.stackable,
+          fragile: src.fragile,
+          maxStackWeightKg: src.maxStackWeightKg,
+          allowSidewaysRotation: src.allowSidewaysRotation,
+          allowAxisRotation: src.allowAxisRotation,
+          packingConfirmed: true,
+        })),
+      );
+    },
+    [items, setItems],
+  );
 
-
-  /** Resolve a row's effective length unit (per-row override → global default). */
-  const lenUnitFor = (it: CbmItem) => it.lenUnit ?? lenUnit;
-  const wtUnitFor = (it: CbmItem) => it.wtUnit ?? wtUnit;
-
-  const showLen = (cm: number, unit: typeof lenUnit) => {
-    const v = cmTo(cm, unit);
-    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
-  };
-  /** Draft-only update: writes to local state, debounced flush sends to parent. */
-  const updateDraft = (id: string, patch: Partial<CbmItem>) => {
-    setDraftItems(draftItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
-  };
-  const setLen =
-    (id: string, key: "length" | "width" | "height", unit: typeof lenUnit) => (n: number) =>
-      updateDraft(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<CbmItem>);
-
-  const showWt = (kg: number, unit: typeof wtUnit) => {
-    const v = kgTo(kg, unit);
-    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
-  };
-  const setWt = (id: string, unit: typeof wtUnit) => (n: number) =>
-    updateDraft(id, { weight: Number.isFinite(n) ? toKg(n, unit) : 0 });
-
-  /** Update Item 1's per-row unit AND the global default (so new rows inherit). */
-  const setRowLenUnit = (it: CbmItem, idx: number) => (u: typeof lenUnit) => {
-    update(it.id, { lenUnit: u });
-    if (idx === 0) setLenUnit(u);
-  };
-  const setRowWtUnit = (it: CbmItem, idx: number) => (u: typeof wtUnit) => {
-    update(it.id, { wtUnit: u });
-    if (idx === 0) setWtUnit(u);
-  };
+  /** Update the row's per-row unit AND, for Item 1, also the global default. */
+  const setRowLenUnit = useCallback(
+    (id: string, isFirst: boolean) => (u: LengthUnit) => {
+      update(id, { lenUnit: u });
+      if (isFirst) setLenUnit(u);
+    },
+    [update, setLenUnit],
+  );
+  const setRowWtUnit = useCallback(
+    (id: string, isFirst: boolean) => (u: WeightUnit) => {
+      update(id, { wtUnit: u });
+      if (isFirst) setWtUnit(u);
+    },
+    [update, setWtUnit],
+  );
 
   const inputsTable = draftItems.flatMap((it, idx) => {
     const itemCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
@@ -352,11 +426,13 @@ export function CbmCalculator({ items, setItems }: Props) {
   // after clicking Optimize, without waiting for snapshot capture.
   const staticExtras = useMemo<import("@/lib/freight/pdf").PdfExtras | undefined>(() => {
     if (!activePack || activePack.placed.length === 0) return undefined;
-    const totalCbm = items.reduce(
+    // Derive totals from draftItems so the KPI tile values match the live
+    // per-row CBM tiles even mid-typing (parent `items` lags behind by debounce).
+    const totalCbm = draftItems.reduce(
       (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
       0,
     );
-    const totalWt = items.reduce((a, it) => a + it.qty * it.weight, 0);
+    const totalWt = draftItems.reduce((a, it) => a + it.qty * it.weight, 0);
     const toneFor = (n: number): "good" | "warn" | "bad" =>
       n >= 85 ? "good" : n >= 70 ? "warn" : "bad";
     return {
@@ -377,147 +453,44 @@ export function CbmCalculator({ items, setItems }: Props) {
         ],
       },
     };
-  }, [items, activePack]);
+  }, [draftItems, activePack]);
 
   return (
     <div className="space-y-6">
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-3 lg:col-span-5">
-        {draftItems.map((it, idx) => {
-          const color = ITEM_COLORS[idx % ITEM_COLORS.length];
-          const confirmed = it.packingConfirmed === true;
-          return (
-            <Card
-              key={it.id}
-              ref={(el) => {
-                rowRefs.current[it.id] = el;
-              }}
-              className="border-2 p-3 transition-shadow"
-              style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
-            >
-              {(() => {
-                const rowLen = lenUnitFor(it);
-                const rowWt = wtUnitFor(it);
-                const rowCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
-                return (
-                  <>
-                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span
-                          className="size-3 rounded-sm border border-black/10"
-                          style={{ background: color }}
-                          aria-hidden
-                        />
-                        <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <UnitSelector
-                            id={`cbm-len-unit-${it.id}`}
-                            value={rowLen}
-                            onChange={setRowLenUnit(it, idx)}
-                            compact
-                          />
-                          <WeightUnitSelector
-                            id={`cbm-wt-unit-${it.id}`}
-                            value={rowWt}
-                            onChange={setRowWtUnit(it, idx)}
-                            compact
-                          />
-                          {/* Inline Package type selector — chosen per item, syncs with packing options popover */}
-                          <Select
-                            value={it.packageType ?? "carton"}
-                            onValueChange={(v) =>
-                              updatePacking(it.id, { packageType: v as PackageType })
-                            }
-                          >
-                            <SelectTrigger
-                              className="h-7 w-auto gap-1 rounded-full border-brand-navy/25 bg-muted/40 px-2.5 py-0 text-[11px] font-medium text-brand-navy shadow-none focus:ring-1"
-                              aria-label={`Item ${idx + 1} package type`}
-                            >
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                                Pkg
-                              </span>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {PACKAGE_TYPES.map((p) => (
-                                <SelectItem key={p.value} value={p.value}>
-                                  {p.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-1">
-                        {/* Packing options chip — sits next to row actions to save vertical space */}
-                        <Popover
-                          open={openPopoverId === it.id}
-                          onOpenChange={(o) => setOpenPopoverId(o ? it.id : null)}
-                        >
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className={cn(
-                                "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                                confirmed
-                                  ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
-                                  : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
-                              )}
-                            >
-                              {confirmed ? (
-                                <CheckCircle2 className="size-3.5 shrink-0" />
-                              ) : (
-                                <Settings2 className="size-3.5 shrink-0" />
-                              )}
-                              <span className="truncate">
-                                {confirmed ? buildSummary(it) : "Packing options"}
-                              </span>
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-4">
-                            {renderPackingPopoverContent({
-                              it,
-                              idx,
-                              items,
-                              updatePacking,
-                              applyToAll,
-                              closePopover: () => setOpenPopoverId(null),
-                            })}
-                          </PopoverContent>
-                        </Popover>
-                        <Button size="icon" variant="ghost" className="size-7" onClick={() => duplicate(it.id)} aria-label="Duplicate">
-                          <Copy className="size-3.5" />
-                        </Button>
-                        {items.length > 1 && (
-                          <Button size="icon" variant="ghost" className="size-7 text-destructive" onClick={() => remove(it.id)} aria-label="Remove">
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      <NumberField compact id={`l-${it.id}`} label="Length" suffix={rowLen} required value={showLen(it.length, rowLen)} onChange={setLen(it.id, "length", rowLen)} hint={`Outer length of one carton in ${rowLen}.`} />
-                      <NumberField compact id={`w-${it.id}`} label="Width" suffix={rowLen} required value={showLen(it.width, rowLen)} onChange={setLen(it.id, "width", rowLen)} hint={`Outer width in ${rowLen}.`} />
-                      <NumberField compact id={`h-${it.id}`} label="Height" suffix={rowLen} required value={showLen(it.height, rowLen)} onChange={setLen(it.id, "height", rowLen)} hint={`Outer height in ${rowLen}.`} />
-                      <NumberField compact id={`q-${it.id}`} label="Qty" required step={1} value={it.qty} onChange={(n) => updateDraft(it.id, { qty: Math.max(1, Math.round(n)) })} hint="Number of identical cartons." />
-                      <NumberField compact id={`wt-${it.id}`} label="Weight" suffix={rowWt} required value={showWt(it.weight, rowWt)} onChange={setWt(it.id, rowWt)} hint={`Actual weight of ONE carton (gross) in ${rowWt}.`} />
-                      <div
-                        className="flex flex-col justify-center rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-1.5"
-                        aria-label={`Item ${idx + 1} CBM`}
-                      >
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">CBM</span>
-                        <span className="text-lg font-bold leading-tight" style={{ color: "var(--brand-orange)" }}>
-                          {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
-                          <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-            </Card>
-          );
-        })}
+        {draftItems.map((it, idx) => (
+          <CbmRow
+            key={it.id}
+            item={it}
+            idx={idx}
+            color={ITEM_COLORS[idx % ITEM_COLORS.length]}
+            globalLenUnit={lenUnit}
+            globalWtUnit={wtUnit}
+            popoverOpen={openPopoverId === it.id}
+            onPopoverOpenChange={(open) => setOpenPopoverId(open ? it.id : null)}
+            registerRef={(el) => {
+              rowRefs.current[it.id] = el;
+            }}
+            allowRemove={items.length > 1}
+            onUpdateDraft={updateDraft}
+            onUpdatePacking={updatePacking}
+            onDuplicate={duplicate}
+            onRemove={remove}
+            onSetLenUnit={setRowLenUnit(it.id, idx === 0)}
+            onSetWtUnit={setRowWtUnit(it.id, idx === 0)}
+            renderPopover={() =>
+              renderPackingPopoverContent({
+                it,
+                idx,
+                items,
+                updatePacking,
+                applyToAll,
+                closePopover: () => setOpenPopoverId(null),
+              })
+            }
+          />
+        ))}
         <div className="flex flex-wrap gap-2">
           <Button onClick={add} size="sm" variant="outline" className="border-brand-navy text-brand-navy">
             <Plus className="size-4" /> Add Item
@@ -1091,3 +1064,223 @@ function ConfirmPackingModal({
     </Dialog>
   );
 }
+
+/* ---------------- CbmRow (memoised) ---------------- */
+
+interface CbmRowProps {
+  item: CbmItem;
+  idx: number;
+  color: string;
+  globalLenUnit: LengthUnit;
+  globalWtUnit: WeightUnit;
+  popoverOpen: boolean;
+  onPopoverOpenChange: (open: boolean) => void;
+  registerRef: (el: HTMLDivElement | null) => void;
+  allowRemove: boolean;
+  onUpdateDraft: (id: string, patch: Partial<CbmItem>) => void;
+  onUpdatePacking: (id: string, patch: Partial<CbmItem>) => void;
+  onDuplicate: (id: string) => void;
+  onRemove: (id: string) => void;
+  onSetLenUnit: (u: LengthUnit) => void;
+  onSetWtUnit: (u: WeightUnit) => void;
+  renderPopover: () => React.ReactNode;
+}
+
+/**
+ * Single row of the CBM calculator manifest.
+ *
+ * Memoised so that with 20+ items, typing into row N only re-renders row N
+ * instead of the entire list. Identity-stable callbacks from the parent are
+ * mandatory — wrap any handler passed in with `useCallback`.
+ */
+const CbmRow = memo(function CbmRow({
+  item: it,
+  idx,
+  color,
+  globalLenUnit,
+  globalWtUnit,
+  popoverOpen,
+  onPopoverOpenChange,
+  registerRef,
+  allowRemove,
+  onUpdateDraft,
+  onUpdatePacking,
+  onDuplicate,
+  onRemove,
+  onSetLenUnit,
+  onSetWtUnit,
+  renderPopover,
+}: CbmRowProps) {
+  const rowLen = it.lenUnit ?? globalLenUnit;
+  const rowWt = it.wtUnit ?? globalWtUnit;
+  const rowCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
+  const confirmed = it.packingConfirmed === true;
+
+  const showLen = (cm: number) => {
+    const v = cmTo(cm, rowLen);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const showWt = (kg: number) => {
+    const v = kgTo(kg, rowWt);
+    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
+  };
+  const setLen = (key: "length" | "width" | "height") => (n: number) =>
+    onUpdateDraft(it.id, { [key]: Number.isFinite(n) ? toCm(n, rowLen) : 0 } as Partial<CbmItem>);
+  const setWt = (n: number) =>
+    onUpdateDraft(it.id, { weight: Number.isFinite(n) ? toKg(n, rowWt) : 0 });
+
+  return (
+    <Card
+      ref={registerRef}
+      className="border-2 p-3 transition-shadow"
+      style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
+    >
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className="size-3 rounded-sm border border-black/10"
+            style={{ background: color }}
+            aria-hidden
+          />
+          <h4 className="text-sm font-semibold text-brand-navy">Item {idx + 1}</h4>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <UnitSelector id={`cbm-len-unit-${it.id}`} value={rowLen} onChange={onSetLenUnit} compact />
+            <WeightUnitSelector id={`cbm-wt-unit-${it.id}`} value={rowWt} onChange={onSetWtUnit} compact />
+            <Select
+              value={it.packageType ?? "carton"}
+              onValueChange={(v) => onUpdatePacking(it.id, { packageType: v as PackageType })}
+            >
+              <SelectTrigger
+                className="h-7 w-auto gap-1 rounded-full border-brand-navy/25 bg-muted/40 px-2.5 py-0 text-[11px] font-medium text-brand-navy shadow-none focus:ring-1"
+                aria-label={`Item ${idx + 1} package type`}
+              >
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Pkg
+                </span>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PACKAGE_TYPES.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <Popover open={popoverOpen} onOpenChange={onPopoverOpenChange}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                  confirmed
+                    ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
+                    : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
+                )}
+              >
+                {confirmed ? (
+                  <CheckCircle2 className="size-3.5 shrink-0" />
+                ) : (
+                  <Settings2 className="size-3.5 shrink-0" />
+                )}
+                <span className="truncate">
+                  {confirmed ? buildSummary(it) : "Packing options"}
+                </span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-4">
+              {renderPopover()}
+            </PopoverContent>
+          </Popover>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="size-7"
+            onClick={() => onDuplicate(it.id)}
+            aria-label="Duplicate"
+          >
+            <Copy className="size-3.5" />
+          </Button>
+          {allowRemove && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-7 text-destructive"
+              onClick={() => onRemove(it.id)}
+              aria-label="Remove"
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <NumberField
+          compact
+          id={`l-${it.id}`}
+          label="Length"
+          suffix={rowLen}
+          required
+          value={showLen(it.length)}
+          onChange={setLen("length")}
+          hint={`Outer length of one carton in ${rowLen}.`}
+        />
+        <NumberField
+          compact
+          id={`w-${it.id}`}
+          label="Width"
+          suffix={rowLen}
+          required
+          value={showLen(it.width)}
+          onChange={setLen("width")}
+          hint={`Outer width in ${rowLen}.`}
+        />
+        <NumberField
+          compact
+          id={`h-${it.id}`}
+          label="Height"
+          suffix={rowLen}
+          required
+          value={showLen(it.height)}
+          onChange={setLen("height")}
+          hint={`Outer height in ${rowLen}.`}
+        />
+        <NumberField
+          compact
+          id={`q-${it.id}`}
+          label="Qty"
+          required
+          step={1}
+          value={it.qty}
+          onChange={(n) => onUpdateDraft(it.id, { qty: Math.max(1, Math.round(n)) })}
+          hint="Number of identical cartons."
+        />
+        <NumberField
+          compact
+          id={`wt-${it.id}`}
+          label="Weight"
+          suffix={rowWt}
+          required
+          value={showWt(it.weight)}
+          onChange={setWt}
+          hint={`Actual weight of ONE carton (gross) in ${rowWt}.`}
+        />
+        <div
+          className="flex flex-col justify-center rounded-lg border-2 border-brand-navy/20 bg-brand-navy-soft/40 px-3 py-1.5"
+          aria-label={`Item ${idx + 1} CBM`}
+        >
+          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            CBM
+          </span>
+          <span className="text-lg font-bold leading-tight" style={{ color: "var(--brand-orange)" }}>
+            {Number.isFinite(rowCbm) ? rowCbm.toFixed(4) : "—"}
+            <span className="ml-0.5 text-[10px] font-semibold text-muted-foreground">m³</span>
+          </span>
+        </div>
+      </div>
+    </Card>
+  );
+});

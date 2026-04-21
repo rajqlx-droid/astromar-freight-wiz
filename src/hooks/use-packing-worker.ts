@@ -4,6 +4,7 @@ import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { ScenarioResult, StrategyId } from "@/lib/freight/scenario-runner";
 import type { CbmItem } from "@/lib/freight/calculators";
 import type { ContainerPreset } from "@/lib/freight/packing";
+import type { RecommendResponseResult } from "@/lib/freight/packing-worker";
 
 /**
  * usePackingWorker — runs the heavy 3D packer off the main thread.
@@ -42,7 +43,11 @@ interface MultiResponse {
   kind: "multi";
   result: AdvancedPackResult[];
 }
-type AnyResponse = PackResponse | ScenariosResponse | MultiResponse;
+interface RecommendResponse {
+  kind: "recommend";
+  result: RecommendResponseResult;
+}
+type AnyResponse = PackResponse | ScenariosResponse | MultiResponse | RecommendResponse;
 
 interface UsePackingWorker {
   /** Pack a single container. */
@@ -58,6 +63,8 @@ interface UsePackingWorker {
     buckets: CbmItem[][],
     containers: ContainerPreset[],
   ) => Promise<AdvancedPackResult[]>;
+  /** Geometry-aware recommendation + per-bucket packs in one round trip. */
+  recommend: (items: CbmItem[]) => Promise<RecommendResponseResult>;
   /** True while at least one job is in flight. */
   pending: boolean;
 }
@@ -136,6 +143,10 @@ export function usePackingWorker(): UsePackingWorker {
     },
     multi: async (buckets, containers) => {
       const r = await send<MultiResponse>({ kind: "multi", buckets, containers });
+      return r.result;
+    },
+    recommend: async (items) => {
+      const r = await send<RecommendResponse>({ kind: "recommend", items });
       return r.result;
     },
     pending: inflight > 0,
