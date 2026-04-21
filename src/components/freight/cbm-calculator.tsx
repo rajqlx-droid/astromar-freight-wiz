@@ -72,6 +72,14 @@ const isRigidUnit = (t?: PackageType) => t === "crate" || t === "pallet";
 export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
   const [wtUnit, setWtUnit] = usePersistentWeightUnit();
+  const [draftItems, setDraftItems] = useState<CbmItem[]>(items);
+  useEffect(() => {
+    setDraftItems(items);
+  }, [items]);
+  useEffect(() => {
+    const t = setTimeout(() => setItems(draftItems), 400);
+    return () => clearTimeout(t);
+  }, [draftItems, setItems]);
   const [forcedChoice, setForcedChoice] = useState<import("@/lib/freight/container-ids").ContainerId | null>(null);
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
