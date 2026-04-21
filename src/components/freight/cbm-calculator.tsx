@@ -455,21 +455,23 @@ export function CbmCalculator({ items, setItems }: Props) {
                   <Sparkles className="size-3.5" /> Optimize loading
                 </Button>
               ) : (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span tabIndex={0}>
-                      <Button
-                        size="sm"
-                        disabled
-                        className="text-white shadow-sm opacity-60"
-                        style={{ background: "var(--brand-orange)" }}
-                      >
-                        <Sparkles className="size-3.5" /> Optimize loading
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">Enter cargo dimensions first</TooltipContent>
-                </Tooltip>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0}>
+                        <Button
+                          size="sm"
+                          disabled
+                          className="text-white shadow-sm opacity-60"
+                          style={{ background: "var(--brand-orange)" }}
+                        >
+                          <Sparkles className="size-3.5" /> Optimize loading
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">Enter cargo dimensions first</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           </Card>
