@@ -598,6 +598,77 @@ function FreightIntelligencePage() {
                 </div>
               </div>
 
+              {/* Optimization Plan promo banner — CBM only, sits below heading row */}
+              {active === "cbm" && (
+                <div
+                  className="no-print mb-3 overflow-hidden rounded-2xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy via-brand-navy to-[#1a2f5a] text-white shadow-md"
+                >
+                  <div className="relative flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-5">
+                    {/* Decorative isometric cubes — hidden on small screens to avoid clutter */}
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 select-none md:block"
+                    >
+                      <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
+                        <g opacity="0.85">
+                          {/* back cube */}
+                          <path d="M70 18 L92 28 L92 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.35" />
+                          <path d="M70 18 L48 28 L48 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.55" />
+                          <path d="M70 18 L92 28 L70 38 L48 28 Z" fill="var(--brand-orange)" opacity="0.75" />
+                          {/* front cube */}
+                          <path d="M50 38 L72 48 L72 72 L50 62 Z" fill="#fff" opacity="0.18" />
+                          <path d="M50 38 L28 48 L28 72 L50 62 Z" fill="#fff" opacity="0.28" />
+                          <path d="M50 38 L72 48 L50 58 L28 48 Z" fill="#fff" opacity="0.45" />
+                        </g>
+                      </svg>
+                    </div>
+
+                    {/* Text + steps */}
+                    <div className="relative z-10 flex-1 md:pr-32">
+                      <div className="mb-1 flex items-center gap-2">
+                        <Sparkles className="size-4 text-brand-orange" />
+                        <h3 className="text-sm font-bold tracking-tight sm:text-base">
+                          Get your container optimization plan
+                        </h3>
+                      </div>
+                      <p className="mb-2.5 text-xs text-white/75 sm:text-sm">
+                        Enter cargo, get visual 3D + 2D loading plans instantly.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] sm:text-xs">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="flex size-4 items-center justify-center rounded-full bg-brand-orange/20 text-[10px] font-bold text-brand-orange">1</span>
+                          <span className="text-white/85">Enter values</span>
+                        </span>
+                        <span className="text-white/30">→</span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="flex size-4 items-center justify-center rounded-full bg-brand-orange/20 text-[10px] font-bold text-brand-orange">2</span>
+                          <span className="text-white/85">Smart container fit</span>
+                        </span>
+                        <span className="text-white/30">→</span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="flex size-4 items-center justify-center rounded-full bg-brand-orange/20 text-[10px] font-bold text-brand-orange">3</span>
+                          <span className="text-white/85">3D + 2D plan</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* CTA */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        document
+                          .getElementById("cbm-optimize-cta")
+                          ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                      }
+                      className="relative z-10 inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-lg bg-brand-orange px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-orange/90 sm:self-center sm:text-sm"
+                    >
+                      View plan
+                      <ArrowRight className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Pro tip — full-width row below heading, no overlap with controls */}
               {bannerOpen && (
                 <div
