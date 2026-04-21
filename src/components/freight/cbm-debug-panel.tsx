@@ -132,15 +132,21 @@ export function CbmDebugPanel({ info }: Props) {
   const totalsMatchLive = Math.abs(perRowSum - info.headlineTotalCbm) < 0.0001;
 
   /* ------------------- Automated typing/load test ------------------- */
-  const runTest = async () => {
-    setRunning(true);
-    setResult(null);
-    cancelRef.current = false;
+  /**
+   * Returns a TestResult after simulating digit-by-digit typing across all 6
+   * test rows. Pure function of `info.setDraftItems` + measured frame timing —
+   * safe to call from both the manual button and the headless test mode.
+   */
+  const executeTest = async (
+    onProgress?: (msg: string) => void,
+  ): Promise<TestResult> => {
     const frameCosts: number[] = [];
     const t0 = performance.now();
 
-    // Seed empty rows first so the row count matches before we type.
-    const emptyRows: CbmItem[] = TEST_ROWS.map((_, i) => ({
+    // Working copy. We mutate this in place between keystrokes so each new
+    // setDraftItems() reflects ALL prior typing across ALL rows — not just
+    // the current row's current field.
+    const rows: CbmItem[] = TEST_ROWS.map((_, i) => ({
       id: `dbg-${Date.now()}-${i}`,
       length: 0,
       width: 0,
@@ -155,76 +161,76 @@ export function CbmDebugPanel({ info }: Props) {
       allowAxisRotation: false,
       packingConfirmed: false,
     }));
-    info.setDraftItems(emptyRows);
-    setProgress("Seeded 6 empty rows…");
-    // Yield so React commits the empty state before we start mutating.
+    info.setDraftItems(rows.map((r) => ({ ...r })));
+    onProgress?.("Seeded 6 empty rows…");
     await new Promise((r) => setTimeout(r, 50));
 
     let keystrokes = 0;
-    const fields: (keyof Pick<CbmItem, "length" | "width" | "height" | "qty" | "weight">)[] = [
-      "length",
-      "width",
-      "height",
-      "qty",
-      "weight",
-    ];
+    const fields = ["length", "width", "height", "qty", "weight"] as const;
 
-    // Type each field of each row, measuring the main-thread cost between
-    // setDraftItems() and the next paint.
     for (let rowIdx = 0; rowIdx < TEST_ROWS.length; rowIdx++) {
       if (cancelRef.current) break;
       const target = TEST_ROWS[rowIdx];
       for (const field of fields) {
-        const value = target[field];
-        // Simulate typing digit-by-digit so we get realistic keystroke counts.
-        const str = String(value);
+        if (cancelRef.current) break;
+        const str = String(target[field]);
         for (let d = 1; d <= str.length; d++) {
           if (cancelRef.current) break;
           const partial = parseInt(str.slice(0, d), 10) || 0;
+
+          // Patch the live row IN PLACE so subsequent keystrokes preserve
+          // every field we've already typed across every row.
+          rows[rowIdx] = { ...rows[rowIdx], [field]: partial };
+
           const before = performance.now();
-          info.setDraftItems(
-            emptyRows.map((row, i) =>
-              i === rowIdx ? { ...row, ...patchAccumulated(target, fields, field, d) } : row,
-            ),
-          );
-          // Wait for next animation frame to measure commit + render cost.
+          // Push a fresh array reference so React commits.
+          info.setDraftItems(rows.map((r) => ({ ...r })));
           await new Promise<void>((r) => requestAnimationFrame(() => r()));
           const cost = performance.now() - before;
           frameCosts.push(cost);
           keystrokes++;
-          // Apply the partial back to emptyRows so the next field builds on it.
-          emptyRows[rowIdx] = {
-            ...emptyRows[rowIdx],
-            [field]: partial,
-          };
-          setProgress(
+          onProgress?.(
             `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms`,
           );
         }
       }
     }
 
-    // Wait for the debounce window + a frame so the headline total settles.
+    // Wait for the debounce window + a frame so headline total settles.
     await new Promise((r) => setTimeout(r, info.debounceMs + 100));
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
 
-    const finalSum = emptyRows.reduce(
+    const finalSum = rows.reduce(
       (a, it) => a + (it.length * it.width * it.height * it.qty) / 1_000_000,
+      0,
+    );
+    const expected = TEST_ROWS.reduce(
+      (a, t) => a + (t.length * t.width * t.height * t.qty) / 1_000_000,
       0,
     );
     const worst = frameCosts.reduce((a, b) => Math.max(a, b), 0);
     const avg = frameCosts.length ? frameCosts.reduce((a, b) => a + b, 0) / frameCosts.length : 0;
 
-    setResult({
+    return {
       rowsFilled: TEST_ROWS.length,
       totalKeystrokes: keystrokes,
       worstFrameMs: worst,
       avgFrameMs: avg,
       perRowSum: finalSum,
       headlineTotal: info.headlineTotalCbm,
+      expectedTotal: expected,
       totalsMatch: Math.abs(finalSum - info.headlineTotalCbm) < 0.0001,
+      matchesExpected: Math.abs(finalSum - expected) < 0.0001,
       totalDurationMs: performance.now() - t0,
-    });
+    };
+  };
+
+  const runTest = async () => {
+    setRunning(true);
+    setResult(null);
+    cancelRef.current = false;
+    const r = await executeTest(setProgress);
+    setResult(r);
     setProgress("");
     setRunning(false);
   };
