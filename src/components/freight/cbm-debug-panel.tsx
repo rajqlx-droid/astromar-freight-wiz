@@ -44,6 +44,22 @@ export interface CbmDebugInfo {
   setDraftItems: (items: CbmItem[]) => void;
 }
 
+/** A single simulated keystroke, captured for failure diagnostics. */
+export interface KeystrokeTrace {
+  /** Sequential index across the whole test (1-based). */
+  step: number;
+  /** Row index being typed into (0-based, refers to TEST_ROWS). */
+  rowIdx: number;
+  /** Field being typed into. */
+  field: "length" | "width" | "height" | "qty" | "weight";
+  /** Partial value after this keystroke (e.g. typing "60" produces 6 then 60). */
+  partial: number;
+  /** Main-thread cost of the keystroke (ms, measured around setDraftItems). */
+  frameMs: number;
+  /** React render commits observed during this keystroke. */
+  renderCount: number;
+}
+
 interface TestResult {
   rowsFilled: number;
   totalKeystrokes: number;
@@ -51,6 +67,12 @@ interface TestResult {
   worstFrameMs: number;
   /** Average per-keystroke main-thread time (ms). */
   avgFrameMs: number;
+  /** Worst React render-count observed for a single keystroke. */
+  worstRenderSpike: number;
+  /** Average React renders per keystroke. */
+  avgRendersPerKeystroke: number;
+  /** Total React renders observed across the whole typing run. */
+  totalRenders: number;
   /** Sum of per-row CBM tiles after the test completed. */
   perRowSum: number;
   /** Headline Total CBM after the test completed. */
@@ -70,6 +92,12 @@ export interface HeadlessTestReport {
   pass: boolean;
   failures: string[];
   result: TestResult;
+  /**
+   * Compact per-keystroke trace. Only populated when the test FAILS (or the
+   * `trace=1` URL flag is set), to keep passing-run output cheap. Useful for
+   * pinpointing which keystroke triggered jank or input loss.
+   */
+  trace?: KeystrokeTrace[];
   /** ISO timestamp the run completed. */
   completedAt: string;
 }
@@ -77,6 +105,8 @@ export interface HeadlessTestReport {
 /** Thresholds for pass/fail in headless mode. */
 const JANK_THRESHOLD_MS = 50; // Worst frame above this = fail
 const AVG_FRAME_THRESHOLD_MS = 16; // Average frame above this = fail (60fps budget)
+/** Render spike budget — more than this many React commits per keystroke = fail. */
+const RENDER_SPIKE_THRESHOLD = 6;
 
 interface Props {
   info: CbmDebugInfo;
@@ -111,6 +141,15 @@ export function CbmDebugPanel({ info }: Props) {
   const [result, setResult] = useState<TestResult | null>(null);
   const [progress, setProgress] = useState<string>("");
   const cancelRef = useRef(false);
+
+  /**
+   * Render-commit counter. Incremented on every render of this panel — which
+   * happens whenever the parent CbmCalculator re-renders (since `info` is
+   * rebuilt on every parent render). The headless test reads this between
+   * each simulated keystroke to count React commits per keystroke.
+   */
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
 
   // SSR-safe enable check. Runs only on the client after hydration.
   useEffect(() => {
@@ -157,8 +196,10 @@ export function CbmDebugPanel({ info }: Props) {
    */
   const executeTest = async (
     onProgress?: (msg: string) => void,
-  ): Promise<TestResult> => {
+  ): Promise<{ result: TestResult; trace: KeystrokeTrace[] }> => {
     const frameCosts: number[] = [];
+    const renderCounts: number[] = [];
+    const trace: KeystrokeTrace[] = [];
     const t0 = performance.now();
 
     // Working copy. We mutate this in place between keystrokes so each new
@@ -200,15 +241,28 @@ export function CbmDebugPanel({ info }: Props) {
           // every field we've already typed across every row.
           rows[rowIdx] = { ...rows[rowIdx], [field]: partial };
 
+          // Snapshot render counter BEFORE the commit so we can measure how
+          // many React renders this single keystroke triggered.
+          const rendersBefore = renderCountRef.current;
           const before = performance.now();
           // Push a fresh array reference so React commits.
           info.setDraftItems(rows.map((r) => ({ ...r })));
           await new Promise<void>((r) => requestAnimationFrame(() => r()));
           const cost = performance.now() - before;
+          const renders = renderCountRef.current - rendersBefore;
           frameCosts.push(cost);
+          renderCounts.push(renders);
           keystrokes++;
+          trace.push({
+            step: keystrokes,
+            rowIdx,
+            field,
+            partial,
+            frameMs: cost,
+            renderCount: renders,
+          });
           onProgress?.(
-            `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms`,
+            `Row ${rowIdx + 1}/6 · ${field}=${partial} · ${cost.toFixed(1)}ms · ${renders} render(s)`,
           );
         }
       }
@@ -228,18 +282,27 @@ export function CbmDebugPanel({ info }: Props) {
     );
     const worst = frameCosts.reduce((a, b) => Math.max(a, b), 0);
     const avg = frameCosts.length ? frameCosts.reduce((a, b) => a + b, 0) / frameCosts.length : 0;
+    const worstRenderSpike = renderCounts.reduce((a, b) => Math.max(a, b), 0);
+    const totalRenders = renderCounts.reduce((a, b) => a + b, 0);
+    const avgRenders = renderCounts.length ? totalRenders / renderCounts.length : 0;
 
     return {
-      rowsFilled: TEST_ROWS.length,
-      totalKeystrokes: keystrokes,
-      worstFrameMs: worst,
-      avgFrameMs: avg,
-      perRowSum: finalSum,
-      headlineTotal: info.headlineTotalCbm,
-      expectedTotal: expected,
-      totalsMatch: Math.abs(finalSum - info.headlineTotalCbm) < 0.0001,
-      matchesExpected: Math.abs(finalSum - expected) < 0.0001,
-      totalDurationMs: performance.now() - t0,
+      result: {
+        rowsFilled: TEST_ROWS.length,
+        totalKeystrokes: keystrokes,
+        worstFrameMs: worst,
+        avgFrameMs: avg,
+        worstRenderSpike,
+        avgRendersPerKeystroke: avgRenders,
+        totalRenders,
+        perRowSum: finalSum,
+        headlineTotal: info.headlineTotalCbm,
+        expectedTotal: expected,
+        totalsMatch: Math.abs(finalSum - info.headlineTotalCbm) < 0.0001,
+        matchesExpected: Math.abs(finalSum - expected) < 0.0001,
+        totalDurationMs: performance.now() - t0,
+      },
+      trace,
     };
   };
 
@@ -247,7 +310,7 @@ export function CbmDebugPanel({ info }: Props) {
     setRunning(true);
     setResult(null);
     cancelRef.current = false;
-    const r = await executeTest(setProgress);
+    const { result: r } = await executeTest(setProgress);
     setResult(r);
     setProgress("");
     setRunning(false);
@@ -262,11 +325,18 @@ export function CbmDebugPanel({ info }: Props) {
   /**
    * Headless test runner — produces a structured pass/fail report. Exposed
    * globally as `window.__cbmHeadlessTest()` and auto-invoked when the URL
-   * has `?debug=test`. Console output is grouped and machine-readable so it
-   * can be scraped by CI / E2E tooling.
+   * has `?debug=test`.
+   *
+   * Output modes (controlled by URL flags):
+   *   - default            → grouped, human-readable console output.
+   *   - `format=json`      → single-line JSON.stringify for CI scraping.
+   *   - `trace=1`          → always include the per-keystroke trace, even on pass.
+   *
+   * On failure the trace is ALWAYS included (regardless of `trace=1`) so the
+   * exact keystroke that caused jank or input loss is visible in the log.
    */
   const runHeadless = useCallback(async (): Promise<HeadlessTestReport> => {
-    const result = await executeTest(setProgress);
+    const { result, trace } = await executeTest(setProgress);
     const failures: string[] = [];
     if (!result.matchesExpected) {
       failures.push(
@@ -288,21 +358,55 @@ export function CbmDebugPanel({ info }: Props) {
         `Average frame jank: ${result.avgFrameMs.toFixed(1)}ms exceeds 60fps budget (${AVG_FRAME_THRESHOLD_MS}ms)`,
       );
     }
+    if (result.worstRenderSpike > RENDER_SPIKE_THRESHOLD) {
+      failures.push(
+        `Render spike: ${result.worstRenderSpike} renders in one keystroke exceeds ${RENDER_SPIKE_THRESHOLD} budget`,
+      );
+    }
+
+    // Read URL flags to decide output format and whether to attach the trace.
+    let formatJson = false;
+    let alwaysTrace = false;
+    try {
+      const url = new URL(window.location.href);
+      formatJson = url.searchParams.get("format") === "json";
+      alwaysTrace = url.searchParams.get("trace") === "1";
+    } catch {
+      /* ignore */
+    }
+
+    const includeTrace = failures.length > 0 || alwaysTrace;
     const report: HeadlessTestReport = {
       pass: failures.length === 0,
       failures,
       result,
+      ...(includeTrace ? { trace } : {}),
       completedAt: new Date().toISOString(),
     };
     setResult(result);
     setProgress("");
-    // Structured console output for CI / E2E.
+
     /* eslint-disable no-console */
-    console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
-    console.log("Result:", result);
-    if (failures.length) console.warn("Failures:", failures);
-    console.log("Report:", report);
-    console.groupEnd();
+    if (formatJson) {
+      // Single-line JSON for CI parsing — no pretty printing, no group wrappers.
+      console.log(JSON.stringify(report));
+    } else {
+      console.group(`[CBM headless test] ${report.pass ? "✓ PASS" : "✗ FAIL"}`);
+      console.log("Result:", result);
+      if (failures.length) {
+        console.warn("Failures:", failures);
+        // Compact per-keystroke trace — collapsed by default to keep the log tidy.
+        console.groupCollapsed(`Trace (${trace.length} keystrokes)`);
+        console.table(trace);
+        console.groupEnd();
+      } else if (alwaysTrace) {
+        console.groupCollapsed(`Trace (${trace.length} keystrokes)`);
+        console.table(trace);
+        console.groupEnd();
+      }
+      console.log("Report:", report);
+      console.groupEnd();
+    }
     /* eslint-enable no-console */
     return report;
   }, [info]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -501,6 +605,23 @@ export function CbmDebugPanel({ info }: Props) {
                   tone={result.avgFrameMs > AVG_FRAME_THRESHOLD_MS ? "warn" : "good"}
                 />
                 <Row
+                  label="Worst render spike"
+                  value={`${result.worstRenderSpike} render(s)`}
+                  tone={
+                    result.worstRenderSpike > RENDER_SPIKE_THRESHOLD
+                      ? "bad"
+                      : result.worstRenderSpike > 3
+                        ? "warn"
+                        : "good"
+                  }
+                  hint={`>${RENDER_SPIKE_THRESHOLD} per keystroke = render storm`}
+                />
+                <Row
+                  label="Avg renders / keystroke"
+                  value={result.avgRendersPerKeystroke.toFixed(2)}
+                  hint={`${result.totalRenders} total commits`}
+                />
+                <Row
                   label="Per-row sum"
                   value={`${result.perRowSum.toFixed(4)} m³`}
                 />
@@ -533,8 +654,10 @@ export function CbmDebugPanel({ info }: Props) {
 
           <p className="text-[10px] text-muted-foreground">
             Headless mode:{" "}
-            <code className="rounded bg-muted px-1">?debug=test</code> · or call{" "}
-            <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
+            <code className="rounded bg-muted px-1">?debug=test</code> ·{" "}
+            <code className="rounded bg-muted px-1">&amp;format=json</code> for CI ·{" "}
+            <code className="rounded bg-muted px-1">&amp;trace=1</code> to always log trace ·
+            or call <code className="rounded bg-muted px-1">window.__cbmHeadlessTest()</code>
           </p>
           <p className="text-[10px] text-muted-foreground">
             Toggle off:{" "}
