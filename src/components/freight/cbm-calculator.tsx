@@ -9,6 +9,7 @@ import {
   Info,
   Sparkles,
   Pencil,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -45,11 +46,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
-import { ITEM_COLORS } from "@/lib/freight/packing";
+import { CONTAINERS, ITEM_COLORS } from "@/lib/freight/packing";
 import {
+  analyseGeometricCeiling,
   recommendContainers,
   recommendContainersFast,
   type ContainerRecommendation,
+  type GeometricCeilingReport,
 } from "@/lib/freight/container-recommender";
 import { usePackingWorker } from "@/hooks/use-packing-worker";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
@@ -254,6 +257,15 @@ export function CbmCalculator({ items, setItems }: Props) {
   const [workerBucketPacks, setWorkerBucketPacks] = useState<AdvancedPackResult[]>([]);
 
   const recommendation: ContainerRecommendation = workerRecommendation ?? fastRecommendation;
+
+  // Geometric ceiling analysis — pure geometry, runs on every keystroke. Detects
+  // items whose dimensions cap utilisation regardless of packer effort
+  // (e.g. a 1.22m cube can't pair-side or stack 2-high in a 40' GP).
+  const ceilingReport = useMemo<GeometricCeilingReport>(() => {
+    const containerId = forcedChoice ?? recommendation.units[0]?.container.id ?? "40gp";
+    const target = CONTAINERS.find((c) => c.id === containerId) ?? CONTAINERS[1];
+    return analyseGeometricCeiling(draftItems, target);
+  }, [draftItems, forcedChoice, recommendation]);
 
   // Active container bucket index for the multi-container case. Shared between
   // the suggestion banner cards and the 3D viewer's tabbed view so clicking
@@ -829,6 +841,29 @@ export function CbmCalculator({ items, setItems }: Props) {
           onUnitSelect={handleUnitSelect}
           unitStats={unitStats}
         />
+        {ceilingReport.headline && (
+          <div className="rounded-lg border-2 border-amber-400/60 bg-amber-50 p-3 text-sm dark:bg-amber-950/20 sm:p-4">
+            <div className="mb-1.5 flex flex-wrap items-center gap-2 font-semibold text-amber-900 dark:text-amber-200">
+              <AlertTriangle className="size-4" />
+              <span>{ceilingReport.headline}</span>
+              {ceilingReport.suggestHc && forcedChoice !== "40hc" && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="ml-auto h-7 bg-brand-navy px-2.5 text-[11px] text-white hover:bg-brand-navy/90"
+                  onClick={() => setForcedChoice("40hc")}
+                >
+                  Switch to 40ft HC
+                </Button>
+              )}
+            </div>
+            <ul className="ml-6 list-disc space-y-1 text-[12px] text-amber-900/90 dark:text-amber-200/90">
+              {ceilingReport.items.map((g) => (
+                <li key={g.itemId}>{g.reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <ContainerLoadView
           items={items}
           recommendation={recommendation}
