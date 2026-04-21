@@ -411,3 +411,105 @@ export function splitItemsAcrossContainers(
 
   return buckets;
 }
+
+/* --------------------------------------------------------------------------
+ * Geometric ceiling analysis
+ * -------------------------------------------------------------------------- */
+
+export interface GeometricCeilingItem {
+  itemIdx: number;
+  itemId: string;
+  shortSideMm: number;
+  heightMm: number;
+  fitsAcross: number;
+  stacksHigh: number;
+  blocksPair: boolean;
+  blocksStack: boolean;
+  hcUnlocksStack: boolean;
+  reason: string;
+}
+
+export interface GeometricCeilingReport {
+  items: GeometricCeilingItem[];
+  /** True if upgrading to 40HC would meaningfully improve placement for ≥1 item. */
+  suggestHc: boolean;
+  /** Plain English headline summary, or null when no ceiling. */
+  headline: string | null;
+}
+
+/**
+ * Detect "geometric ceiling" cases — items whose physical dimensions prevent
+ * the packer from making good use of the chosen container, regardless of
+ * algorithm tweaks. Pure geometry, no packer call.
+ */
+export function analyseGeometricCeiling(
+  items: CbmItem[],
+  currentContainer: ContainerPreset,
+): GeometricCeilingReport {
+  const out: GeometricCeilingItem[] = [];
+  const C = currentContainer.inner;
+  const HC = CONTAINERS.find((c) => c.id === "40hc")!.inner;
+  let suggestHc = false;
+
+  items.forEach((it, idx) => {
+    if (it.length <= 0 || it.width <= 0 || it.height <= 0 || it.qty <= 0) return;
+    const lmm = it.length * 10;
+    const wmm = it.width * 10;
+    const hmm = it.height * 10;
+    const stackable = it.stackable !== false;
+    const rule = getGapRule(it.packageType ?? "carton");
+
+    const shortSide = Math.min(lmm, wmm);
+    const usableWidth = C.w - 2 * rule.wallMin;
+    const fitsAcross = Math.max(
+      1,
+      Math.floor((usableWidth + rule.minGap) / (shortSide + rule.minGap)),
+    );
+
+    const usableHeight = C.h - CEILING_RESERVE_MM;
+    const stacksHigh = stackable ? Math.max(1, Math.floor(usableHeight / hmm)) : 1;
+
+    const usableHeightHc = HC.h - CEILING_RESERVE_MM;
+    const stacksHighHc = stackable ? Math.max(1, Math.floor(usableHeightHc / hmm)) : 1;
+
+    const blocksPair = fitsAcross < 2;
+    const blocksStack = stackable && stacksHigh < 2;
+    const hcUnlocksStack = blocksStack && stacksHighHc >= 2;
+
+    if (!blocksPair && !blocksStack) return;
+
+    let reason: string;
+    if (blocksPair && blocksStack) {
+      reason = `${it.length.toFixed(0)}×${it.width.toFixed(0)}×${it.height.toFixed(0)} cm only fits 1 across and 1 high in ${currentContainer.name} — wastes most of each row.`;
+    } else if (blocksPair) {
+      reason = `${it.width.toFixed(0)} cm wide — only 1 fits across the ${(C.w / 10).toFixed(0)} cm container (need ≤${((C.w - 2 * rule.wallMin - rule.minGap) / 2 / 10).toFixed(0)} cm to pair).`;
+    } else {
+      reason = `${it.height.toFixed(0)} cm tall — can't stack 2-high in ${currentContainer.name} (${(C.h / 10).toFixed(0)} cm inner).`;
+    }
+    if (hcUnlocksStack) {
+      reason += " Switching to 40ft HC would allow 2-high stacking.";
+      suggestHc = true;
+    }
+
+    out.push({
+      itemIdx: idx,
+      itemId: it.id,
+      shortSideMm: shortSide,
+      heightMm: hmm,
+      fitsAcross,
+      stacksHigh,
+      blocksPair,
+      blocksStack,
+      hcUnlocksStack,
+      reason,
+    });
+  });
+
+  const headline =
+    out.length > 0
+      ? `Geometric ceiling: ${out.map((o) => `Item ${o.itemIdx + 1}`).join(", ")} can't be packed efficiently in ${currentContainer.name}.`
+      : null;
+
+  return { items: out, suggestHc, headline };
+}
+
