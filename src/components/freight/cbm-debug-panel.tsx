@@ -142,6 +142,15 @@ export function CbmDebugPanel({ info }: Props) {
   const [progress, setProgress] = useState<string>("");
   const cancelRef = useRef(false);
 
+  /**
+   * Render-commit counter. Incremented on every render of this panel — which
+   * happens whenever the parent CbmCalculator re-renders (since `info` is
+   * rebuilt on every parent render). The headless test reads this between
+   * each simulated keystroke to count React commits per keystroke.
+   */
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+
   // SSR-safe enable check. Runs only on the client after hydration.
   useEffect(() => {
     setEnabled(isDebugEnabled());
