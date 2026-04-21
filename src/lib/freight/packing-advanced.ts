@@ -32,14 +32,23 @@ export interface ItemPlacementStat {
   weightKgPerPkg: number;
 }
 
+/** Sort hint that biases which cartons the packer tries first. */
+export type PackStrategy = "auto" | "row-back" | "weight-first" | "floor-first" | "mixed";
+
 export interface AdvancedPackResult {
   container: ContainerPreset;
   placed: PlacedBox[];
   totalCartons: number;
   placedCartons: number;
   truncated: boolean;
+  /** Total CBM of every carton in the manifest (placed + unplaced). */
   cargoCbm: number;
+  /** CBM of placed cartons only — used for utilization. */
+  placedCargoCbm: number;
   weightKg: number;
+  /** Placed cargo weight only (kg). */
+  placedWeightKg: number;
+  /** placedCargoCbm / capCbm × 100, capped at 100. */
   utilizationPct: number;
   weightUtilizationPct: number;
   perItem: ItemPlacementStat[];
@@ -109,6 +118,7 @@ interface PlacedInternal extends PlacedBox {
 export function packContainerAdvanced(
   items: CbmItem[],
   container: ContainerPreset,
+  strategy: PackStrategy = "auto",
 ): AdvancedPackResult {
   const C = container.inner;
 
@@ -155,12 +165,34 @@ export function packContainerAdvanced(
     }
   });
 
-  // Sort: non-stackable first (need floor), heaviest, largest. Fragile last (top).
+  // Strategy-aware sort. Fragile always last (top). Non-stackable always before
+  // stackable so they secure floor space. Within those buckets the strategy
+  // hint chooses the primary key.
+  const vol = (c: ExpandedCarton) => c.origL * c.origW * c.origH;
+  const floor = (c: ExpandedCarton) => c.origL * c.origW;
   expanded.sort((a, b) => {
     if (a.fragile !== b.fragile) return a.fragile ? 1 : -1;
     if (a.stackable !== b.stackable) return a.stackable ? 1 : -1;
-    if (b.weight !== a.weight) return b.weight - a.weight;
-    return b.origL * b.origW * b.origH - a.origL * a.origW * a.origH;
+    switch (strategy) {
+      case "weight-first":
+        if (b.weight !== a.weight) return b.weight - a.weight;
+        return vol(b) - vol(a);
+      case "floor-first":
+        if (floor(b) !== floor(a)) return floor(b) - floor(a);
+        return b.weight - a.weight;
+      case "mixed":
+        // Largest volume first, weight as tiebreak — natural loader behaviour.
+        if (vol(b) !== vol(a)) return vol(b) - vol(a);
+        return b.weight - a.weight;
+      case "row-back":
+        // Group by item so identical SKUs form full rows back-to-front.
+        if (a.itemIdx !== b.itemIdx) return a.itemIdx - b.itemIdx;
+        return vol(b) - vol(a);
+      case "auto":
+      default:
+        if (b.weight !== a.weight) return b.weight - a.weight;
+        return vol(b) - vol(a);
+    }
   });
 
   // Skyline grid (top-Z per cell, in mm).
@@ -533,6 +565,10 @@ export function packContainerAdvanced(
   const floorCoveredMm2 = placed.filter(p => p.z < 10).reduce((s, p) => s + p.l * p.w, 0);
   const floorCoveragePct = C.l * C.w > 0 ? Math.min(100, (floorCoveredMm2 / (C.l * C.w)) * 100) : 0;
 
+  // Placed-only weight for honest utilization (matches placedCargoCbm).
+  let placedWeightKg = 0;
+  for (const p of placedInternal) placedWeightKg += p.weight;
+
   return {
     container,
     placed,
@@ -540,10 +576,17 @@ export function packContainerAdvanced(
     placedCartons: placedCount,
     truncated,
     cargoCbm,
+    placedCargoCbm,
     weightKg: totalWeight,
-    utilizationPct: container.capCbm > 0 ? (cargoCbm / container.capCbm) * 100 : 0,
+    placedWeightKg,
+    utilizationPct:
+      container.capCbm > 0
+        ? Math.min(100, (placedCargoCbm / container.capCbm) * 100)
+        : 0,
     weightUtilizationPct:
-      container.maxPayloadKg > 0 ? (totalWeight / container.maxPayloadKg) * 100 : 0,
+      container.maxPayloadKg > 0
+        ? Math.min(100, (placedWeightKg / container.maxPayloadKg) * 100)
+        : 0,
     perItem,
     cogOffsetPct,
     usedCbm,

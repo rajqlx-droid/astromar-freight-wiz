@@ -85,41 +85,25 @@ export function runAllScenarios(
     : items;
 
   const results = strategies.map((s) => {
-
-    const sorted = sortByStrategy(safeItems, s.id);
-
-    const pack = packContainerAdvanced(sorted, container);
-
+    // Pass the strategy id straight to the packer so its internal sort actually
+    // honours the user's chosen approach (previously the runner re-sorted, but
+    // packContainerAdvanced re-sorted internally and discarded the hint).
+    const pack = packContainerAdvanced(safeItems, container, s.id);
     const compliance = computeComplianceReport(pack);
-
     const placedPct =
-
       pack.totalCartons > 0 ? (pack.placedCartons / pack.totalCartons) * 100 : 100;
-
     return {
-
       strategyId: s.id,
-
       strategyName: s.name,
-
       pack,
-
       utilizationPct: pack.utilizationPct,
-
       voidPct: Math.max(0, 100 - pack.utilizationPct),
-
       placedPct,
-
       cogOk: Math.abs(pack.cogOffsetPct) <= 0.2,
-
       compliance,
-
       isBest: false,
-
       rank: 0,
-
     };
-
   });
 
   results.sort((a, b) =>
