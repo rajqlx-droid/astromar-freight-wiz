@@ -1,37 +1,21 @@
 
 
-## Restore side-by-side layout: Inputs left, Results right
+## Create `src/lib/freight/gap-rules.ts`
 
-The user reports the layout regressed — results currently stack below the inputs instead of sitting beside them as before. Restore the two-column layout in the CBM/container calculator.
-
----
-
-### What changed
-
-Somewhere in the recent multi-container / accessibility / perf passes the responsive grid on `cbm-calculator.tsx` got flattened (or a wrapper lost its `lg:grid-cols-2` / `xl:grid-cols-3` classes), so the items panel and the results/3D viewer now render in a single column on desktop.
-
-### Fix
-
-**`src/components/freight/cbm-calculator.tsx`**
-- Restore the desktop two-column shell:
-  - Left column (≈ 5/12 or 1/2 width on `lg+`): items entry, package list, controls.
-  - Right column (≈ 7/12 or 1/2 width on `lg+`): results card, container suggestion banner, 3D viewer.
-- Use the previous Tailwind pattern: a parent `grid grid-cols-1 lg:grid-cols-12 gap-6` with `lg:col-span-5` (inputs) and `lg:col-span-7` (results), or whichever split was in use before — match the prior ratio exactly.
-- Keep mobile behaviour as a single stacked column (`grid-cols-1`) so phones still flow vertically.
-- Ensure the multi-container suggestion banner, results card, and 3D viewer all live inside the right column so they sit beside the inputs, not below.
-
-### Verify
-
-- Inputs on the left, results + 3D viewer on the right at `lg` (≥1024px) and above.
-- On the current 947px preview viewport (below `lg`), the single-column stack is expected and correct — confirm with the user whether they want the side-by-side breakpoint lowered to `md` (≥768px) so it shows side-by-side at the current preview width too.
-- Skip links, ARIA tabs, persistence, live region, and 3D perf optimizations all remain intact — this is a layout-only fix.
+Add a single new file containing gap/clearance rules for freight package types (carton, pallet, drum, crate, bale, bag). The module exports clearance constants, a `GapRule` interface, a `GAP_RULES_MM` lookup, a `getGapRule()` helper, and a `classifyGap()` function returning `"ALLOWED" | "WARN" | "BLOCK"`.
 
 ### Files touched
 
-- `src/components/freight/cbm-calculator.tsx` — restore the two-column grid wrapper.
+- **`src/lib/freight/gap-rules.ts`** (new) — exact contents you provided, verbatim. No formatting changes, no reordering, no added comments.
 
 ### Out of scope
 
-- No changes to packer, recommender, 3D viewer, ARIA logic, or persistence.
-- No new dependencies.
+- No edits to any existing file.
+- No imports of this module from anywhere else (you can wire it in later).
+- No tests, no type re-exports, no changes to `src/lib/freight/types.ts`.
+
+### Notes
+
+- File is pure TypeScript with no runtime side effects, so adding it cannot break the build or existing routes.
+- Once approved, the file is created exactly as specified in a single write.
 
