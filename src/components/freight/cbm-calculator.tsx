@@ -331,75 +331,80 @@ export function CbmCalculator({ items, setItems }: Props) {
     }
   }, [showOptimization]);
 
-  const update = (id: string, patch: Partial<CbmItem>) => {
-    setDraftItems(draftItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
-  };
+  // Stable callbacks: keep identity across renders so memoised <CbmRow> only
+  // re-renders when its own item changes, not when *any* item changes.
+  const update = useCallback(
+    (id: string, patch: Partial<CbmItem>) => {
+      setDraftItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    },
+    [],
+  );
+  const updateDraft = useCallback(
+    (id: string, patch: Partial<CbmItem>) => {
+      setDraftItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+    },
+    [],
+  );
   /** Toggle a packing flag and auto-confirm the row in one shot. */
-  const updatePacking = (id: string, patch: Partial<CbmItem>) => {
-    setItems(
-      items.map((it) => (it.id === id ? { ...it, ...patch, packingConfirmed: true } : it)),
-    );
-  };
-  const remove = (id: string) => setItems(items.filter((it) => it.id !== id));
-  const duplicate = (id: string) => {
-    const src = items.find((it) => it.id === id);
-    if (!src) return;
-    setItems([...items, { ...src, id: nextId("cbm") }]);
-  };
-  const add = () => setItems([...items, emptyCbmItem()]);
-  const clear = () => setItems([emptyCbmItem(0)]);
+  const updatePacking = useCallback(
+    (id: string, patch: Partial<CbmItem>) => {
+      setItems(
+        items.map((it) => (it.id === id ? { ...it, ...patch, packingConfirmed: true } : it)),
+      );
+    },
+    [items, setItems],
+  );
+  const remove = useCallback(
+    (id: string) => setItems(items.filter((it) => it.id !== id)),
+    [items, setItems],
+  );
+  const duplicate = useCallback(
+    (id: string) => {
+      const src = items.find((it) => it.id === id);
+      if (!src) return;
+      setItems([...items, { ...src, id: nextId("cbm") }]);
+    },
+    [items, setItems],
+  );
+  const add = useCallback(() => setItems([...items, emptyCbmItem()]), [items, setItems]);
+  const clear = useCallback(() => setItems([emptyCbmItem(0)]), [setItems]);
 
   /** Copy one row's packing options to every other row & mark them all confirmed. */
-  const applyToAll = (sourceId: string) => {
-    const src = items.find((it) => it.id === sourceId);
-    if (!src) return;
-    setItems(
-      items.map((it) => ({
-        ...it,
-        packageType: src.packageType,
-        stackable: src.stackable,
-        fragile: src.fragile,
-        maxStackWeightKg: src.maxStackWeightKg,
-        allowSidewaysRotation: src.allowSidewaysRotation,
-        allowAxisRotation: src.allowAxisRotation,
-        packingConfirmed: true,
-      })),
-    );
-  };
+  const applyToAll = useCallback(
+    (sourceId: string) => {
+      const src = items.find((it) => it.id === sourceId);
+      if (!src) return;
+      setItems(
+        items.map((it) => ({
+          ...it,
+          packageType: src.packageType,
+          stackable: src.stackable,
+          fragile: src.fragile,
+          maxStackWeightKg: src.maxStackWeightKg,
+          allowSidewaysRotation: src.allowSidewaysRotation,
+          allowAxisRotation: src.allowAxisRotation,
+          packingConfirmed: true,
+        })),
+      );
+    },
+    [items, setItems],
+  );
 
-
-  /** Resolve a row's effective length unit (per-row override → global default). */
-  const lenUnitFor = (it: CbmItem) => it.lenUnit ?? lenUnit;
-  const wtUnitFor = (it: CbmItem) => it.wtUnit ?? wtUnit;
-
-  const showLen = (cm: number, unit: typeof lenUnit) => {
-    const v = cmTo(cm, unit);
-    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
-  };
-  /** Draft-only update: writes to local state, debounced flush sends to parent. */
-  const updateDraft = (id: string, patch: Partial<CbmItem>) => {
-    setDraftItems(draftItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
-  };
-  const setLen =
-    (id: string, key: "length" | "width" | "height", unit: typeof lenUnit) => (n: number) =>
-      updateDraft(id, { [key]: Number.isFinite(n) ? toCm(n, unit) : 0 } as Partial<CbmItem>);
-
-  const showWt = (kg: number, unit: typeof wtUnit) => {
-    const v = kgTo(kg, unit);
-    return Number.isFinite(v) ? Number(v.toFixed(4)) : NaN;
-  };
-  const setWt = (id: string, unit: typeof wtUnit) => (n: number) =>
-    updateDraft(id, { weight: Number.isFinite(n) ? toKg(n, unit) : 0 });
-
-  /** Update Item 1's per-row unit AND the global default (so new rows inherit). */
-  const setRowLenUnit = (it: CbmItem, idx: number) => (u: typeof lenUnit) => {
-    update(it.id, { lenUnit: u });
-    if (idx === 0) setLenUnit(u);
-  };
-  const setRowWtUnit = (it: CbmItem, idx: number) => (u: typeof wtUnit) => {
-    update(it.id, { wtUnit: u });
-    if (idx === 0) setWtUnit(u);
-  };
+  /** Update the row's per-row unit AND, for Item 1, also the global default. */
+  const setRowLenUnit = useCallback(
+    (id: string, isFirst: boolean) => (u: LengthUnit) => {
+      update(id, { lenUnit: u });
+      if (isFirst) setLenUnit(u);
+    },
+    [update, setLenUnit],
+  );
+  const setRowWtUnit = useCallback(
+    (id: string, isFirst: boolean) => (u: WeightUnit) => {
+      update(id, { wtUnit: u });
+      if (isFirst) setWtUnit(u);
+    },
+    [update, setWtUnit],
+  );
 
   const inputsTable = draftItems.flatMap((it, idx) => {
     const itemCbm = (it.length * it.width * it.height * it.qty) / 1_000_000;
