@@ -85,9 +85,10 @@ export function CargoBannerScene() {
       <style>{`
         .cargo-scene {
           position: relative;
-          flex: 1 1 0%;
-          min-width: 0;
-          align-self: stretch;
+          flex: 0 0 auto;
+          width: 200px;
+          height: 56px;
+          align-self: center;
           /* lane begins ~0.5cm (≈19px) after the text container ends */
           margin-left: 19px;
           perspective: 800px;
@@ -95,7 +96,7 @@ export function CargoBannerScene() {
           overflow: hidden;
           display: none;
           z-index: 1;
-          opacity: 0.9;
+          opacity: 0.95;
         }
         @media (min-width: 768px) {
           .cargo-scene { display: block; }
