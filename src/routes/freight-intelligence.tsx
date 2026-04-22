@@ -44,6 +44,7 @@ import { MobileResultBar } from "@/components/freight/mobile-result-bar";
 import { MiniHistoryStrip } from "@/components/freight/mini-history-strip";
 import { CompareDialog } from "@/components/freight/compare-dialog";
 import { SplitCompareView } from "@/components/freight/split-compare-view";
+import { CargoBannerScene } from "@/components/freight/cargo-banner-scene";
 import { CALCULATORS, type CalcKey } from "@/lib/freight/types";
 import {
   calcAir,
@@ -605,16 +606,8 @@ function FreightIntelligencePage() {
                       aria-hidden
                       className="pointer-events-none absolute -left-6 top-1/2 size-24 -translate-y-1/2 rounded-full bg-brand-orange/20 blur-2xl"
                     />
-                    {/* Container icon decoration */}
-                    <div aria-hidden className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 select-none lg:block">
-                      <svg width="80" height="56" viewBox="0 0 120 80" fill="none">
-                        <g opacity="0.9">
-                          <path d="M70 18 L92 28 L92 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.4" />
-                          <path d="M70 18 L48 28 L48 52 L70 42 Z" fill="var(--brand-orange)" opacity="0.6" />
-                          <path d="M70 18 L92 28 L70 38 L48 28 Z" fill="var(--brand-orange)" opacity="0.85" />
-                        </g>
-                      </svg>
-                    </div>
+                    {/* Live 3D cargo scene */}
+                    <CargoBannerScene />
                     <div className="relative z-10 flex min-w-0 flex-1 items-center gap-3 lg:pr-20">
                       <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 ring-1 ring-brand-orange/30">
                         <Sparkles className="size-4 text-brand-orange" />
