@@ -760,44 +760,7 @@ function FreightIntelligencePage() {
         {/* Mobile-only sticky bottom result bar (mirrors active calculator's result) */}
         <MobileResultBar result={mobileResult ?? null} inputsTable={mobileInputs} />
 
-        {/* CTA */}
-        <section className="mx-3 mb-10 md:mx-auto md:max-w-7xl md:px-4">
-          <div
-            className="overflow-hidden rounded-2xl border-2 p-6 text-white md:p-10"
-            style={{
-              borderColor: "var(--brand-orange)",
-              background: "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))",
-            }}
-          >
-            <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
-              <div>
-                <h2 className="text-xl font-bold md:text-2xl">Need expert assistance with your shipment?</h2>
-                <p className="mt-1 text-sm text-white/80 md:text-base">
-                  Our Chennai-based team handles freight, customs and FTWZ end-to-end.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-4 text-xs text-white/80">
-                  <span className="flex items-center gap-1.5">
-                    <Phone className="size-3.5" />
-                    <span>+91 99402 11014</span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Mail className="size-3.5" />
-                    <span>sales@astromarfreezone.com</span>
-                  </span>
-                  <span>Mon–Sat · 9:00–18:30 IST</span>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild size="lg" className="text-white shadow hover:opacity-90" style={{ background: "var(--brand-orange)" }}>
-                  <a href="mailto:sales@astromarfreezone.com?subject=Shipment%20Enquiry">Contact our Team <ArrowRight className="size-4" /></a>
-                </Button>
-                <Button asChild size="lg" variant="outline" className="border-2 border-white bg-transparent text-white hover:bg-white/10">
-                  <a href="tel:+919940211014">Schedule a Call</a>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </section>
+        {/* CTA banner removed — replaced by CommercialPoster above the calculator */}
 
         {/* FAQ */}
         <section className="mx-auto max-w-7xl px-3 pb-12 md:px-4">
