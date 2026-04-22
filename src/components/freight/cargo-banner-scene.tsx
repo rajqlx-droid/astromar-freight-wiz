@@ -84,12 +84,12 @@ export function CargoBannerScene() {
 
       <style>{`
         .cargo-scene {
-          position: absolute;
-          /* lane begins ~1cm (≈38px) after the "...plan" text */
-          left: calc(55% + 38px);
-          right: 0;
-          top: 0;
-          bottom: 0;
+          position: relative;
+          flex: 1 1 0%;
+          min-width: 0;
+          align-self: stretch;
+          /* lane begins ~0.5cm (≈19px) after the text container ends */
+          margin-left: 19px;
           perspective: 800px;
           perspective-origin: 50% 55%;
           overflow: hidden;
