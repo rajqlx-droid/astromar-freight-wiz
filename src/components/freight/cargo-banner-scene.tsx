@@ -121,10 +121,11 @@ export function CargoBannerScene() {
         /* the whole truck */
         .cargo-truck {
           position: absolute;
-          left: -90px;
-          bottom: -2px;
-          width: 64px;
-          height: 30px;
+          left: -120px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 84px;
+          height: 40px;
           animation: cargo-drive 9s linear infinite;
           will-change: transform;
         }
