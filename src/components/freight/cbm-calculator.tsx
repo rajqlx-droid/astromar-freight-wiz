@@ -757,7 +757,7 @@ export function CbmCalculator({ items, setItems }: Props) {
     {!showOptimization && (
       <Card
         id="cbm-optimize-cta"
-        className="border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-4 sm:p-5 scroll-mt-24"
+        className="border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-4 pr-20 sm:p-5 sm:pr-24 scroll-mt-24"
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">
