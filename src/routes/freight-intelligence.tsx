@@ -692,8 +692,6 @@ function FreightIntelligencePage() {
                 </div>
               </div>
 
-              {/* Commercial poster — full-width brand band between heading and calculator */}
-              <CommercialPoster />
 
               {/* Mobile-only optimization promo (full width, since desktop version is inline above) */}
               {active === "cbm" && (
