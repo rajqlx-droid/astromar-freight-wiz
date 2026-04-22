@@ -131,14 +131,14 @@ export function CargoBannerScene() {
         .cargo-speed--2 { top: 42%; animation-delay: 0.9s;  width: 28px; }
         .cargo-speed--3 { top: 64%; animation-delay: 1.7s;  width: 16px; }
 
-        /* the whole truck */
+        /* the whole truck (cab + trailer) */
         .cargo-truck {
           position: absolute;
-          left: -120px;
+          left: -160px;
           top: 50%;
           transform: translateY(-50%);
-          width: 84px;
-          height: 40px;
+          width: 134px;
+          height: 44px;
           animation: cargo-drive 9s linear infinite;
           will-change: transform;
         }
@@ -151,33 +151,16 @@ export function CargoBannerScene() {
           animation: cargo-bob 0.65s ease-in-out infinite;
         }
 
-        /* headlight glow at the front of the container */
-        .cargo-headlight {
-          position: absolute;
-          top: 50%;
-          right: -14px;
-          width: 36px;
-          height: 14px;
-          transform: translateY(-50%);
-          background: radial-gradient(
-            ellipse at left center,
-            rgba(255, 220, 140, 0.85) 0%,
-            rgba(255, 200, 100, 0.35) 35%,
-            transparent 70%
-          );
-          filter: blur(1px);
-          animation: cargo-headlight 1.4s ease-in-out infinite;
-        }
-
-        /* exhaust puffs behind */
+        /* exhaust puffs from the cab stack */
         .cargo-puff {
           position: absolute;
-          bottom: 8px;
-          left: -2px;
+          /* puff drifts up-back from above the cab stack */
+          top: 4px;
+          left: 96px;
           width: 8px;
           height: 8px;
           border-radius: 9999px;
-          background: rgba(255,255,255,0.55);
+          background: rgba(255,255,255,0.6);
           filter: blur(2px);
           opacity: 0;
           animation: cargo-puff 2.2s ease-out infinite;
@@ -186,10 +169,10 @@ export function CargoBannerScene() {
         .cargo-puff--2 { animation-delay: 0.7s; }
         .cargo-puff--3 { animation-delay: 1.4s; }
 
-        /* 3D container body — scaled ~30% larger */
+        /* 3D container body (trailer) — sits on the LEFT (rear of truck) */
         .cargo-box {
           position: absolute;
-          top: 0;
+          top: 4px;
           left: 6px;
           width: 72px;
           height: 32px;
@@ -261,10 +244,103 @@ export function CargoBannerScene() {
           font-family: ui-sans-serif, system-ui, sans-serif;
         }
 
+        /* ===== TRUCK CAB (tractor unit) — sits on the RIGHT, in front ===== */
+        .cargo-cab {
+          position: absolute;
+          top: 6px;
+          left: 84px;
+          width: 44px;
+          height: 30px;
+        }
+        /* lower cab body — dark navy, matches brand */
+        .cargo-cab-body {
+          position: absolute;
+          left: 0;
+          bottom: 0;
+          width: 44px;
+          height: 22px;
+          background: linear-gradient(180deg, #1a3470 0%, #0f2451 100%);
+          border-radius: 3px 4px 2px 2px;
+          box-shadow:
+            inset 0 0 0 1px rgba(0,0,0,0.4),
+            inset -3px 0 6px rgba(0,0,0,0.35);
+        }
+        /* sleeper roof / upper cab */
+        .cargo-cab-roof {
+          position: absolute;
+          left: 2px;
+          bottom: 18px;
+          width: 30px;
+          height: 14px;
+          background: linear-gradient(180deg, #24468a 0%, #15306a 100%);
+          border-radius: 4px 5px 1px 1px;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.4);
+        }
+        /* windshield (front-right of cab) */
+        .cargo-cab-window {
+          position: absolute;
+          right: 2px;
+          bottom: 10px;
+          width: 11px;
+          height: 12px;
+          background: linear-gradient(135deg, #9fd4ff 0%, #4a8fc7 60%, #2c5d8f 100%);
+          border-radius: 2px 3px 1px 1px;
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5);
+        }
+        /* grille */
+        .cargo-cab-grille {
+          position: absolute;
+          right: 0;
+          bottom: 4px;
+          width: 4px;
+          height: 8px;
+          background: repeating-linear-gradient(0deg, #111 0 1px, #333 1px 2px);
+          border-radius: 1px;
+        }
+        /* front bumper */
+        .cargo-cab-bumper {
+          position: absolute;
+          right: -2px;
+          bottom: 1px;
+          width: 6px;
+          height: 4px;
+          background: #2a2a2a;
+          border-radius: 1px;
+          box-shadow: inset 0 -1px 0 #000;
+        }
+        /* exhaust stack behind cab */
+        .cargo-stack {
+          position: absolute;
+          left: -2px;
+          bottom: 16px;
+          width: 3px;
+          height: 14px;
+          background: linear-gradient(180deg, #888 0%, #444 100%);
+          border-radius: 1px 1px 0 0;
+          box-shadow: inset -1px 0 0 rgba(0,0,0,0.5);
+        }
+        /* headlights — two small glows on front-right of cab */
+        .cargo-headlight {
+          position: absolute;
+          right: -10px;
+          width: 22px;
+          height: 8px;
+          background: radial-gradient(
+            ellipse at left center,
+            rgba(255, 230, 160, 0.95) 0%,
+            rgba(255, 200, 100, 0.4) 40%,
+            transparent 75%
+          );
+          filter: blur(0.6px);
+          animation: cargo-headlight 1.4s ease-in-out infinite;
+        }
+        .cargo-headlight--lo { bottom: 3px; }
+        .cargo-headlight--hi { bottom: 9px; opacity: 0.75; }
+
         /* wheels */
         .cargo-wheel {
           position: absolute;
-          bottom: -2px;
+          bottom: 0;
           width: 11px;
           height: 11px;
           border-radius: 9999px;
@@ -281,15 +357,19 @@ export function CargoBannerScene() {
           background: #555;
           border-radius: 9999px;
         }
-        .cargo-wheel--rear  { left: 16px; }
-        .cargo-wheel--front { left: 56px; }
+        /* trailer wheels (left side) */
+        .cargo-wheel--rear     { left: 14px; }
+        .cargo-wheel--mid      { left: 30px; }
+        /* cab wheels (right side) */
+        .cargo-wheel--cab-rear  { left: 88px; }
+        .cargo-wheel--cab-front { left: 116px; }
 
-        /* ground shadow */
+        /* ground shadow — wider for full truck */
         .cargo-shadow {
           position: absolute;
           left: 50%;
           bottom: -5px;
-          width: 78px;
+          width: 130px;
           height: 6px;
           transform: translateX(-50%);
           background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%);
