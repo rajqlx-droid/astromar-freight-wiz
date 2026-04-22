@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 
 /**
  * CargoBannerScene
- * A tiny self-contained CSS-3D scene of a shipping container in motion.
- * Drops into the inline promo banner where the static SVG icon used to live.
+ * A tiny CSS-3D shipping container that physically drives across the banner,
+ * left → right, then loops. Wheels spin, body bobs, ground shadow tracks it.
  * Pure CSS — no Three.js, no canvas, zero new deps.
  */
 export function CargoBannerScene() {
@@ -24,147 +24,169 @@ export function CargoBannerScene() {
       className="cargo-scene pointer-events-none select-none"
       data-reduced={reduced ? "true" : "false"}
     >
-      {/* motion trail dots drifting back */}
-      <span className="cargo-trail cargo-trail--1" />
-      <span className="cargo-trail cargo-trail--2" />
-      <span className="cargo-trail cargo-trail--3" />
+      {/* road / ground line */}
+      <span className="cargo-road" />
+      {/* speed lines */}
+      <span className="cargo-speed cargo-speed--1" />
+      <span className="cargo-speed cargo-speed--2" />
+      <span className="cargo-speed cargo-speed--3" />
 
-      {/* ground shadow */}
-      <span className="cargo-shadow" />
-
-      {/* secondary container in the back, half opacity, offset rotation */}
-      <div className="cargo-stage cargo-stage--back">
-        <div className="cargo-box cargo-box--back">
-          <span className="cargo-face cargo-face--front" />
-          <span className="cargo-face cargo-face--back" />
-          <span className="cargo-face cargo-face--right" />
-          <span className="cargo-face cargo-face--left" />
-          <span className="cargo-face cargo-face--top" />
-          <span className="cargo-face cargo-face--bottom" />
+      {/* the truck travels across */}
+      <div className="cargo-truck">
+        <div className="cargo-bob">
+          {/* 3D container body */}
+          <div className="cargo-box">
+            <span className="cargo-face cargo-face--front">
+              <span className="cargo-doors" />
+            </span>
+            <span className="cargo-face cargo-face--back" />
+            <span className="cargo-face cargo-face--right">
+              <span className="cargo-label">ASTROMAR</span>
+            </span>
+            <span className="cargo-face cargo-face--left">
+              <span className="cargo-label">ASTROMAR</span>
+            </span>
+            <span className="cargo-face cargo-face--top" />
+            <span className="cargo-face cargo-face--bottom" />
+          </div>
+          {/* wheels */}
+          <span className="cargo-wheel cargo-wheel--rear" />
+          <span className="cargo-wheel cargo-wheel--front" />
         </div>
-      </div>
-
-      {/* primary hero container */}
-      <div className="cargo-stage cargo-stage--front">
-        <div className="cargo-box cargo-box--front">
-          <span className="cargo-face cargo-face--front">
-            <span className="cargo-doors" />
-          </span>
-          <span className="cargo-face cargo-face--back" />
-          <span className="cargo-face cargo-face--right">
-            <span className="cargo-label">ASTROMAR</span>
-          </span>
-          <span className="cargo-face cargo-face--left">
-            <span className="cargo-label">ASTROMAR</span>
-          </span>
-          <span className="cargo-face cargo-face--top" />
-          <span className="cargo-face cargo-face--bottom" />
-        </div>
+        {/* ground shadow that travels with the truck */}
+        <span className="cargo-shadow" />
       </div>
 
       <style>{`
         .cargo-scene {
           position: absolute;
-          right: 0.75rem;
+          right: 0.5rem;
           top: 50%;
           transform: translateY(-50%);
-          width: 110px;
-          height: 80px;
-          perspective: 600px;
-          perspective-origin: 50% 45%;
+          width: 180px;
+          height: 70px;
+          perspective: 700px;
+          perspective-origin: 50% 60%;
+          overflow: hidden;
           display: none;
         }
         @media (min-width: 768px) {
           .cargo-scene { display: block; }
         }
 
-        .cargo-stage {
+        /* faint road line at the bottom */
+        .cargo-road {
+          position: absolute;
+          left: 0; right: 0;
+          bottom: 10px;
+          height: 1px;
+          background: linear-gradient(
+            90deg,
+            transparent 0,
+            rgba(255,255,255,0.18) 20%,
+            rgba(255,255,255,0.18) 80%,
+            transparent 100%
+          );
+        }
+
+        /* speed streaks blowing past behind the truck */
+        .cargo-speed {
+          position: absolute;
+          height: 1px;
+          width: 18px;
+          background: linear-gradient(90deg, transparent, rgba(255,127,42,0.85));
+          opacity: 0;
+          animation: cargo-speed 1.6s linear infinite;
+        }
+        .cargo-speed--1 { top: 22%; animation-delay: 0s;    }
+        .cargo-speed--2 { top: 48%; animation-delay: 0.55s; width: 24px; }
+        .cargo-speed--3 { top: 70%; animation-delay: 1.1s;  width: 14px; }
+
+        /* the whole truck moves across the scene */
+        .cargo-truck {
+          position: absolute;
+          left: 0;
+          bottom: 4px;
+          width: 64px;
+          height: 44px;
+          animation: cargo-drive 5.5s linear infinite;
+          will-change: transform;
+        }
+
+        /* gentle vertical bob on top of the horizontal drive */
+        .cargo-bob {
           position: absolute;
           inset: 0;
           transform-style: preserve-3d;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .cargo-stage--front { animation: cargo-float 4s ease-in-out infinite; }
-        .cargo-stage--back {
-          transform: translate3d(-22px, 6px, -40px) scale(0.65);
-          opacity: 0.45;
-          animation: cargo-float 5.5s ease-in-out infinite reverse;
+          animation: cargo-bob 0.6s ease-in-out infinite;
         }
 
+        /* 3D container body — sits on top of the wheels */
         .cargo-box {
-          position: relative;
-          width: 60px;
-          height: 30px;
+          position: absolute;
+          top: 0;
+          left: 4px;
+          width: 56px;
+          height: 28px;
           transform-style: preserve-3d;
-          --depth: 28px;
+          /* slight 3/4 perspective so we read it as a real box */
+          transform: rotateX(-10deg) rotateY(-22deg);
         }
-        .cargo-box--front { animation: cargo-spin 12s linear infinite; }
-        .cargo-box--back  { animation: cargo-spin 18s linear infinite reverse; }
-
         .cargo-face {
           position: absolute;
           display: block;
           background: var(--brand-orange, #ff7f2a);
-          background-image:
-            repeating-linear-gradient(
-              90deg,
-              rgba(0,0,0,0.18) 0 1px,
-              transparent 1px 4px
-            );
-          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
+          background-image: repeating-linear-gradient(
+            90deg,
+            rgba(0,0,0,0.22) 0 1px,
+            transparent 1px 5px
+          );
+          box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3);
         }
-        /* container faces — box: 60w x 30h x 28 depth */
         .cargo-face--front {
-          width: 60px; height: 30px;
-          transform: translateZ(14px);
-          background-image:
-            repeating-linear-gradient(90deg, rgba(0,0,0,0.22) 0 1px, transparent 1px 5px);
+          width: 56px; height: 28px;
+          transform: translateZ(11px);
         }
         .cargo-face--back {
-          width: 60px; height: 30px;
-          transform: rotateY(180deg) translateZ(14px);
-          filter: brightness(0.8);
+          width: 56px; height: 28px;
+          transform: rotateY(180deg) translateZ(11px);
+          filter: brightness(0.78);
         }
         .cargo-face--right {
-          width: 28px; height: 30px;
-          left: 16px;
-          transform: rotateY(90deg) translateZ(30px);
+          width: 22px; height: 28px;
+          left: 17px;
+          transform: rotateY(90deg) translateZ(28px);
           filter: brightness(1.05);
         }
         .cargo-face--left {
-          width: 28px; height: 30px;
-          left: 16px;
-          transform: rotateY(-90deg) translateZ(30px);
+          width: 22px; height: 28px;
+          left: 17px;
+          transform: rotateY(-90deg) translateZ(28px);
           filter: brightness(0.85);
         }
         .cargo-face--top {
-          width: 60px; height: 28px;
-          top: 1px;
-          transform: rotateX(90deg) translateZ(14px);
+          width: 56px; height: 22px;
+          top: 3px;
+          transform: rotateX(90deg) translateZ(11px);
           background: color-mix(in oklab, var(--brand-orange, #ff7f2a) 80%, white);
-          background-image:
-            repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 6px);
+          background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 6px);
         }
         .cargo-face--bottom {
-          width: 60px; height: 28px;
-          top: 1px;
-          transform: rotateX(-90deg) translateZ(14px);
-          filter: brightness(0.55);
+          width: 56px; height: 22px;
+          top: 3px;
+          transform: rotateX(-90deg) translateZ(11px);
+          filter: brightness(0.5);
         }
 
-        /* door split lines on the front face */
+        /* door split lines on front face */
         .cargo-doors {
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(90deg, transparent 49%, rgba(0,0,0,0.45) 49%, rgba(0,0,0,0.45) 51%, transparent 51%),
-            linear-gradient(0deg,  transparent 8%,  rgba(0,0,0,0.3) 8%,  rgba(0,0,0,0.3) 9%,  transparent 9%,
-                                   transparent 91%, rgba(0,0,0,0.3) 91%, rgba(0,0,0,0.3) 92%, transparent 92%);
+            linear-gradient(90deg, transparent 49%, rgba(0,0,0,0.5) 49%, rgba(0,0,0,0.5) 51%, transparent 51%);
         }
 
-        /* side panel ASTROMAR text */
+        /* ASTROMAR side label */
         .cargo-label {
           position: absolute;
           inset: 0;
@@ -173,84 +195,82 @@ export function CargoBannerScene() {
           justify-content: center;
           font-size: 5px;
           font-weight: 800;
-          letter-spacing: 0.12em;
-          color: rgba(255,255,255,0.92);
-          text-shadow: 0 1px 0 rgba(0,0,0,0.35);
+          letter-spacing: 0.14em;
+          color: rgba(255,255,255,0.95);
+          text-shadow: 0 1px 0 rgba(0,0,0,0.4);
           font-family: ui-sans-serif, system-ui, sans-serif;
         }
 
-        /* ground shadow */
+        /* wheels */
+        .cargo-wheel {
+          position: absolute;
+          bottom: 0;
+          width: 9px;
+          height: 9px;
+          border-radius: 9999px;
+          background: #111;
+          box-shadow:
+            inset 0 0 0 1.5px #2a2a2a,
+            inset 0 0 0 3px #111;
+          animation: cargo-wheel 0.45s linear infinite;
+        }
+        .cargo-wheel::after {
+          content: "";
+          position: absolute;
+          inset: 35%;
+          background: #555;
+          border-radius: 9999px;
+        }
+        .cargo-wheel--rear  { left: 10px; }
+        .cargo-wheel--front { left: 44px; }
+
+        /* ground shadow under the truck */
         .cargo-shadow {
           position: absolute;
           left: 50%;
-          bottom: 6px;
+          bottom: -3px;
           width: 64px;
-          height: 8px;
+          height: 6px;
           transform: translateX(-50%);
-          background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%);
+          background: radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 70%);
           filter: blur(2px);
-          animation: cargo-shadow 4s ease-in-out infinite;
+          animation: cargo-shadow 0.6s ease-in-out infinite;
         }
 
-        /* motion trail */
-        .cargo-trail {
-          position: absolute;
-          top: 50%;
-          right: -6px;
-          width: 4px;
-          height: 4px;
-          border-radius: 9999px;
-          background: var(--brand-orange, #ff7f2a);
-          box-shadow: 0 0 6px rgba(255,127,42,0.7);
-          opacity: 0;
-          animation: cargo-trail 3s linear infinite;
+        @keyframes cargo-drive {
+          0%   { transform: translateX(-80px); }
+          100% { transform: translateX(190px); }
         }
-        .cargo-trail--1 { animation-delay: 0s;   top: 30%; }
-        .cargo-trail--2 { animation-delay: 1s;   top: 55%; }
-        .cargo-trail--3 { animation-delay: 2s;   top: 70%; }
-
-        @keyframes cargo-spin {
-          from { transform: rotateX(-12deg) rotateY(0deg); }
-          to   { transform: rotateX(-12deg) rotateY(360deg); }
-        }
-        @keyframes cargo-float {
+        @keyframes cargo-bob {
           0%, 100% { transform: translateY(0); }
-          50%      { transform: translateY(-3px); }
+          50%      { transform: translateY(-1.5px); }
         }
-        .cargo-stage--back {
-          /* keep base translate when floating */
-          animation-name: cargo-float-back;
-        }
-        @keyframes cargo-float-back {
-          0%, 100% { transform: translate3d(-22px, 6px, -40px) scale(0.65); }
-          50%      { transform: translate3d(-22px, 2px, -40px) scale(0.65); }
+        @keyframes cargo-wheel {
+          from { box-shadow: inset 0 0 0 1.5px #2a2a2a, inset 0 0 0 3px #111; transform: rotate(0deg); }
+          to   { box-shadow: inset 0 0 0 1.5px #2a2a2a, inset 0 0 0 3px #111; transform: rotate(360deg); }
         }
         @keyframes cargo-shadow {
-          0%, 100% { transform: translateX(-50%) scale(1, 1);   opacity: 0.55; }
-          50%      { transform: translateX(-50%) scale(0.85, 1); opacity: 0.4; }
+          0%, 100% { transform: translateX(-50%) scaleX(1);    opacity: 0.55; }
+          50%      { transform: translateX(-50%) scaleX(0.92); opacity: 0.4; }
         }
-        @keyframes cargo-trail {
-          0%   { transform: translateX(0)     scale(1);   opacity: 0; }
+        @keyframes cargo-speed {
+          0%   { transform: translateX(190px); opacity: 0; }
           15%  { opacity: 0.9; }
-          100% { transform: translateX(-110px) scale(0.4); opacity: 0; }
+          100% { transform: translateX(-40px); opacity: 0; }
         }
 
-        /* reduced motion: hold a nice 3/4 hero pose, kill all keyframes */
-        .cargo-scene[data-reduced="true"] .cargo-box--front,
-        .cargo-scene[data-reduced="true"] .cargo-box--back,
-        .cargo-scene[data-reduced="true"] .cargo-stage--front,
-        .cargo-scene[data-reduced="true"] .cargo-stage--back,
+        /* reduced motion: park the truck centered, kill animations */
+        .cargo-scene[data-reduced="true"] .cargo-truck,
+        .cargo-scene[data-reduced="true"] .cargo-bob,
+        .cargo-scene[data-reduced="true"] .cargo-wheel,
         .cargo-scene[data-reduced="true"] .cargo-shadow,
-        .cargo-scene[data-reduced="true"] .cargo-trail {
+        .cargo-scene[data-reduced="true"] .cargo-speed {
           animation: none !important;
         }
-        .cargo-scene[data-reduced="true"] .cargo-box--front {
-          transform: rotateX(-15deg) rotateY(-28deg);
+        .cargo-scene[data-reduced="true"] .cargo-truck {
+          transform: translateX(60px);
         }
-        .cargo-scene[data-reduced="true"] .cargo-box--back {
-          transform: rotateX(-15deg) rotateY(-28deg);
-        }
-        .cargo-scene[data-reduced="true"] .cargo-trail { display: none; }
+        .cargo-scene[data-reduced="true"] .cargo-speed { display: none; }
       `}</style>
     </div>
   );
