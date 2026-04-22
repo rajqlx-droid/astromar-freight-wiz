@@ -582,9 +582,8 @@ function FreightIntelligencePage() {
                   </div>
                 </div>
 
-                {/* Optimization Plan promo banner — CBM only, slots between title and action stack on desktop */}
-                {active === "cbm" && (
-                  <div
+                {/* Optimization Plan promo banner — shown on every tool, slots between title and action stack on desktop */}
+                <div
                     className="no-print group/ad relative hidden flex-1 overflow-hidden rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-navy via-[#0f2451] to-[#1a3470] px-5 py-3.5 text-white shadow-[0_4px_20px_-4px_rgba(10,30,80,0.4)] ring-1 ring-inset ring-white/5 md:flex md:items-center md:gap-5"
                   >
                     {/* Subtle dot pattern overlay */}
@@ -623,7 +622,6 @@ function FreightIntelligencePage() {
                       <CargoBannerScene />
                     </div>
                   </div>
-                )}
 
                 {/* Action cluster: Compare/History stacked vertically (1 column, 2 rows) */}
                 <div className="ml-auto flex shrink-0 flex-col items-stretch gap-1.5 rounded-lg border border-brand-navy/30 bg-background p-1.5 shadow-sm">
