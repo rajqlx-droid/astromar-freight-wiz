@@ -106,11 +106,11 @@ export function CargoBannerScene() {
         /* the whole truck moves across the scene */
         .cargo-truck {
           position: absolute;
-          left: 0;
-          bottom: 4px;
+          left: -80px;
+          bottom: -2px;
           width: 64px;
-          height: 44px;
-          animation: cargo-drive 5.5s linear infinite;
+          height: 30px;
+          animation: cargo-drive 7s linear infinite;
           will-change: transform;
         }
 
