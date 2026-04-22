@@ -59,15 +59,17 @@ export function CargoBannerScene() {
 
       <style>{`
         .cargo-scene {
-          position: relative;
-          flex: 1 1 auto;
-          min-width: 120px;
-          height: 56px;
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 30px;
           perspective: 700px;
           perspective-origin: 50% 60%;
           overflow: hidden;
           display: none;
-          z-index: 10;
+          z-index: 1;
+          opacity: 0.55;
         }
         @media (min-width: 768px) {
           .cargo-scene { display: block; }
@@ -104,11 +106,11 @@ export function CargoBannerScene() {
         /* the whole truck moves across the scene */
         .cargo-truck {
           position: absolute;
-          left: 0;
-          bottom: 4px;
+          left: -80px;
+          bottom: -2px;
           width: 64px;
-          height: 44px;
-          animation: cargo-drive 5.5s linear infinite;
+          height: 30px;
+          animation: cargo-drive 7s linear infinite;
           will-change: transform;
         }
 
@@ -237,8 +239,8 @@ export function CargoBannerScene() {
         }
 
         @keyframes cargo-drive {
-          0%   { transform: translateX(-90px); }
-          100% { transform: translateX(100%); }
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(calc(100vw + 160px)); }
         }
         @keyframes cargo-bob {
           0%, 100% { transform: translateY(0); }
