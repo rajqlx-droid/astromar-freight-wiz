@@ -673,8 +673,7 @@ function FreightIntelligencePage() {
 
 
               {/* Mobile-only optimization promo (full width, since desktop version is inline above) */}
-              {active === "cbm" && (
-                <div
+              <div
                   className="no-print mb-3 overflow-hidden rounded-xl border border-brand-navy/10 bg-gradient-to-r from-brand-navy to-[#1a2f5a] px-3 py-2.5 text-white shadow-sm md:hidden"
                 >
                   <div className="flex items-center gap-2">
@@ -683,21 +682,22 @@ function FreightIntelligencePage() {
                       <p className="truncate text-xs font-bold">Get your container optimization plan</p>
                       <p className="truncate text-[11px] text-white/70">Recommend the best container, render a 3D loading plan</p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        document
-                          .getElementById("cbm-optimize-cta")
-                          ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                      }
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-orange px-2.5 py-1.5 text-[11px] font-semibold text-white"
-                    >
-                      View
-                      <ArrowRight className="size-3" />
-                    </button>
+                    {active === "cbm" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          document
+                            .getElementById("cbm-optimize-cta")
+                            ?.scrollIntoView({ behavior: "smooth", block: "center" })
+                        }
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md bg-brand-orange px-2.5 py-1.5 text-[11px] font-semibold text-white"
+                      >
+                        View
+                        <ArrowRight className="size-3" />
+                      </button>
+                    )}
                   </div>
                 </div>
-              )}
 
               {/* Pro tip — full-width row below heading, no overlap with controls */}
               {bannerOpen && (
