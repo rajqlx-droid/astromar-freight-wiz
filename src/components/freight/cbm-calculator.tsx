@@ -575,7 +575,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   return (
     <div className="space-y-6">
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      <div className="space-y-3 lg:col-span-5">
+      <div className="space-y-3 lg:col-span-7">
         {draftItems.map((it, idx) => (
           <CbmRow
             key={it.id}
@@ -686,7 +686,7 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Card>
         )}
       </div>
-      <div className="lg:col-span-7">
+      <div className="lg:col-span-5">
       {/* Results card sits beside inputs on lg+; stacks below on mobile.
           NOTE: sticky positioning was removed — the WebGL canvas in the
           optimization block could break out of the sticky stacking context
