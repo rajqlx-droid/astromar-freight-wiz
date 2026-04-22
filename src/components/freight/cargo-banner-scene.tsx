@@ -130,12 +130,12 @@ export function CargoBannerScene() {
         /* the whole truck (cab + trailer) */
         .cargo-truck {
           position: absolute;
-          left: -160px;
+          left: 0;
           top: 50%;
           transform: translateY(-50%);
           width: 134px;
           height: 44px;
-          animation: cargo-drive 9s linear infinite;
+          animation: cargo-drive 7s linear infinite;
           will-change: transform;
         }
 
@@ -374,8 +374,11 @@ export function CargoBannerScene() {
         }
 
         @keyframes cargo-drive {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(calc(100% + 200px)); }
+          /* enter from the left edge of the lane, exit fully past the right */
+          0%   { transform: translate(-160px, -50%); }
+          100% { transform: translate(calc(100cqw + 20px), -50%); }
+        }
+        .cargo-scene { container-type: inline-size; }
         }
         @keyframes cargo-bob {
           0%, 100% { transform: translateY(0); }
