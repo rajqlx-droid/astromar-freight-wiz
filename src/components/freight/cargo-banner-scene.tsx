@@ -173,13 +173,13 @@ export function CargoBannerScene() {
         .cargo-puff--2 { animation-delay: 0.7s; }
         .cargo-puff--3 { animation-delay: 1.4s; }
 
-        /* 3D container body */
+        /* 3D container body — scaled ~30% larger */
         .cargo-box {
           position: absolute;
           top: 0;
-          left: 4px;
-          width: 56px;
-          height: 24px;
+          left: 6px;
+          width: 72px;
+          height: 32px;
           transform-style: preserve-3d;
           transform: rotateX(-10deg) rotateY(-22deg);
         }
@@ -190,42 +190,42 @@ export function CargoBannerScene() {
           background-image: repeating-linear-gradient(
             90deg,
             rgba(0,0,0,0.22) 0 1px,
-            transparent 1px 5px
+            transparent 1px 6px
           );
           box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3);
         }
         .cargo-face--front {
-          width: 56px; height: 24px;
-          transform: translateZ(10px);
+          width: 72px; height: 32px;
+          transform: translateZ(13px);
         }
         .cargo-face--back {
-          width: 56px; height: 24px;
-          transform: rotateY(180deg) translateZ(10px);
+          width: 72px; height: 32px;
+          transform: rotateY(180deg) translateZ(13px);
           filter: brightness(0.78);
         }
         .cargo-face--right {
-          width: 20px; height: 24px;
-          left: 18px;
-          transform: rotateY(90deg) translateZ(28px);
+          width: 26px; height: 32px;
+          left: 23px;
+          transform: rotateY(90deg) translateZ(36px);
           filter: brightness(1.05);
         }
         .cargo-face--left {
-          width: 20px; height: 24px;
-          left: 18px;
-          transform: rotateY(-90deg) translateZ(28px);
+          width: 26px; height: 32px;
+          left: 23px;
+          transform: rotateY(-90deg) translateZ(36px);
           filter: brightness(0.85);
         }
         .cargo-face--top {
-          width: 56px; height: 20px;
-          top: 2px;
-          transform: rotateX(90deg) translateZ(10px);
+          width: 72px; height: 26px;
+          top: 3px;
+          transform: rotateX(90deg) translateZ(13px);
           background: color-mix(in oklab, var(--brand-orange, #ff7f2a) 80%, white);
           background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 6px);
         }
         .cargo-face--bottom {
-          width: 56px; height: 20px;
-          top: 2px;
-          transform: rotateX(-90deg) translateZ(10px);
+          width: 72px; height: 26px;
+          top: 3px;
+          transform: rotateX(-90deg) translateZ(13px);
           filter: brightness(0.5);
         }
         .cargo-doors {
