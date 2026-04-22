@@ -619,7 +619,7 @@ function FreightIntelligencePage() {
                         <p className="truncate text-xs text-white/70">Recommend the best container, render a 3D loading plan</p>
                       </div>
                     </div>
-                    {/* Live 3D cargo scene — fills space between text and View plan button, starts ~0.5cm after text */}
+                    {/* Live 3D cargo scene — drives across the full banner, bottom lane */}
                     <CargoBannerScene />
                     <button
                       type="button"
