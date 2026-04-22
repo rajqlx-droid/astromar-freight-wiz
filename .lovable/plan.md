@@ -1,69 +1,56 @@
 
 
-## Foundation-of-Loading Rules — make gaps and floating cargo block compliance
+## Replace existing CTA banner with commercial poster, placed between Load Optimizer heading and Compare/History controls
 
-### What you saw in the screenshot
+### Placement (confirmed)
 
-- Row 5 reports **"GAPS IN ROW · 15% VOID"** in red — yet the global badge still reads **"100 COMPLIANT ✓"**.
-- The pallets at floor level appear to **float** with daylight visible underneath / between them.
-- Compliance score (`src/lib/freight/compliance.ts`) only inspects: weight, CoG, placed%, utilisation%. It is **blind** to gaps, support quality, floor coverage, and ceiling clearance — the actual physical "foundation of loading" rules.
-
-### What changes
-
-**1. Extend `compliance.ts` with the 4 missing foundation rules**
-
-Add these checks alongside the existing ones. Each contributes to the score and surfaces a violation card in the loader HUD:
-
-| Rule | Check | Severity | Penalty |
-|---|---|---|---|
-| `FLOATING_CARGO` | Any placed box with `z > 1mm` whose support ratio < 0.9 (recomputed from the height-map snapshot) | RED | -25, blocks export |
-| `FLOOR_GAP` | Any row's `wallUtilizationPct < 90%` (already computed in `loading-rows.ts`) | YELLOW (≥1 row) / RED (≥3 rows or any row < 75%) | -5 per row, capped at -20 |
-| `FOUNDATION_WEAK` | Any stacked box whose supporters' combined `maxStackWeightKg` is exceeded, OR resting on < 60% solid contact | RED | -20 |
-| `CEILING_CLEARANCE` | Any box with `z + h > C.h - CEILING_RESERVE_MM` (already tracked as `nearCeilingPlacedIdxs`) | YELLOW | -5 |
-
-After these additions the badge in the screenshot would correctly read **"REVIEW REQUIRED"** (yellow) instead of "100 COMPLIANT".
-
-**2. Surface gap data the scorer needs**
-
-`computeComplianceReport` currently receives only `AdvancedPackResult`. Extend its signature to optionally accept the pre-computed `RowGroup[]` from `loading-rows.ts`:
-
-```ts
-computeComplianceReport(pack, { rows? })
+```text
+┌─────────────────────────────────────────────┐
+│  Calculator panel (CBM / Air / …)           │
+├─────────────────────────────────────────────┤
+│  "Container Load Optimizer" heading         │
+├─────────────────────────────────────────────┤
+│  ❮ COMMERCIAL POSTER (new) ❯                │  ← inserted here
+├─────────────────────────────────────────────┤
+│  Compare scenarios + History buttons        │
+├─────────────────────────────────────────────┤
+│  3D viewer / loader HUD / rows              │
+├─────────────────────────────────────────────┤
+│  FAQ / Footer                               │
+└─────────────────────────────────────────────┘
 ```
 
-When `rows` are provided, the FLOOR_GAP rule runs. All call sites in `cbm-calculator.tsx`, `scenario-runner.ts`, and the PDF generator pass the rows they already build.
+And the existing dark-navy "Need expert assistance?" banner below the optimizer is **removed**.
 
-**3. Eliminate the "floating cargo" visual artifact**
+### What gets built
 
-Two real causes, fixed independently:
+**New file** `src/components/freight/commercial-poster.tsx` — a self-contained cinematic ad unit:
 
-- **Packer side** (`packing-advanced.ts`): the snap-to-neighbour pass already exists for X and Y. Add a **snap-down on Z** pass that, after each placement, lowers the box until its bottom touches either floor (`z = 0`) or another box's top. This closes the sub-stride vertical gaps that appear when a box was placed on a tall neighbour but a shorter neighbour was added later.
-- **Renderer side** (`container-3d-view.tsx`): the apparent floor gap in the screenshot is partly a Z-fighting artifact between the floor mesh and box bottoms. Lift the floor mesh by 2mm and shrink box bottoms by 1mm so the floor is always behind the boxes from any angle.
+- Full-width band, ~340–440 px tall on desktop, scales gracefully down to ~220 px on mobile (948 px viewport included)
+- Deep navy plate (`var(--brand-navy-strong)`) with layered SVG artwork:
+  - Port-crane + container-ship skyline silhouette (pure SVG, no asset upload)
+  - Dotted halftone overlay for print-ad texture
+  - Bold diagonal orange slash (`var(--brand-orange)`) as the graphic device
+- Top-left "ASTROMAR │ LOGISTICS" lockup, small-caps, like a print sign-off
+- Hero claim: **"MOVE CARGO LIKE YOU MEAN IT."** — condensed all-caps, `clamp(2rem, 6vw, 4.5rem)`, leading-none
+- Sub-claim: one short line — "End-to-end freight, customs and FTWZ — out of Chennai."
+- Single high-contrast pill CTA "Talk to Astromar →" + tappable phone line `+91 99402 11014`
+- Bottom credibility strip: "25+ YRS · 50K+ TEU MOVED · FTWZ LICENSED · CHENNAI" in tracked-out uppercase
+- Subtle parallax on the diagonal slash + slow skyline drift on hover (desktop only, gated by `prefers-reduced-motion`)
 
-**4. New "Foundation Audit" card in the load report**
+**Edits to** `src/routes/freight-intelligence.tsx`:
 
-Below the existing wall-efficiency strip, add a 4-row checklist:
+1. Insert `<CommercialPoster />` immediately **after** the "Container Load Optimizer" section heading and **before** the Compare scenarios / History action row
+2. **Delete** the existing post-optimizer CTA `<section>` (the dark-navy "Need expert assistance with your shipment?" block with phone/email chips and two buttons)
 
-```
-Foundation Audit
-✓  All boxes resting on floor or solid support
-✗  Floor gaps in 2 rows  →  Re-shuffle (see row 5, row 12)
-✓  No stack-weight overload
-✓  Roof clearance OK (80mm reserve)
-```
+### Files touched
 
-Clicking a failed row scrolls to that row in the existing loading-rows panel.
-
-### Technical notes
-
-- **Files touched**: `src/lib/freight/compliance.ts` (rules + signature), `src/lib/freight/packing-advanced.ts` (Z-snap pass), `src/components/freight/container-3d-view.tsx` (floor offset), `src/components/freight/loader-hud.tsx` (Foundation Audit card), `src/components/freight/cbm-calculator.tsx` + `src/lib/freight/scenario-runner.ts` + `src/lib/freight/pdf.ts` (pass rows into the scorer).
-- **No data-model changes.** `RowGroup`, `AdvancedPackResult`, and `PlacedBox` already carry every field the new rules need (`wallUtilizationPct`, `gapWarning`, `nearCeilingPlacedIdxs`, `loadKg`, `maxStackWeightKg`).
-- **Scenario comparison stays correct.** Because every strategy is re-scored with the same rules, the Best badge will still rank by truthful compliance instead of placed%-only ties.
-- **Export gating.** `canApprove` (already used to block PDF export) now flips to `false` for any RED foundation violation, preventing loaders from sealing a container with floating cargo.
+- `src/components/freight/commercial-poster.tsx` *(new)*
+- `src/routes/freight-intelligence.tsx` *(insert one component, delete old CTA section)*
 
 ### Out of scope
 
-- No changes to the packing algorithm's placement strategy, item rotation rules, or container presets.
-- No changes to the 3D camera / loading video — those were addressed in the previous turn.
-- No new dependencies.
+- Calculator, 3D viewer, loader HUD, FAQ, footer — untouched
+- No new dependencies — pure SVG + Tailwind tokens already in the theme
+- Copy lives in one component; easy to edit later
 
