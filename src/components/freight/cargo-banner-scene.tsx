@@ -85,8 +85,8 @@ export function CargoBannerScene() {
       <style>{`
         .cargo-scene {
           position: absolute;
-          /* lane begins ~1cm (≈38px) after the "...plan" text */
-          left: calc(55% + 38px);
+          /* lane begins ~0.5cm (≈19px) after the "...plan" text */
+          left: calc(50% + 19px);
           right: 0;
           top: 0;
           bottom: 0;
