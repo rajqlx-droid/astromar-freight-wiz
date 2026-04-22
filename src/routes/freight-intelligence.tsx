@@ -584,7 +584,7 @@ function FreightIntelligencePage() {
 
                 {/* Optimization Plan promo banner — shown on every tool, slots between title and action stack on desktop */}
                 <div
-                    className="no-print group/ad relative hidden flex-1 overflow-hidden rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-navy via-[#0f2451] to-[#1a3470] px-5 py-3.5 text-white shadow-[0_4px_20px_-4px_rgba(10,30,80,0.4)] ring-1 ring-inset ring-white/5 md:flex md:items-center md:gap-5"
+                    className="no-print group/ad relative mx-2 hidden flex-1 overflow-hidden rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-navy via-[#0f2451] to-[#1a3470] px-5 py-3.5 text-white shadow-[0_4px_20px_-4px_rgba(10,30,80,0.4)] ring-1 ring-inset ring-white/5 md:flex md:items-center md:gap-5 lg:mx-4"
                   >
                     {/* Subtle dot pattern overlay */}
                     <div
