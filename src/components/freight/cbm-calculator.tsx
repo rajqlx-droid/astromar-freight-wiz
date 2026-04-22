@@ -775,40 +775,23 @@ export function CbmCalculator({ items, setItems }: Props) {
                 Get container optimization plan
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                Stop guessing which container fits your shipment. Our optimizer evaluates
-                every standard container (20ft, 40ft, 40ft HC, 45ft) against your cargo
-                dimensions, weight limits and stacking rules — then renders a complete,
-                row-by-row loading plan you can hand to your warehouse team.
+                Find the best-fit container for your cargo and get an interactive 3D loading
+                plan, row-by-row instructions and a branded PDF — ready for your forwarder.
               </p>
-              <ul className="mt-3 grid grid-cols-1 gap-x-4 gap-y-2 text-[13px] text-brand-navy/85 sm:grid-cols-2">
-                <li className="flex items-start gap-2">
-                  <ContainerIcon className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-                  <span><span className="font-semibold">Best-fit container</span> — recommended size with utilization %, payload margin and cost-per-CBM.</span>
+              <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-brand-navy/85">
+                <li className="flex items-center gap-1.5">
+                  <ContainerIcon className="size-4 text-brand-orange" /> Best-fit container
                 </li>
-                <li className="flex items-start gap-2">
-                  <Box className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-                  <span><span className="font-semibold">Interactive 3D loading plan</span> — rotate, inspect every carton and verify clearance before booking.</span>
+                <li className="flex items-center gap-1.5">
+                  <Box className="size-4 text-brand-orange" /> 3D loading plan
                 </li>
-                <li className="flex items-start gap-2">
-                  <Layers className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-                  <span><span className="font-semibold">Row-by-row instructions</span> — fragile, heavy and non-stack rules respected automatically.</span>
+                <li className="flex items-center gap-1.5">
+                  <Video className="size-4 text-brand-orange" /> Loading video
                 </li>
-                <li className="flex items-start gap-2">
-                  <Video className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-                  <span><span className="font-semibold">Loading sequence video</span> — share with the loading crew so cargo lands right the first time.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Ruler className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-                  <span><span className="font-semibold">Wall &amp; floor utilization</span> — spot wasted space and rebalance items in seconds.</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <FileDown className="mt-0.5 size-4 shrink-0 text-brand-orange" />
-                  <span><span className="font-semibold">Branded PDF export</span> — full report with diagrams, KPIs and packing list, ready for the forwarder.</span>
+                <li className="flex items-center gap-1.5">
+                  <FileDown className="size-4 text-brand-orange" /> PDF export
                 </li>
               </ul>
-              <p className="mt-3 text-[12px] italic text-muted-foreground">
-                Takes 30 seconds — we'll just ask a few packing questions (fragile, stackable, orientation) before generating the plan.
-              </p>
             </div>
           </div>
           {hasAnyDims ? (
