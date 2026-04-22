@@ -606,15 +606,13 @@ function FreightIntelligencePage() {
                       className="pointer-events-none absolute -left-6 top-1/2 size-24 -translate-y-1/2 rounded-full bg-brand-orange/20 blur-2xl"
                     />
                     <div className="relative z-10 flex min-w-0 shrink items-center gap-3">
-                      <div className="group/icon relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-orange/25 via-brand-orange/10 to-transparent ring-1 ring-brand-orange/30 transition-transform duration-500 hover:rotate-6 hover:scale-110">
-                        {/* Rotating conic sheen border */}
+                      <div className="relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-brand-orange/30 via-brand-orange/15 to-transparent ring-1 ring-brand-orange/40 transition-transform duration-500 hover:scale-110">
+                        {/* Shimmer sweep — diagonal light streak */}
                         <span
                           aria-hidden
-                          className="pointer-events-none absolute -inset-px rounded-lg opacity-70 [background:conic-gradient(from_0deg,transparent_0deg,rgba(255,127,42,0.8)_60deg,transparent_140deg,transparent_220deg,rgba(255,127,42,0.6)_300deg,transparent_360deg)] [animation:spin_6s_linear_infinite] [mask:linear-gradient(#000,#000)_content-box,linear-gradient(#000,#000)] [mask-composite:exclude] [-webkit-mask-composite:xor] p-px motion-reduce:animate-none"
+                          className="pointer-events-none absolute inset-y-0 -left-full w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/60 to-transparent [animation:shimmer-sweep_3.5s_ease-in-out_infinite] motion-reduce:hidden"
                         />
-                        {/* Inner solid fill so the conic only shows as a border */}
-                        <span aria-hidden className="absolute inset-[1.5px] rounded-[7px] bg-[#0c1a3a]" />
-                        <Sparkles className="relative size-4 text-brand-orange" />
+                        <Sparkles className="relative size-4 text-brand-orange drop-shadow-[0_0_4px_rgba(255,127,42,0.6)]" />
                       </div>
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-2">
