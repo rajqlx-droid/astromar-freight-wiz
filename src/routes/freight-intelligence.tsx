@@ -44,7 +44,6 @@ import { MobileResultBar } from "@/components/freight/mobile-result-bar";
 import { MiniHistoryStrip } from "@/components/freight/mini-history-strip";
 import { CompareDialog } from "@/components/freight/compare-dialog";
 import { SplitCompareView } from "@/components/freight/split-compare-view";
-import { CommercialPoster } from "@/components/freight/commercial-poster";
 import { CALCULATORS, type CalcKey } from "@/lib/freight/types";
 import {
   calcAir,
@@ -692,8 +691,6 @@ function FreightIntelligencePage() {
                 </div>
               </div>
 
-              {/* Commercial poster — full-width brand band between heading and calculator */}
-              <CommercialPoster />
 
               {/* Mobile-only optimization promo (full width, since desktop version is inline above) */}
               {active === "cbm" && (
