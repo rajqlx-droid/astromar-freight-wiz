@@ -618,7 +618,7 @@ function FreightIntelligencePage() {
                           <span className="rounded-sm bg-brand-orange/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-orange ring-1 ring-brand-orange/30">Free</span>
                           <p className="truncate text-sm font-bold leading-tight">Get your container optimization plan</p>
                         </div>
-                        <p className="truncate text-xs text-white/70">Enter cargo → 3D + 2D loading visuals</p>
+                        <p className="truncate text-xs text-white/70">Recommend the best container, render a 3D loading plan</p>
                       </div>
                     </div>
                     <button
@@ -694,7 +694,7 @@ function FreightIntelligencePage() {
                     <Sparkles className="size-4 shrink-0 text-brand-orange" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-xs font-bold">Get your container optimization plan</p>
-                      <p className="truncate text-[11px] text-white/70">Enter cargo → 3D + 2D loading visuals</p>
+                      <p className="truncate text-[11px] text-white/70">Recommend the best container, render a 3D loading plan</p>
                     </div>
                     <button
                       type="button"
