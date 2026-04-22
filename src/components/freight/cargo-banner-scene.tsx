@@ -237,8 +237,8 @@ export function CargoBannerScene() {
         }
 
         @keyframes cargo-drive {
-          0%   { transform: translateX(-120px); }
-          100% { transform: translateX(140px); }
+          0%   { transform: translateX(-90px); }
+          100% { transform: translateX(100%); }
         }
         @keyframes cargo-bob {
           0%, 100% { transform: translateY(0); }
