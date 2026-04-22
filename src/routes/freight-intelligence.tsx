@@ -606,9 +606,7 @@ function FreightIntelligencePage() {
                       aria-hidden
                       className="pointer-events-none absolute -left-6 top-1/2 size-24 -translate-y-1/2 rounded-full bg-brand-orange/20 blur-2xl"
                     />
-                    {/* Live 3D cargo scene — drives across the full banner, bottom lane */}
-                    <CargoBannerScene />
-                    <div className="relative z-10 flex min-w-0 flex-1 items-center gap-3">
+                    <div className="relative z-10 flex min-w-0 shrink-0 items-center gap-3">
                       <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 ring-1 ring-brand-orange/30">
                         <Sparkles className="size-4 text-brand-orange" />
                         <span className="absolute -right-0.5 -top-0.5 size-2 animate-pulse rounded-full bg-brand-orange shadow-[0_0_8px_rgba(255,127,42,0.8)]" />
