@@ -773,7 +773,7 @@ export function CbmCalculator({ items, setItems }: Props) {
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Find the best-fit container for your cargo and get an interactive 3D loading
-                plan, row-by-row instructions and a branded PDF — ready for your forwarder.
+                plan with row-by-row instructions — ready for your forwarder.
               </p>
               <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-brand-navy/85">
                 <li className="flex items-center gap-1.5">
