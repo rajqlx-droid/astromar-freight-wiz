@@ -72,17 +72,17 @@ export function CargoBannerScene() {
       <style>{`
         .cargo-scene {
           position: absolute;
-          /* start lane after the text block — roughly past the "plan" word */
-          left: 55%;
+          /* lane begins ~1cm (≈38px) after the "...plan" text */
+          left: calc(55% + 38px);
           right: 0;
+          top: 0;
           bottom: 0;
-          height: 36px;
-          perspective: 700px;
-          perspective-origin: 50% 60%;
+          perspective: 800px;
+          perspective-origin: 50% 55%;
           overflow: hidden;
           display: none;
           z-index: 1;
-          opacity: 0.85;
+          opacity: 0.9;
         }
         @media (min-width: 768px) {
           .cargo-scene { display: block; }
@@ -121,10 +121,11 @@ export function CargoBannerScene() {
         /* the whole truck */
         .cargo-truck {
           position: absolute;
-          left: -90px;
-          bottom: -2px;
-          width: 64px;
-          height: 30px;
+          left: -120px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 84px;
+          height: 40px;
           animation: cargo-drive 9s linear infinite;
           will-change: transform;
         }
@@ -172,13 +173,13 @@ export function CargoBannerScene() {
         .cargo-puff--2 { animation-delay: 0.7s; }
         .cargo-puff--3 { animation-delay: 1.4s; }
 
-        /* 3D container body */
+        /* 3D container body — scaled ~30% larger */
         .cargo-box {
           position: absolute;
           top: 0;
-          left: 4px;
-          width: 56px;
-          height: 24px;
+          left: 6px;
+          width: 72px;
+          height: 32px;
           transform-style: preserve-3d;
           transform: rotateX(-10deg) rotateY(-22deg);
         }
@@ -189,42 +190,42 @@ export function CargoBannerScene() {
           background-image: repeating-linear-gradient(
             90deg,
             rgba(0,0,0,0.22) 0 1px,
-            transparent 1px 5px
+            transparent 1px 6px
           );
           box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3);
         }
         .cargo-face--front {
-          width: 56px; height: 24px;
-          transform: translateZ(10px);
+          width: 72px; height: 32px;
+          transform: translateZ(13px);
         }
         .cargo-face--back {
-          width: 56px; height: 24px;
-          transform: rotateY(180deg) translateZ(10px);
+          width: 72px; height: 32px;
+          transform: rotateY(180deg) translateZ(13px);
           filter: brightness(0.78);
         }
         .cargo-face--right {
-          width: 20px; height: 24px;
-          left: 18px;
-          transform: rotateY(90deg) translateZ(28px);
+          width: 26px; height: 32px;
+          left: 23px;
+          transform: rotateY(90deg) translateZ(36px);
           filter: brightness(1.05);
         }
         .cargo-face--left {
-          width: 20px; height: 24px;
-          left: 18px;
-          transform: rotateY(-90deg) translateZ(28px);
+          width: 26px; height: 32px;
+          left: 23px;
+          transform: rotateY(-90deg) translateZ(36px);
           filter: brightness(0.85);
         }
         .cargo-face--top {
-          width: 56px; height: 20px;
-          top: 2px;
-          transform: rotateX(90deg) translateZ(10px);
+          width: 72px; height: 26px;
+          top: 3px;
+          transform: rotateX(90deg) translateZ(13px);
           background: color-mix(in oklab, var(--brand-orange, #ff7f2a) 80%, white);
           background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0 1px, transparent 1px 6px);
         }
         .cargo-face--bottom {
-          width: 56px; height: 20px;
-          top: 2px;
-          transform: rotateX(-90deg) translateZ(10px);
+          width: 72px; height: 26px;
+          top: 3px;
+          transform: rotateX(-90deg) translateZ(13px);
           filter: brightness(0.5);
         }
         .cargo-doors {
@@ -239,7 +240,7 @@ export function CargoBannerScene() {
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 4.5px;
+          font-size: 6px;
           font-weight: 800;
           letter-spacing: 0.14em;
           color: rgba(255,255,255,0.95);
@@ -251,13 +252,13 @@ export function CargoBannerScene() {
         .cargo-wheel {
           position: absolute;
           bottom: -2px;
-          width: 8px;
-          height: 8px;
+          width: 11px;
+          height: 11px;
           border-radius: 9999px;
           background: #111;
           box-shadow:
-            inset 0 0 0 1.2px #2a2a2a,
-            inset 0 0 0 2.5px #111;
+            inset 0 0 0 1.5px #2a2a2a,
+            inset 0 0 0 3px #111;
           animation: cargo-wheel 0.6s linear infinite;
         }
         .cargo-wheel::after {
@@ -267,16 +268,16 @@ export function CargoBannerScene() {
           background: #555;
           border-radius: 9999px;
         }
-        .cargo-wheel--rear  { left: 12px; }
-        .cargo-wheel--front { left: 44px; }
+        .cargo-wheel--rear  { left: 16px; }
+        .cargo-wheel--front { left: 56px; }
 
         /* ground shadow */
         .cargo-shadow {
           position: absolute;
           left: 50%;
-          bottom: -4px;
-          width: 60px;
-          height: 5px;
+          bottom: -5px;
+          width: 78px;
+          height: 6px;
           transform: translateX(-50%);
           background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%);
           filter: blur(2px);
