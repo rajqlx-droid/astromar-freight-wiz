@@ -13,7 +13,6 @@ import {
   Container as ContainerIcon,
   Box,
   Video,
-  FileDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -774,7 +773,7 @@ export function CbmCalculator({ items, setItems }: Props) {
               </h3>
               <p className="mt-1 text-sm text-muted-foreground">
                 Find the best-fit container for your cargo and get an interactive 3D loading
-                plan, row-by-row instructions and a branded PDF — ready for your forwarder.
+                plan with row-by-row instructions — ready for your forwarder.
               </p>
               <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-brand-navy/85">
                 <li className="flex items-center gap-1.5">
@@ -785,9 +784,6 @@ export function CbmCalculator({ items, setItems }: Props) {
                 </li>
                 <li className="flex items-center gap-1.5">
                   <Video className="size-4 text-brand-orange" /> Loading video
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <FileDown className="size-4 text-brand-orange" /> PDF export
                 </li>
               </ul>
             </div>
