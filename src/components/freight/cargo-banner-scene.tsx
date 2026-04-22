@@ -240,7 +240,7 @@ export function CargoBannerScene() {
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 4.5px;
+          font-size: 6px;
           font-weight: 800;
           letter-spacing: 0.14em;
           color: rgba(255,255,255,0.95);
@@ -252,13 +252,13 @@ export function CargoBannerScene() {
         .cargo-wheel {
           position: absolute;
           bottom: -2px;
-          width: 8px;
-          height: 8px;
+          width: 11px;
+          height: 11px;
           border-radius: 9999px;
           background: #111;
           box-shadow:
-            inset 0 0 0 1.2px #2a2a2a,
-            inset 0 0 0 2.5px #111;
+            inset 0 0 0 1.5px #2a2a2a,
+            inset 0 0 0 3px #111;
           animation: cargo-wheel 0.6s linear infinite;
         }
         .cargo-wheel::after {
@@ -268,16 +268,16 @@ export function CargoBannerScene() {
           background: #555;
           border-radius: 9999px;
         }
-        .cargo-wheel--rear  { left: 12px; }
-        .cargo-wheel--front { left: 44px; }
+        .cargo-wheel--rear  { left: 16px; }
+        .cargo-wheel--front { left: 56px; }
 
         /* ground shadow */
         .cargo-shadow {
           position: absolute;
           left: 50%;
-          bottom: -4px;
-          width: 60px;
-          height: 5px;
+          bottom: -5px;
+          width: 78px;
+          height: 6px;
           transform: translateX(-50%);
           background: radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 70%);
           filter: blur(2px);
