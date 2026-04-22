@@ -35,16 +35,13 @@ export function CargoBannerScene() {
 
       {/* the truck */}
       <div className="cargo-truck">
-        {/* exhaust puffs (behind the truck) */}
+        {/* exhaust puffs (behind the truck, from stack) */}
         <span className="cargo-puff cargo-puff--1" />
         <span className="cargo-puff cargo-puff--2" />
         <span className="cargo-puff cargo-puff--3" />
 
         <div className="cargo-bob">
-          {/* headlight cone in front */}
-          <span className="cargo-headlight" />
-
-          {/* 3D container body */}
+          {/* 3D container body (trailer) */}
           <div className="cargo-box">
             <span className="cargo-face cargo-face--front">
               <span className="cargo-doors" />
@@ -60,9 +57,25 @@ export function CargoBannerScene() {
             <span className="cargo-face cargo-face--bottom" />
           </div>
 
-          {/* wheels */}
+          {/* trailer wheels */}
           <span className="cargo-wheel cargo-wheel--rear" />
-          <span className="cargo-wheel cargo-wheel--front" />
+          <span className="cargo-wheel cargo-wheel--mid" />
+
+          {/* truck cab (tractor unit) in front of trailer */}
+          <div className="cargo-cab">
+            <span className="cargo-cab-body" />
+            <span className="cargo-cab-roof" />
+            <span className="cargo-cab-window" />
+            <span className="cargo-cab-grille" />
+            <span className="cargo-cab-bumper" />
+            <span className="cargo-stack" />
+            <span className="cargo-headlight cargo-headlight--lo" />
+            <span className="cargo-headlight cargo-headlight--hi" />
+          </div>
+
+          {/* cab wheels */}
+          <span className="cargo-wheel cargo-wheel--cab-rear" />
+          <span className="cargo-wheel cargo-wheel--cab-front" />
         </div>
 
         {/* ground shadow */}
