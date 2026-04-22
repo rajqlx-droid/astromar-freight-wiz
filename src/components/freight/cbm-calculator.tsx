@@ -786,9 +786,6 @@ export function CbmCalculator({ items, setItems }: Props) {
                 <li className="flex items-center gap-1.5">
                   <Video className="size-4 text-brand-orange" /> Loading video
                 </li>
-                <li className="flex items-center gap-1.5">
-                  <FileDown className="size-4 text-brand-orange" /> PDF export
-                </li>
               </ul>
             </div>
           </div>
