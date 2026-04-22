@@ -620,17 +620,6 @@ function FreightIntelligencePage() {
                     </div>
                     {/* Live 3D cargo scene — drives across the full banner, bottom lane */}
                     <CargoBannerScene />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        document
-                          .getElementById("cbm-optimize-cta")
-                          ?.scrollIntoView({ behavior: "smooth", block: "center" })
-                      }
-                      className="relative z-10 inline-flex shrink-0 items-center gap-1.5 rounded-md bg-brand-orange px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_12px_-2px_rgba(255,127,42,0.5)] transition-all hover:scale-[1.03] hover:bg-brand-orange/90 hover:shadow-[0_6px_16px_-2px_rgba(255,127,42,0.65)]"
-                    >
-                      <ArrowRight className="size-3.5 transition-transform" />
-                    </button>
                   </div>
                 )}
 
