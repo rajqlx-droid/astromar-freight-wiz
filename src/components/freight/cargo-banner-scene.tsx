@@ -59,16 +59,15 @@ export function CargoBannerScene() {
 
       <style>{`
         .cargo-scene {
-          position: absolute;
-          right: 0.5rem;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 180px;
-          height: 70px;
+          position: relative;
+          flex: 1 1 auto;
+          min-width: 120px;
+          height: 56px;
           perspective: 700px;
           perspective-origin: 50% 60%;
           overflow: hidden;
           display: none;
+          z-index: 10;
         }
         @media (min-width: 768px) {
           .cargo-scene { display: block; }
