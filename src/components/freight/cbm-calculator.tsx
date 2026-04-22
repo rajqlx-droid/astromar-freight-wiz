@@ -574,7 +574,7 @@ export function CbmCalculator({ items, setItems }: Props) {
 
   return (
     <div className="space-y-6">
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+    <div className="mt-2 grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-3 lg:col-span-7">
         {draftItems.map((it, idx) => (
           <CbmRow
