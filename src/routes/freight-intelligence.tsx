@@ -613,7 +613,6 @@ function FreightIntelligencePage() {
                       </div>
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-2">
-                          <span className="rounded-sm bg-brand-orange/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-orange ring-1 ring-brand-orange/30">Free</span>
                           <p className="truncate text-sm font-bold leading-tight">Get your container optimization plan</p>
                         </div>
                         <p className="truncate text-xs text-white/70">Recommend the best container, render a 3D loading plan</p>
@@ -630,7 +629,6 @@ function FreightIntelligencePage() {
                       }
                       className="relative z-10 inline-flex shrink-0 items-center gap-1.5 rounded-md bg-brand-orange px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_12px_-2px_rgba(255,127,42,0.5)] transition-all hover:scale-[1.03] hover:bg-brand-orange/90 hover:shadow-[0_6px_16px_-2px_rgba(255,127,42,0.65)]"
                     >
-                      View plan
                       <ArrowRight className="size-3.5 transition-transform" />
                     </button>
                   </div>
