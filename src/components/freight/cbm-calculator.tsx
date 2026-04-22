@@ -752,6 +752,64 @@ export function CbmCalculator({ items, setItems }: Props) {
       </div>
     </div>
 
+    {/* Optimize-container CTA — full width below the inputs/results grid so
+        Results doesn't have empty trailing space when items column grows. */}
+    {!showOptimization && (
+      <Card
+        id="cbm-optimize-cta"
+        className="border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-4 sm:p-5 scroll-mt-24"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <div className="rounded-full bg-brand-orange/10 p-2 text-brand-orange">
+              <Sparkles className="size-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-brand-navy">
+                Get container optimization plan
+              </h3>
+              <p className="mt-0.5 max-w-md text-[11px] text-muted-foreground">
+                Recommend the best container, render a 3D loading plan, generate a loading
+                video and unlock PDF export. We'll ask a few packing questions first.
+              </p>
+            </div>
+          </div>
+          {hasAnyDims ? (
+            <Button
+              size="sm"
+              className="text-white shadow-sm hover:opacity-90"
+              style={{ background: "var(--brand-orange)" }}
+              onClick={() => {
+                pushItems(draftItems);
+                if (allConfirmed) {
+                  setOptimizationRequested(true);
+                } else {
+                  setConfirmModalOpen(true);
+                }
+              }}
+            >
+              <Sparkles className="size-3.5" /> Optimize loading
+            </Button>
+          ) : (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger
+                  type="button"
+                  aria-disabled="true"
+                  className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white opacity-60 shadow-sm"
+                  style={{ background: "var(--brand-orange)" }}
+                  onClick={(e) => e.preventDefault()}
+                >
+                  <Sparkles className="size-3.5" /> Optimize loading
+                </TooltipTrigger>
+                <TooltipContent side="top">Enter cargo dimensions first</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
+      </Card>
+    )}
+
     {/* Optimization plan — full-width below the inputs/results grid so the
         3D viewer has room to breathe on desktop and stacks cleanly on mobile,
         with no chance of overlapping the Results card. */}
