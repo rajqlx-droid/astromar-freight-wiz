@@ -762,7 +762,7 @@ export function CbmCalculator({ items, setItems }: Props) {
         id="cbm-optimize-cta"
         className="mx-auto w-[calc(100%-1rem)] sm:w-[calc(100%-3rem)] lg:w-[calc(100%-5rem)] rounded-xl border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-3.5 pr-16 sm:p-4 sm:pr-20 scroll-mt-24"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-2.5">
             <div className="rounded-full bg-brand-orange/10 p-2.5 text-brand-orange">
               <Sparkles className="size-6" />
