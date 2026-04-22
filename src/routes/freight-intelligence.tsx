@@ -606,9 +606,11 @@ function FreightIntelligencePage() {
                       className="pointer-events-none absolute -left-6 top-1/2 size-24 -translate-y-1/2 rounded-full bg-brand-orange/20 blur-2xl"
                     />
                     <div className="relative z-10 flex min-w-0 shrink items-center gap-3">
-                      <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 ring-1 ring-brand-orange/30">
-                        <Sparkles className="size-4 text-brand-orange" />
-                        <span className="absolute -right-0.5 -top-0.5 size-2 animate-pulse rounded-full bg-brand-orange shadow-[0_0_8px_rgba(255,127,42,0.8)]" />
+                      <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange/15 ring-1 ring-brand-orange/40 shadow-[0_0_18px_rgba(255,127,42,0.55)] animate-[pulse_2.4s_ease-in-out_infinite]">
+                        <span aria-hidden className="pointer-events-none absolute inset-0 rounded-lg bg-brand-orange/30 blur-md animate-[pulse_2.4s_ease-in-out_infinite]" />
+                        <span aria-hidden className="pointer-events-none absolute -inset-1 rounded-xl ring-1 ring-brand-orange/30 animate-ping opacity-60" />
+                        <Sparkles className="relative size-4 text-brand-orange drop-shadow-[0_0_6px_rgba(255,127,42,0.9)]" />
+                        <span className="absolute -right-0.5 -top-0.5 size-2 animate-pulse rounded-full bg-brand-orange shadow-[0_0_10px_rgba(255,127,42,1)]" />
                       </div>
                       <div className="min-w-0 space-y-0.5">
                         <div className="flex items-center gap-2">
