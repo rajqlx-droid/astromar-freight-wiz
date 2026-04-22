@@ -72,17 +72,17 @@ export function CargoBannerScene() {
       <style>{`
         .cargo-scene {
           position: absolute;
-          /* start lane after the text block — roughly past the "plan" word */
-          left: 55%;
+          /* lane begins ~1cm (≈38px) after the "...plan" text */
+          left: calc(55% + 38px);
           right: 0;
+          top: 0;
           bottom: 0;
-          height: 36px;
-          perspective: 700px;
-          perspective-origin: 50% 60%;
+          perspective: 800px;
+          perspective-origin: 50% 55%;
           overflow: hidden;
           display: none;
           z-index: 1;
-          opacity: 0.85;
+          opacity: 0.9;
         }
         @media (min-width: 768px) {
           .cargo-scene { display: block; }
