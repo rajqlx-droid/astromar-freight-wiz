@@ -1,56 +1,45 @@
 
 
-## Replace existing CTA banner with commercial poster, placed between Load Optimizer heading and Compare/History controls
+## Make the "Get your container optimization plan" banner feel alive — a tiny 3D cargo scene in motion
 
-### Placement (confirmed)
+### What the user is asking
 
-```text
-┌─────────────────────────────────────────────┐
-│  Calculator panel (CBM / Air / …)           │
-├─────────────────────────────────────────────┤
-│  "Container Load Optimizer" heading         │
-├─────────────────────────────────────────────┤
-│  ❮ COMMERCIAL POSTER (new) ❯                │  ← inserted here
-├─────────────────────────────────────────────┤
-│  Compare scenarios + History buttons        │
-├─────────────────────────────────────────────┤
-│  3D viewer / loader HUD / rows              │
-├─────────────────────────────────────────────┤
-│  FAQ / Footer                               │
-└─────────────────────────────────────────────┘
-```
+Looking at the uploaded screenshot: the small dark-navy promo banner that already lives **inline in the calculator heading row** (the one with the orange "View plan" button, the "FREE" pill, and the orange container icon on the right). They want the static SVG container icon replaced with **something 3D and moving — like cargo**. A tiny moving scene baked into the banner, not a separate full-width section.
 
-And the existing dark-navy "Need expert assistance?" banner below the optimizer is **removed**.
+### Where this lives today
 
-### What gets built
+`src/routes/freight-intelligence.tsx` lines 585–644 — the desktop inline promo banner shown only when `active === "cbm"`. Right side currently has a flat SVG of a stack of three orange containers (lines 609–617). There's also a slimmer mobile variant lower down (lines 696–720) without the icon.
 
-**New file** `src/components/freight/commercial-poster.tsx` — a self-contained cinematic ad unit:
+### The plan
 
-- Full-width band, ~340–440 px tall on desktop, scales gracefully down to ~220 px on mobile (948 px viewport included)
-- Deep navy plate (`var(--brand-navy-strong)`) with layered SVG artwork:
-  - Port-crane + container-ship skyline silhouette (pure SVG, no asset upload)
-  - Dotted halftone overlay for print-ad texture
-  - Bold diagonal orange slash (`var(--brand-orange)`) as the graphic device
-- Top-left "ASTROMAR │ LOGISTICS" lockup, small-caps, like a print sign-off
-- Hero claim: **"MOVE CARGO LIKE YOU MEAN IT."** — condensed all-caps, `clamp(2rem, 6vw, 4.5rem)`, leading-none
-- Sub-claim: one short line — "End-to-end freight, customs and FTWZ — out of Chennai."
-- Single high-contrast pill CTA "Talk to Astromar →" + tappable phone line `+91 99402 11014`
-- Bottom credibility strip: "25+ YRS · 50K+ TEU MOVED · FTWZ LICENSED · CHENNAI" in tracked-out uppercase
-- Subtle parallax on the diagonal slash + slow skyline drift on hover (desktop only, gated by `prefers-reduced-motion`)
+**1. New component: `src/components/freight/cargo-banner-scene.tsx`**
 
-**Edits to** `src/routes/freight-intelligence.tsx`:
+A self-contained CSS-3D micro-scene, ~80 px tall on desktop:
 
-1. Insert `<CommercialPoster />` immediately **after** the "Container Load Optimizer" section heading and **before** the Compare scenarios / History action row
-2. **Delete** the existing post-optimizer CTA `<section>` (the dark-navy "Need expert assistance with your shipment?" block with phone/email chips and two buttons)
+- **A perspective stage** (`perspective: 600px`, `transform-style: preserve-3d`) sized to slot into the banner's right side where the current SVG sits
+- **A real 3D shipping container** built from 6 divs (front, back, left, right, top, bottom) in brand-orange with corrugated ridge lines drawn via `repeating-linear-gradient` and tiny ASTROMAR text on the side panel — looks like an actual ISO container, not a flat icon
+- **Continuous gentle motion**: the container slowly rotates on Y-axis (`@keyframes spin-y` 12s linear infinite) and floats up/down ~3 px (`@keyframes float` 4s ease-in-out infinite) so it always reads as "alive" without being distracting
+- **A second smaller container** behind it on a slower offset rotation, half-opacity, to give depth — like a stack passing by
+- **A ground shadow** as a flattened ellipse beneath that scales inversely with the float, so the container actually feels grounded
+- **A faint motion trail** — 3 small orange dots drifting right-to-left across the back plane on a 3s loop, suggesting the container is moving forward through space
+- **`prefers-reduced-motion` gate**: if the user has reduced motion on, animations stop and the container holds at a nice 3/4 hero angle (no jitter, no spin)
+- **Pure CSS**, no Three.js, no new deps, no canvas — keeps bundle weight zero and renders instantly
+
+**2. Edit `src/routes/freight-intelligence.tsx`**
+
+- **Desktop banner (lines 609–617)**: replace the static `<svg>` container icon block with `<CargoBannerScene />`, positioned exactly where the SVG sat (absolute, right-3, vertically centered, hidden below `lg`)
+- **Mobile banner (lines 696–720)**: keep as-is — too cramped for the 3D scene, the `Sparkles` icon stays
+- No changes to copy, layout, the orange "View plan" button, or the surrounding heading row
 
 ### Files touched
 
-- `src/components/freight/commercial-poster.tsx` *(new)*
-- `src/routes/freight-intelligence.tsx` *(insert one component, delete old CTA section)*
+- `src/components/freight/cargo-banner-scene.tsx` *(new)*
+- `src/routes/freight-intelligence.tsx` *(swap one icon block)*
 
 ### Out of scope
 
-- Calculator, 3D viewer, loader HUD, FAQ, footer — untouched
-- No new dependencies — pure SVG + Tailwind tokens already in the theme
-- Copy lives in one component; easy to edit later
+- The mobile promo strip (stays simple)
+- The calculator, optimizer, compare/history, FAQ, footer
+- No new dependencies (no Three.js / R3F — pure CSS 3D)
+- No changes to colors, copy, or the banner's outer container
 
