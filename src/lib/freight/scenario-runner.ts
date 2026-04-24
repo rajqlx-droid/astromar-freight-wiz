@@ -200,7 +200,8 @@ export function pickBestPlan(
   });
 
   // Filter: only keep plans without RED violations (overlap, hanging,
-  // gap < 50 mm with vertical overlap, door/ceiling breach).
+  // gap < 50 mm with vertical overlap, door/ceiling breach, weight overload,
+  // floating cargo). UNPLACED is now YELLOW so shut-out alone never blocks.
   const legal = results.filter((r) => r.compliance.status !== "RED");
 
   // Helper: count RED violations in a plan. Used as the primary tiebreak
@@ -209,6 +210,36 @@ export function pickBestPlan(
   // better just because it crammed more cartons in).
   const redCount = (r: ScenarioResult) =>
     r.compliance.violations.filter((v) => v.type === "RED").length;
+
+  // Compute shut-out totals from the manifest minus what the chosen plan
+  // physically placed. Pure manifest math — no per-strategy guesswork.
+  const computeShutOut = (chosen: ScenarioResult): ShutOutTotals | null => {
+    const placedCartons = chosen.pack.placedCartons;
+    const totalCartons = chosen.pack.totalCartons;
+    if (placedCartons >= totalCartons) return null;
+    let cartons = 0;
+    let cbm = 0;
+    let weightKg = 0;
+    items.forEach((it, idx) => {
+      const stat = chosen.pack.perItem[idx];
+      const placed = stat?.placed ?? 0;
+      const unplaced = Math.max(0, it.qty - placed);
+      if (unplaced <= 0) return;
+      cartons += unplaced;
+      cbm += ((it.length * it.width * it.height) / 1_000_000) * unplaced;
+      weightKg += it.weight * unplaced;
+    });
+    if (cartons === 0 && cbm < 0.0001 && weightKg < 0.01) return null;
+    return { cartons, cbm, weightKg };
+  };
+
+  const buildMeta = (chosen: ScenarioResult, allLegal: boolean): BestPlanMeta => ({
+    shutOut: computeShutOut(chosen),
+    allLegal,
+    hardViolations: chosen.compliance.violations
+      .filter((v) => v.type === "RED")
+      .map((v) => v.message),
+  });
 
   if (legal.length > 0) {
     // Healthy path: every plan in the pool is physically safe. Sort by
@@ -222,7 +253,7 @@ export function pickBestPlan(
       return b.compliance.score - a.compliance.score;
     });
     const ranked = legal.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
-    return { best: ranked[0], all: ranked };
+    return { best: ranked[0], all: ranked, meta: buildMeta(ranked[0], true) };
   }
 
   // Fallback path: every strategy tripped at least one RED rule. Rather
@@ -243,5 +274,5 @@ export function pickBestPlan(
   });
 
   const ranked = pool.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
-  return { best: ranked[0], all: ranked };
+  return { best: ranked[0], all: ranked, meta: buildMeta(ranked[0], false) };
 }
