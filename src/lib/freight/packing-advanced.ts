@@ -416,16 +416,19 @@ export function packContainerAdvanced(
           // Non-stackable must rest on the floor.
           if (!c.stackable && ev.z > 0) {
             lastReason ||= "Non-stackable — no floor space remaining";
+            cartonRejects.nonStackable++;
             continue;
           }
           // Sealed (fragile) cells block further stacking.
           if (ev.anySealed) {
             lastReason ||= "Cannot stack on fragile item below";
+            cartonRejects.sealed++;
             continue;
           }
           // Support ratio.
           if (ev.z > 0 && ev.supportRatio < SUPPORT_MIN_RATIO) {
             lastReason ||= "Insufficient support below";
+            cartonRejects.support++;
             continue;
           }
           // Stack-weight: every supporter must be able to take +c.weight on top of its existing load.
@@ -436,6 +439,7 @@ export function packContainerAdvanced(
             if (s.maxStackWeightKg > 0 && s.loadKg + c.weight > s.maxStackWeightKg) {
               weightOk = false;
               lastReason ||= "Exceeds max stack weight of item below";
+              cartonRejects.stackWeight++;
               break;
             }
           }
@@ -469,7 +473,7 @@ export function packContainerAdvanced(
             x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
           if (score < bestScore) {
             bestScore = score;
-            bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters };
+            bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters, supportRatio: ev.supportRatio };
           }
         }
       }
