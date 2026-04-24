@@ -38,6 +38,13 @@ export type PackStrategy = "auto" | "row-back" | "weight-first" | "floor-first" 
 export interface AdvancedPackResult {
   container: ContainerPreset;
   placed: PlacedBox[];
+  /**
+   * Support ratio (0..1) recorded at placement time for each `placed[i]`.
+   * 1 = floor or fully-supported stack, <0.85 only ever appears in degraded
+   * scenarios (won't occur with the current SUPPORT_MIN_RATIO gate).
+   * Used by the 3D debug overlay to colour-code stacking decisions.
+   */
+  supportRatios: number[];
   totalCartons: number;
   placedCartons: number;
   truncated: boolean;
@@ -61,6 +68,32 @@ export interface AdvancedPackResult {
   cogLateralOffsetPct: number;
   nearCeilingPlacedIdxs: number[];
   floorCoveragePct: number;
+  /**
+   * Diagnostics about cartons the packer wanted to stack but rejected because
+   * a stacking rule fired. Drives the user-facing "stacking reduced" warning.
+   * `count` is the number of carton instances rejected for stacking reasons
+   * (these may still have placed on the floor of a later container, or been
+   * counted as unplaced — the field describes packing behaviour, not the
+   * final placement outcome).
+   */
+  stackingDiagnostics: {
+    /** Total candidate placements rejected by a stacking rule. */
+    rejectedAttempts: number;
+    /** Cartons that ended up unplaced AND failed at least one stacking rule. */
+    unplacedDueToStacking: number;
+    /** Per-rule rejection counts. Same keys as `dominantReason`. */
+    reasonCounts: {
+      support: number;
+      sealed: number;
+      stackWeight: number;
+      nonStackable: number;
+    };
+    /**
+     * The rule that triggered most often — drives the warning copy.
+     * `null` when no stacking rule fired.
+     */
+    dominantReason: "support" | "sealed" | "stackWeight" | "nonStackable" | null;
+  };
 }
 
 const RENDER_CAP = 500;
