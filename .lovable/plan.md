@@ -1,50 +1,62 @@
 
 
-## Risk assessment for the manual "sideways OK" toggle
+## Why only 9 cartons fit, no stacking — and how to fix it
 
-Short answer: **Very low risk. No architectural errors. Two minor edge cases worth knowing.**
+### Your input
+- 30 cartons at **121.92 × 121.92 × 121.92 cm**, **500 kg each** (4 ft cubes)
+- Container 40HC inner: 12032 × 2352 × 2700 mm
 
-### Why it's safe
+### Two separate things are happening
 
-The `allowSidewaysRotation` flag already exists end-to-end:
-- It's already on the `CbmItem` type.
-- The packer (`packing-advanced.ts`) already reads it.
-- Downstream consumers (loading rows, 3D view, report, video) already react to it via the packer's output.
-- Saved scenarios and history already serialize it.
+**1. Side-by-side: physically impossible (not a bug)**
+Two cartons side-by-side = 2 × 1219.2 = **2438.4 mm**, but the 40HC inner width is only **2352 mm**. So only **1 carton per row** is geometrically possible. This is correct.
 
-We're only changing **one thing**: making an existing static label clickable, wired through the same item-update path that qty / dimension / weight already use. No new state, no new effects, no new data flow.
+**2. Stacking: blocked by a quantization bug (the real problem)**
+The packer should stack a second carton on top of each floor carton (2 × 1219.2 = 2438.4 mm < 2620 mm usable height). It refuses to, and the root cause is in `packing-advanced.ts`:
 
-### The 2 edge cases (and how we handle them)
+- The support check uses a **100 mm cell grid** (`CELL_MM = 100`).
+- A 1219.2 mm carton footprint covers `ceil(1219.2/100) = 13` cells per side → **169 cells** under the footprint.
+- The real carton only fills `(1219.2/100)² ≈ 148.6` cells worth.
+- Support ratio = 148.6 / 169 ≈ **0.879**.
+- The packer requires `SUPPORT_MIN_RATIO = 0.9`. **0.879 < 0.9 → stacking rejected.**
 
-**1. Pallets and crates are force-rotated by the packer**
-- `packing-advanced.ts` overrides `allowSidewaysRotation = true` for pallets and crates regardless of the flag.
-- **Risk if ignored:** user clicks "off" on a pallet, expects fixed orientation, but the 3D plan still rotates it → looks like a bug.
-- **Mitigation:** chip is rendered as locked-on and disabled for pallets/crates with a tooltip explaining why. Zero mismatch between UI and packer behavior.
+So every dimension that is not a clean multiple of 100 mm (122 cm, 75 cm, 45 cm, etc.) suffers from this quantization penalty even when the upper carton is *identical* to the one below it.
 
-**2. Existing items / saved scenarios may have `allowSidewaysRotation` undefined**
-- Old history entries created before this field was always set.
-- **Risk if ignored:** chip could render in a confusing in-between state, or `!undefined` toggling could feel unpredictable.
-- **Mitigation:** read with a safe default at the chip site — `undefined → true` for kg-based packages (matches today's display). First click writes an explicit boolean. No migration needed, no crash, no schema change.
+Result: 9 cartons line up floor-only along the 12 m length, then the remaining 21 spill into 2 more containers — exactly what your PDF shows.
 
-### What is NOT at risk
+### The fix
 
-- Packer logic, recommender, loading rows, 3D view, report, video — **no code change**, so no behavior change beyond what the flag already controls.
-- Worker re-run pipeline — reuses the existing debounced item-update path, so no new race conditions.
-- Saved scenarios / history schema — backward compatible via the safe default.
-- Pallet/crate special-case — preserved exactly.
-- Performance — one extra boolean per item, one extra click handler. Negligible.
+Change the support check so it measures **actual footprint overlap**, not quantized cell coverage. Two complementary changes inside `evaluatePlacement` in `src/lib/freight/packing-advanced.ts`:
 
-### Could anything break the build or throw at runtime?
+1. **Identical-supporter shortcut.** If the only supporter directly below has the same `(l, w)` footprint and the same `(x, y)` corner (within 1 cm), treat support as 100% — a carton sitting flush on an identical carton is by definition fully supported.
 
-- **TypeScript:** no, the field already exists on `CbmItem`.
-- **Runtime:** no, the updater path is the same one already used by every other field on the row.
-- **SSR / hydration:** no, it's a client-only interactive chip with no server dependency.
+2. **Real-area support ratio (fallback for non-identical stacks).** Instead of `supported / total` cells, compute the geometric overlap area between the new box footprint and the union of supporting boxes' top faces, divided by the new box's footprint area. This eliminates the cell-rounding penalty for any dimension.
 
-### Verdict
+3. **Lower the threshold safely.** Drop `SUPPORT_MIN_RATIO` from `0.9` to `0.85` as a defensive backstop. 0.85 is still safe for real-world stacking (industry standard for ISTA/CTU is 80–90%) and matches the quantization tolerance for sub-100 mm dimensions.
 
-Safe to proceed. The only "risk" is the pallet/crate UX mismatch, which we explicitly handle by disabling the chip for those package types.
+### Files touched
 
-### Files touched (unchanged from prior plan)
+- `src/lib/freight/packing-advanced.ts` — update `evaluatePlacement` to return geometric overlap support ratio, add identical-stack shortcut, lower threshold to 0.85.
 
-- `src/components/freight/cbm-calculator.tsx` *(make the chip a real toggle, default-safe read, lock for pallets/crates)*
+### Expected result for your scenario
+
+- Floor row: 9 cartons along the 12 m length (unchanged — this is the geometric max for 1219.2 mm cartons with door reserve and gaps).
+- Stack: a **second tier** of 9 cartons on top → 18 placed in one container.
+- Remaining 12 cartons fit in a second container (also stacked 2 tiers, 9 + 3) → **2 containers instead of 3+** for this load.
+- Weight per stacked column: 1000 kg, well under cargo limits.
+- The "GAP — RE-SHUFFLE" warning will also go away because wall-utilization improves once the cargo is stacked rather than spread across 9+ rows.
+
+### Safety / no-risk checklist
+
+- The geometric support ratio is **stricter or equal** to the cell-based one in every realistic case — it cannot create floating cargo.
+- Identical-stack shortcut only applies when the box below has the same footprint AND same XY corner — no risk of authorising weak stacks.
+- `maxStackWeightKg`, `fragile`, `stackable=false`, sealed columns, and door/ceiling reserves are all untouched.
+- 3D view, loading rows, report, and video read from `placed[]` and stay correct automatically.
+- No type changes, no schema changes, no UI changes.
+
+### Out of scope (intentionally not changed)
+
+- Width-side packing — 2 cartons side-by-side is geometrically impossible in any standard ocean container; nothing to fix there.
+- Strategy/scoring — the existing back-to-front + bottom-first scoring is correct once the support bug is removed.
+- Cell size — keeping `CELL_MM = 100` for performance; the geometric overlap fix doesn't need a finer grid.
 
