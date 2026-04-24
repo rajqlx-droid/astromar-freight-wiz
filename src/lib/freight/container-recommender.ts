@@ -12,7 +12,7 @@
 
 import type { CbmItem } from "./calculators";
 import { CONTAINERS, type ContainerPreset } from "./packing";
-import { packContainerAdvanced, type AdvancedPackResult } from "./packing-advanced";
+import type { AdvancedPackResult } from "./packing-advanced";
 import { pickBestPlan } from "./scenario-runner";
 import { CEILING_RESERVE_MM, getGapRule } from "./gap-rules";
 
