@@ -17,10 +17,7 @@ import {
   type PlacedBox,
 } from "@/lib/freight/packing";
 import { type AdvancedPackResult } from "@/lib/freight/packing-advanced";
-import {
-  splitItemsAcrossContainers,
-  type ContainerRecommendation,
-} from "@/lib/freight/container-recommender";
+import { type ContainerRecommendation } from "@/lib/freight/container-recommender";
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
