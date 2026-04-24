@@ -70,7 +70,7 @@ export interface PackResult {
 
 const RENDER_CAP = 500;
 const CELL_MM = 100;
-const SUPPORT_MIN_RATIO = 0.9;
+const SUPPORT_MIN_RATIO = 0.85;
 const PLACE_STEP_MM = 100;
 
 /**
@@ -238,10 +238,17 @@ export function pickOptimalContainer(arg: number | CbmItem[]): ContainerPreset {
   }
   if (totalQty === 0) return CONTAINERS[0];
 
+  // Use the same multi-strategy optimiser the 3D viewer uses, so the
+  // auto-selected container always agrees with the rendered plan. The
+  // single-strategy shortcut here previously caused split-brain: the
+  // picker said "20GP fits" while the viewer's pickBestPlan disagreed,
+  // producing a red HUD on a plan the optimiser had already rejected.
+  // Lazy import to avoid a static cycle (scenario-runner ← packing).
+  const { pickBestPlan } = require("./scenario-runner") as typeof import("./scenario-runner");
   for (const c of CONTAINERS) {
     if (cbm > c.capCbm * 1.05) continue;
-    const pack = packContainerAdvanced(items, c);
-    if (pack.placedCartons >= totalQty) return c;
+    const { best } = pickBestPlan(items, c);
+    if (best.pack.placedCartons >= totalQty) return c;
   }
   // Cap at 40HC — anything more is reported as cargo shut-out by the recommender.
   return HC;
