@@ -44,8 +44,6 @@ export interface ComplianceOptions {
 // placer uses; geometric overlap (below) eliminates the cell-grid penalty
 // that previously misjudged stacks of dimensions not divisible by 100 mm.
 const SUPPORT_MIN_RATIO = 0.85;
-const FLOOR_GAP_RED_ROWS = 3;
-const FLOOR_GAP_RED_PCT = 75;
 
 /**
  * Audit each stacked box's support ratio using **geometric overlap** against
