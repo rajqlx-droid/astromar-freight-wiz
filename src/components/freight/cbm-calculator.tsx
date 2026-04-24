@@ -296,7 +296,6 @@ export function CbmCalculator({ items, setItems }: Props) {
     return recommendContainersFast(cbm, wt);
   }, [draftItems]);
   const [workerRecommendation, setWorkerRecommendation] = useState<ContainerRecommendation | null>(null);
-  const [workerBucketPacks, setWorkerBucketPacks] = useState<AdvancedPackResult[]>([]);
 
   const recommendation: ContainerRecommendation = workerRecommendation ?? fastRecommendation;
 
@@ -308,110 +307,6 @@ export function CbmCalculator({ items, setItems }: Props) {
     const target = CONTAINERS.find((c) => c.id === containerId) ?? CONTAINERS[1];
     return analyseGeometricCeiling(draftItems, target);
   }, [draftItems, forcedChoice, recommendation]);
-
-  // Active container bucket index for the multi-container case. Shared between
-  // the suggestion banner cards and the 3D viewer's tabbed view so clicking
-  // a card swaps the visible container. Persisted across refresh / tab switch.
-  //
-  // SSR-safe init pattern: always seed with 0 on first render so server and
-  // client markup match exactly, then hydrate the stored value inside
-  // useEffect after mount. Reading localStorage in the useState initializer
-  // — even guarded by `typeof window` — produces hydration mismatches because
-  // the server renders 0 while the client renders the stored value.
-  const ACTIVE_UNIT_KEY = "freight.activeUnitIdx";
-  const [activeUnitIdx, setActiveUnitIdx] = useState<number>(0);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(ACTIVE_UNIT_KEY);
-      const n = raw == null ? 0 : parseInt(raw, 10);
-      if (Number.isFinite(n) && n >= 0) setActiveUnitIdx(n);
-    } catch {
-      /* ignore */
-    }
-    // Run once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Per-unit placed/total counts — drives the "12/16 placed" badges.
-  // When we have real bucket packs from the worker, use exact placedCartons.
-  // Otherwise show a rough CBM-based fullness proxy.
-  const unitStats = useMemo(() => {
-    if (!recommendation.isMulti) return undefined;
-    if (workerBucketPacks.length === recommendation.units.length) {
-      return recommendation.units.map((_, i) => {
-        const pack = workerBucketPacks[i];
-        const total = pack.perItem.reduce((s, p) => s + p.planned, 0);
-        const placed = pack.placedCartons;
-        return { placed, total };
-      });
-    }
-    // Fast path fallback: we don't yet know per-bucket carton counts, so
-    // approximate placed/total as fillCbm / usableCbm — keeps badges visible
-    // while the worker is busy without lying about exact counts.
-    return recommendation.units.map((u) => {
-      const containerCbm = (u.container.inner.l * u.container.inner.w * u.container.inner.h) / 1_000_000_000;
-      const usable = containerCbm * 0.85;
-      const total = Math.max(1, Math.round(u.fillCbm * 10));
-      const placed = Math.min(total, Math.round((Math.min(u.fillCbm, usable) / Math.max(0.0001, u.fillCbm)) * total));
-      return { placed, total };
-    });
-  }, [recommendation, workerBucketPacks]);
-
-
-
-  // Clamp persisted idx if it's now out of range (e.g. switched single↔multi
-  // or unit count shrank). Otherwise leave the user's last-viewed bucket alone
-  // so refreshing on a multi-container result keeps state.
-  useEffect(() => {
-    const max = recommendation.isMulti ? recommendation.units.length - 1 : 0;
-    if (activeUnitIdx > max || activeUnitIdx < 0) {
-      setActiveUnitIdx(0);
-    }
-  }, [recommendation.isMulti, recommendation.units.length, activeUnitIdx]);
-
-  // Persist on every change.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      localStorage.setItem(ACTIVE_UNIT_KEY, String(activeUnitIdx));
-    } catch {
-      /* quota — ignore */
-    }
-  }, [activeUnitIdx]);
-
-  // ARIA live announcements for active bucket changes (multi-container only).
-  // Skip the first mount so SR users aren't bombarded on page load. Clear the
-  // message ~2s after each change so re-selecting the same card re-announces.
-  const [liveMessage, setLiveMessage] = useState("");
-  const firstMountRef = useRef(true);
-  useEffect(() => {
-    if (firstMountRef.current) {
-      firstMountRef.current = false;
-      return;
-    }
-    if (!recommendation.isMulti) return;
-    const total = recommendation.units.length;
-    const unit = recommendation.units[activeUnitIdx];
-    if (!unit) return;
-    const stats = unitStats?.[activeUnitIdx];
-    const placedTxt = stats ? `, ${stats.placed} of ${stats.total} placed` : "";
-    setLiveMessage(
-      `Now viewing container ${activeUnitIdx + 1} of ${total}: ${unit.container.name}${placedTxt}.`,
-    );
-    const t = setTimeout(() => setLiveMessage(""), 2000);
-    return () => clearTimeout(t);
-  }, [activeUnitIdx, recommendation.isMulti, recommendation.units, unitStats]);
-
-  const handleUnitSelect = (idx: number) => {
-    setActiveUnitIdx(idx);
-    // Smooth-scroll the 3D viewer into view so the user immediately sees the
-    // bucket they just picked rendered below.
-    requestAnimationFrame(() => {
-      document
-        .getElementById("container-load-viewer")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  };
 
   // Items that have real dimensions but haven't had packing options confirmed yet.
   // Read from draftItems so the optimize CTA reflects what the user just typed,
