@@ -39,69 +39,54 @@ export interface ComplianceOptions {
   rows?: RowGroup[];
 }
 
-const SUPPORT_MIN_RATIO = 0.9;
+// Match the packer (packing-advanced.ts) — both must agree or the auditor
+// flags clean stacks as "floating". 0.85 is the same defensive backstop the
+// placer uses; geometric overlap (below) eliminates the cell-grid penalty
+// that previously misjudged stacks of dimensions not divisible by 100 mm.
+const SUPPORT_MIN_RATIO = 0.85;
 const FLOOR_GAP_RED_ROWS = 3;
 const FLOOR_GAP_RED_PCT = 75;
 
 /**
- * Re-derive a quantised height-map from the placed boxes and audit each box's
- * support ratio. Mirrors the packer's grid (CELL_MM = 100) so the numbers
- * agree with what the placer actually saw.
+ * Audit each stacked box's support ratio using **geometric overlap** against
+ * the boxes physically below it. Mirrors evaluatePlacement() in
+ * packing-advanced.ts so the auditor and packer never disagree on whether a
+ * stack is supported (a disagreement would surface as a "floating cargo" RED
+ * even though the box is physically flush on its supporter).
  */
 function auditFloatingCargo(pack: AdvancedPackResult): {
   floatingCount: number;
   weakStackCount: number;
 } {
-  const C = pack.container.inner;
-  const CELL = 100;
-  const cellsX = Math.ceil(C.l / CELL);
-  const cellsY = Math.ceil(C.w / CELL);
-  // Sort by z ascending so we build the height-map in placement order.
-  const sorted = pack.placed
-    .map((b, i) => ({ b, i }))
-    .sort((a, b) => a.b.z - b.b.z || a.b.x - b.b.x || a.b.y - b.b.y);
-
-  const heightMap = new Float32Array(cellsX * cellsY);
   let floatingCount = 0;
   let weakStackCount = 0;
+  const placed = pack.placed;
 
-  for (const { b } of sorted) {
-    if (b.z <= 1) {
-      // On the floor — always supported.
-      const cx0 = Math.floor(b.x / CELL);
-      const cy0 = Math.floor(b.y / CELL);
-      const cx1 = Math.ceil((b.x + b.l) / CELL);
-      const cy1 = Math.ceil((b.y + b.w) / CELL);
-      for (let cy = cy0; cy < cy1; cy++) {
-        for (let cx = cx0; cx < cx1; cx++) {
-          heightMap[cy * cellsX + cx] = b.z + b.h;
-        }
-      }
-      continue;
+  for (const b of placed) {
+    if (b.z <= 1) continue; // floor box — always supported
+
+    const footprintArea = b.l * b.w;
+    if (footprintArea <= 0) continue;
+
+    let overlapArea = 0;
+    for (const s of placed) {
+      if (s === b) continue;
+      // Supporter's TOP face must equal this box's BOTTOM (within 1 mm).
+      if (Math.abs(s.z + s.h - b.z) > 1) continue;
+      const ox0 = Math.max(b.x, s.x);
+      const oy0 = Math.max(b.y, s.y);
+      const ox1 = Math.min(b.x + b.l, s.x + s.l);
+      const oy1 = Math.min(b.y + b.w, s.y + s.w);
+      const dx = ox1 - ox0;
+      const dy = oy1 - oy0;
+      if (dx > 0 && dy > 0) overlapArea += dx * dy;
     }
-    // Stacked box: measure support against current height-map.
-    const cx0 = Math.floor(b.x / CELL);
-    const cy0 = Math.floor(b.y / CELL);
-    const cx1 = Math.ceil((b.x + b.l) / CELL);
-    const cy1 = Math.ceil((b.y + b.w) / CELL);
-    let supported = 0;
-    let total = 0;
-    for (let cy = cy0; cy < cy1; cy++) {
-      for (let cx = cx0; cx < cx1; cx++) {
-        total++;
-        const h = heightMap[cy * cellsX + cx];
-        if (Math.abs(h - b.z) < 1) supported++;
-      }
-    }
-    const ratio = total > 0 ? supported / total : 0;
+
+    const ratio = Math.min(1, overlapArea / footprintArea);
     if (ratio < SUPPORT_MIN_RATIO) floatingCount++;
     if (ratio < 0.6) weakStackCount++;
-    for (let cy = cy0; cy < cy1; cy++) {
-      for (let cx = cx0; cx < cx1; cx++) {
-        heightMap[cy * cellsX + cx] = b.z + b.h;
-      }
-    }
   }
+
   return { floatingCount, weakStackCount };
 }
 

@@ -182,17 +182,44 @@ export function pickBestPlan(
   // Filter: only keep plans without RED violations (overlap, hanging,
   // gap < 50 mm with vertical overlap, door/ceiling breach).
   const legal = results.filter((r) => r.compliance.status !== "RED");
-  // If every strategy hit a RED (rare — usually means cargo cannot fit at
-  // all), fall back to the full set so we still return *something* the
-  // shut-out report can subtract from.
-  const pool = legal.length > 0 ? legal : results;
 
+  // Helper: count RED violations in a plan. Used as the primary tiebreak
+  // when no plan is fully legal — we then pick the *cleanest* plan, not
+  // the densest one (a plan with 50 overlap violations isn't actually
+  // better just because it crammed more cartons in).
+  const redCount = (r: ScenarioResult) =>
+    r.compliance.violations.filter((v) => v.type === "RED").length;
+
+  if (legal.length > 0) {
+    // Healthy path: every plan in the pool is physically safe. Sort by
+    // densest placedCargoCbm, then most cartons, then highest compliance
+    // score (prefer cleaner YELLOW/GREEN over plans with more warnings).
+    legal.sort((a, b) => {
+      if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
+        return b.pack.placedCargoCbm - a.pack.placedCargoCbm;
+      if (b.pack.placedCartons !== a.pack.placedCartons)
+        return b.pack.placedCartons - a.pack.placedCartons;
+      return b.compliance.score - a.compliance.score;
+    });
+    const ranked = legal.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
+    return { best: ranked[0], all: ranked };
+  }
+
+  // Fallback path: every strategy tripped at least one RED rule. Rather
+  // than picking the densest dirty plan (which is what produced the
+  // overlap-clipping visual the user reported), pick the plan with the
+  // FEWEST RED violations and highest compliance score. CBM is a final
+  // tiebreak — safety wins over volume when nothing is fully legal.
+  const pool = [...results];
   pool.sort((a, b) => {
+    const ra = redCount(a);
+    const rb = redCount(b);
+    if (ra !== rb) return ra - rb; // fewer RED violations first
+    if (b.compliance.score !== a.compliance.score)
+      return b.compliance.score - a.compliance.score;
     if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
       return b.pack.placedCargoCbm - a.pack.placedCargoCbm;
-    if (b.pack.placedCartons !== a.pack.placedCartons)
-      return b.pack.placedCartons - a.pack.placedCartons;
-    return b.compliance.score - a.compliance.score;
+    return b.pack.placedCartons - a.pack.placedCartons;
   });
 
   const ranked = pool.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
