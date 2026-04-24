@@ -966,7 +966,9 @@ function buildSummary(it: CbmItem): string {
   bits.push(it.packageType ?? "carton");
   if (it.stackable === false) bits.push("no-stack");
   if (it.fragile) bits.push("fragile");
-  if (it.allowSidewaysRotation !== false) bits.push("sideways OK");
+  // Note: sideways state is rendered as its own dedicated toggle chip next
+  // to the packing-options pill, so we intentionally omit it from this
+  // joined-text summary to avoid duplication.
   if (it.allowAxisRotation) bits.push("tip OK");
   if ((it.maxStackWeightKg ?? 0) > 0) bits.push(`max ${it.maxStackWeightKg}kg`);
   return bits.join(" · ");
