@@ -479,8 +479,26 @@ export function packContainerAdvanced(
       }
     }
 
+    // Roll up this carton's stacking-rule rejections into the global counters
+    // BEFORE deciding whether to bail out so warnings stay accurate even when
+    // most rejections eventually find a non-stacked floor placement instead.
+    stackingReasonCounts.support += cartonRejects.support;
+    stackingReasonCounts.sealed += cartonRejects.sealed;
+    stackingReasonCounts.stackWeight += cartonRejects.stackWeight;
+    stackingReasonCounts.nonStackable += cartonRejects.nonStackable;
+    const cartonRejectTotal =
+      cartonRejects.support +
+      cartonRejects.sealed +
+      cartonRejects.stackWeight +
+      cartonRejects.nonStackable;
+    totalStackingRejections += cartonRejectTotal;
+
     if (!bestPick) {
       perItemReason[c.itemIdx] ||= lastReason || "Container full";
+      // If at least one stacking rule fired during this carton's scan, charge
+      // the unplaced result to stacking. (A "container full" miss with zero
+      // stacking rejections is genuine capacity exhaustion.)
+      if (cartonRejectTotal > 0) unplacedDueToStacking++;
       continue;
     }
 
