@@ -1194,9 +1194,15 @@ function CargoBox({
   const tiltColor = box.rotated === "axis" ? "#d946ef" : "#facc15";
 
   // Wooden pallet under every box (only when sitting on the floor — z≈0).
+  // CRITICAL: do NOT lift the cargo by the pallet height. The packer treats
+  // the pallet as part of the cargo unit (its height is included in the
+  // carton dimensions for palletised goods). Lifting floor cargo by 12 cm
+  // while keeping stacked cargo at its raw z made stacked boxes appear to
+  // float / overlap in the 3D view even when the pack math was correct.
+  // The decorative pallet now embeds *into* the floor below the box bottom
+  // so visual contact planes match the physical model exactly.
   const onFloor = box.z < 10; // mm
-  const PALLET_H = 0.12;
-  const palletLift = onFloor ? PALLET_H : 0;
+  const palletLift = 0;
 
   // Hover state — drives the rich tilt popover.
   const [hovered, setHovered] = useState(false);
