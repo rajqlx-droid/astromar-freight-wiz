@@ -26,8 +26,6 @@ import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
-import { type ScenarioResult } from "@/lib/freight/scenario-runner";
-import { computeComplianceReport } from "@/lib/freight/compliance";
 import { type ContainerId } from "@/lib/freight/container-ids";
 import { usePackingWorker } from "@/hooks/use-packing-worker";
 
@@ -111,8 +109,6 @@ export function ContainerLoadView({
   onActiveUnitChange,
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
-  const [selectedStrategyId, setSelectedStrategyId] = useState<import("@/lib/freight/scenario-runner").StrategyId | null>(null);
-  const [compareStrategies, setCompareStrategies] = useState(false);
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
   const setChoice = (c: ContainerChoice) => {
     setInternalChoice(c);
@@ -185,11 +181,13 @@ export function ContainerLoadView({
     };
   }, [deferredItems, isMulti, recommendation, worker.multi]);
 
-  // Strategy comparison (default: just "row-back"; user can opt into all 4).
-  const [scenarios, setScenarios] = useState<ScenarioResult[]>([]);
+  // Single-strategy pack ("row-back"). Scenario comparison UI was removed.
+  const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
+    makeEmptyPack(deferredContainer),
+  );
   useEffect(() => {
     if (!hasCargo) {
-      setScenarios([]);
+      setSinglePack(makeEmptyPack(deferredContainer));
       return;
     }
     let cancelled = false;
@@ -197,13 +195,10 @@ export function ContainerLoadView({
       ? splitItemsAcrossContainers(deferredItems, recommendation!)[Number(activeTab)] ??
         deferredItems
       : deferredItems;
-    const strategies: import("@/lib/freight/scenario-runner").StrategyId[] = compareStrategies
-      ? ["row-back", "weight-first", "floor-first", "mixed"]
-      : ["row-back"];
     worker
-      .scenarios(packItems, deferredContainer, strategies)
+      .pack(packItems, deferredContainer)
       .then((res) => {
-        if (!cancelled) setScenarios(res);
+        if (!cancelled) setSinglePack(res);
       })
       .catch(() => {
         /* worker gone */
@@ -218,24 +213,12 @@ export function ContainerLoadView({
     recommendation,
     activeTab,
     deferredContainer,
-    compareStrategies,
-    worker.scenarios,
+    worker.pack,
   ]);
 
-  // singlePack falls out of scenarios[0]. While the first run is in flight,
-  // show an empty pack so downstream components (3D viewer, panels) render
-  // without crashing — the worker fills in the real result a moment later.
-  const singlePack: AdvancedPackResult = useMemo(
-    () => scenarios[0]?.pack ?? makeEmptyPack(deferredContainer),
-    [scenarios, deferredContainer],
-  );
-
-  const activePack: AdvancedPackResult = selectedStrategyId
-    ? scenarios.find((s) => s.strategyId === selectedStrategyId)?.pack ??
-      (isMulti ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack : singlePack)
-    : isMulti
-      ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
-      : singlePack;
+  const activePack: AdvancedPackResult = isMulti
+    ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
+    : singlePack;
 
   // True when the worker hasn't returned a real pack yet for the current input.
   const isCalculating = worker.pending && activePack.placed.length === 0 && hasCargo;
@@ -409,11 +392,6 @@ export function ContainerLoadView({
                 view3DRef={view3DRef}
                 isActive={activeTab === String(i)}
                 viewerCollapsed={viewerCollapsed}
-                scenarios={scenarios}
-                selectedStrategyId={selectedStrategyId}
-                setSelectedStrategyId={setSelectedStrategyId}
-                compareStrategies={compareStrategies}
-                setCompareStrategies={setCompareStrategies}
                 rollup={{
                   totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
                   totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
@@ -436,11 +414,6 @@ export function ContainerLoadView({
           view3DRef={view3DRef}
           isActive
           viewerCollapsed={viewerCollapsed}
-          scenarios={scenarios}
-          selectedStrategyId={selectedStrategyId}
-          setSelectedStrategyId={setSelectedStrategyId}
-          compareStrategies={compareStrategies}
-          setCompareStrategies={setCompareStrategies}
         />
       )}
     </Card>
@@ -460,11 +433,6 @@ function SinglePlanBody({
   isActive,
   viewerCollapsed = false,
   rollup,
-  scenarios,
-  selectedStrategyId,
-  setSelectedStrategyId,
-  compareStrategies,
-  setCompareStrategies,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -476,11 +444,6 @@ function SinglePlanBody({
   isActive: boolean;
   viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
-  scenarios: ScenarioResult[];
-  selectedStrategyId: import("@/lib/freight/scenario-runner").StrategyId | null;
-  setSelectedStrategyId: (id: import("@/lib/freight/scenario-runner").StrategyId | null) => void;
-  compareStrategies: boolean;
-  setCompareStrategies: (v: boolean) => void;
 }) {
   // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
   // along scene-z (container width axis). Cleared when row toggles off.
@@ -503,11 +466,6 @@ function SinglePlanBody({
     () => buildPalletSequence(pack, rows),
     [pack, rows],
   );
-  const compliance = useMemo(
-    () => computeComplianceReport(pack, { rows }),
-    [pack, rows],
-  );
-
   // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
     if (palletIdx > palletSequence.length - 1) {
