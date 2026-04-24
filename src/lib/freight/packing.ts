@@ -5,6 +5,7 @@
 
 import type { CbmItem } from "./calculators";
 import { packContainerAdvanced } from "./packing-advanced";
+import { pickBestPlan } from "./scenario-runner";
 
 export interface ContainerPreset {
   id: "20gp" | "40gp" | "40hc";
@@ -243,8 +244,6 @@ export function pickOptimalContainer(arg: number | CbmItem[]): ContainerPreset {
   // single-strategy shortcut here previously caused split-brain: the
   // picker said "20GP fits" while the viewer's pickBestPlan disagreed,
   // producing a red HUD on a plan the optimiser had already rejected.
-  // Lazy import to avoid a static cycle (scenario-runner ← packing).
-  const { pickBestPlan } = require("./scenario-runner") as typeof import("./scenario-runner");
   for (const c of CONTAINERS) {
     if (cbm > c.capCbm * 1.05) continue;
     const { best } = pickBestPlan(items, c);
