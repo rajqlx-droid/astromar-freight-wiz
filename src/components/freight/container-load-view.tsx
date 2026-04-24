@@ -26,8 +26,6 @@ import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
 import { LoadingVideoButton } from "./loading-video-button";
-import { type ScenarioResult } from "@/lib/freight/scenario-runner";
-import { computeComplianceReport } from "@/lib/freight/compliance";
 import { type ContainerId } from "@/lib/freight/container-ids";
 import { usePackingWorker } from "@/hooks/use-packing-worker";
 
