@@ -4,6 +4,8 @@ import { computeComplianceReport, type ComplianceReport } from "./compliance";
 
 import { buildRows } from "./loading-rows";
 
+import { validateAdvancedPack, type GeometryAudit } from "./geometry-validator";
+
 import type { CbmItem } from "./calculators";
 
 import type { ContainerPreset } from "./packing";
