@@ -20,7 +20,6 @@ export const CONTAINERS: ContainerPreset[] = [
   { id: "20gp", name: "20ft GP", inner: { l: 5900, w: 2352, h: 2393 }, capCbm: 30, maxPayloadKg: 28000 },
   { id: "40gp", name: "40ft GP", inner: { l: 12032, w: 2352, h: 2393 }, capCbm: 60, maxPayloadKg: 26500 },
   { id: "40hc", name: "40ft HC", inner: { l: 12032, w: 2352, h: 2700 }, capCbm: 70, maxPayloadKg: 26500 },
-  { id: "lcl" as any, name: "LCL / Groupage", inner: { l: 3000, w: 2352, h: 2393 }, capCbm: 15, maxPayloadKg: 10000 },
 ];
 
 /** Searates-style palette — distinct, accessible. */

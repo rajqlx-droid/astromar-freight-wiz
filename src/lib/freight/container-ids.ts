@@ -6,9 +6,9 @@
 
 import { CONTAINERS } from "./packing";
 
-export type ContainerId = "20gp" | "40gp" | "40hc" | "lcl";
+export type ContainerId = "20gp" | "40gp" | "40hc";
 
-export const VALID_CONTAINER_IDS: ContainerId[] = ["20gp", "40gp", "40hc", "lcl"];
+export const VALID_CONTAINER_IDS: ContainerId[] = ["20gp", "40gp", "40hc"];
 
 /** Throws at runtime (dev only) if an unknown ID is used anywhere. */
 export function assertValidContainerId(id: string): asserts id is ContainerId {
