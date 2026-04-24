@@ -4,6 +4,8 @@ import { computeComplianceReport, type ComplianceReport } from "./compliance";
 
 import { buildRows } from "./loading-rows";
 
+import { validateAdvancedPack, type GeometryAudit } from "./geometry-validator";
+
 import type { CbmItem } from "./calculators";
 
 import type { ContainerPreset } from "./packing";
@@ -94,7 +96,8 @@ export function runAllScenarios(
     // Build rows once per scenario so the foundation-rules audit (FLOOR_GAP)
     // sees the same row groupings the loading-rows panel surfaces.
     const rows = pack.placed.length > 0 ? buildRows(pack) : [];
-    const compliance = computeComplianceReport(pack, { rows });
+    const geometryAudit = validateAdvancedPack(pack);
+    const compliance = computeComplianceReport(pack, { rows, geometryAudit });
     const placedPct =
       pack.totalCartons > 0 ? (pack.placedCartons / pack.totalCartons) * 100 : 100;
     return {
@@ -150,6 +153,8 @@ export interface BestPlan {
   all: ScenarioResult[];
   /** Aggregated decision metadata for the HUD / recommender. */
   meta: BestPlanMeta;
+  /** Canonical post-pack geometry audit for the chosen plan. */
+  audit: GeometryAudit;
 }
 
 /**
@@ -159,12 +164,11 @@ export interface BestPlan {
  *
  * Tie-break: more cartons placed → higher compliance score.
  *
- * Hard rules enforced via the compliance report:
- *   - no overlap, no hanging cargo (SUPPORT_MIN_RATIO 0.85 in the packer)
+ * Hard rules enforced via the shared geometry validator:
+ *   - no overlap, no hanging cargo (SUPPORT_MIN_RATIO 0.85)
  *   - 50 mm minimum gap (gap-rules.ts)
- *   - door / ceiling reserves
- * The packer itself rejects placements that would violate these — we then
- * confirm via compliance.canApprove that the *resulting* plan is clean.
+ *   - door / ceiling / wall reserves
+ *   - non-stackable / fragile cannot carry load
  */
 export function pickBestPlan(
   items: CbmItem[],
@@ -177,12 +181,15 @@ export function pickBestPlan(
     { id: "mixed",        name: "Loader Natural" },
   ];
 
+  const audits = new Map<string, GeometryAudit>();
   const results: ScenarioResult[] = allStrategies.map((s) => {
     // No qty scaling here: the optimise path must use 100% of the manifest
     // against 100% of the container's geometric inner dimensions.
     const pack = packContainerAdvanced(items, container, s.id);
     const rows = pack.placed.length > 0 ? buildRows(pack) : [];
-    const compliance = computeComplianceReport(pack, { rows });
+    const geometryAudit = validateAdvancedPack(pack);
+    audits.set(s.id, geometryAudit);
+    const compliance = computeComplianceReport(pack, { rows, geometryAudit });
     const placedPct =
       pack.totalCartons > 0 ? (pack.placedCartons / pack.totalCartons) * 100 : 100;
     return {
@@ -199,17 +206,14 @@ export function pickBestPlan(
     };
   });
 
-  // Filter: only keep plans without RED violations (overlap, hanging,
-  // gap < 50 mm with vertical overlap, door/ceiling breach, weight overload,
-  // floating cargo). UNPLACED is now YELLOW so shut-out alone never blocks.
-  const legal = results.filter((r) => r.compliance.status !== "RED");
+  // Filter using the shared geometry audit (single source of truth).
+  // UNPLACED is YELLOW so shut-out alone never blocks the legal pool.
+  const legal = results.filter((r) => audits.get(r.strategyId)?.allLegal === true);
 
   // Helper: count RED violations in a plan. Used as the primary tiebreak
-  // when no plan is fully legal — we then pick the *cleanest* plan, not
-  // the densest one (a plan with 50 overlap violations isn't actually
-  // better just because it crammed more cartons in).
+  // when no plan is fully legal — we then pick the *cleanest* plan.
   const redCount = (r: ScenarioResult) =>
-    r.compliance.violations.filter((v) => v.type === "RED").length;
+    audits.get(r.strategyId)?.violations.length ?? 0;
 
   // Compute shut-out totals from the manifest minus what the chosen plan
   // physically placed. Pure manifest math — no per-strategy guesswork.
@@ -233,18 +237,18 @@ export function pickBestPlan(
     return { cartons, cbm, weightKg };
   };
 
-  const buildMeta = (chosen: ScenarioResult, allLegal: boolean): BestPlanMeta => ({
-    shutOut: computeShutOut(chosen),
-    allLegal,
-    hardViolations: chosen.compliance.violations
-      .filter((v) => v.type === "RED")
-      .map((v) => v.message),
-  });
+  const buildMeta = (chosen: ScenarioResult, allLegal: boolean): BestPlanMeta => {
+    const audit = audits.get(chosen.strategyId);
+    return {
+      shutOut: computeShutOut(chosen),
+      allLegal,
+      // Use the validator's own messages so HUD copy never drifts from
+      // the optimiser's verdict.
+      hardViolations: audit ? audit.violations.map((v) => v.message) : [],
+    };
+  };
 
   if (legal.length > 0) {
-    // Healthy path: every plan in the pool is physically safe. Sort by
-    // densest placedCargoCbm, then most cartons, then highest compliance
-    // score (prefer cleaner YELLOW/GREEN over plans with more warnings).
     legal.sort((a, b) => {
       if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
         return b.pack.placedCargoCbm - a.pack.placedCargoCbm;
@@ -253,19 +257,19 @@ export function pickBestPlan(
       return b.compliance.score - a.compliance.score;
     });
     const ranked = legal.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
-    return { best: ranked[0], all: ranked, meta: buildMeta(ranked[0], true) };
+    return {
+      best: ranked[0],
+      all: ranked,
+      meta: buildMeta(ranked[0], true),
+      audit: audits.get(ranked[0].strategyId)!,
+    };
   }
 
-  // Fallback path: every strategy tripped at least one RED rule. Rather
-  // than picking the densest dirty plan (which is what produced the
-  // overlap-clipping visual the user reported), pick the plan with the
-  // FEWEST RED violations and highest compliance score. CBM is a final
-  // tiebreak — safety wins over volume when nothing is fully legal.
   const pool = [...results];
   pool.sort((a, b) => {
     const ra = redCount(a);
     const rb = redCount(b);
-    if (ra !== rb) return ra - rb; // fewer RED violations first
+    if (ra !== rb) return ra - rb;
     if (b.compliance.score !== a.compliance.score)
       return b.compliance.score - a.compliance.score;
     if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
@@ -274,5 +278,10 @@ export function pickBestPlan(
   });
 
   const ranked = pool.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
-  return { best: ranked[0], all: ranked, meta: buildMeta(ranked[0], false) };
+  return {
+    best: ranked[0],
+    all: ranked,
+    meta: buildMeta(ranked[0], false),
+    audit: audits.get(ranked[0].strategyId)!,
+  };
 }

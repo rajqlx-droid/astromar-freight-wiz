@@ -1,6 +1,7 @@
 import type { AdvancedPackResult } from "./packing-advanced";
 import { CEILING_RESERVE_MM } from "./gap-rules";
 import type { RowGroup } from "./loading-rows";
+import { validateAdvancedPack, type GeometryAudit } from "./geometry-validator";
 
 export type ComplianceStatus = "GREEN" | "YELLOW" | "RED";
 
@@ -37,55 +38,13 @@ export interface ComplianceReport {
 export interface ComplianceOptions {
   /** Pre-computed row groups from `loading-rows.buildRows`. Required to evaluate FLOOR_GAP. */
   rows?: RowGroup[];
-}
-
-// Match the packer (packing-advanced.ts) — both must agree or the auditor
-// flags clean stacks as "floating". 0.85 is the same defensive backstop the
-// placer uses; geometric overlap (below) eliminates the cell-grid penalty
-// that previously misjudged stacks of dimensions not divisible by 100 mm.
-const SUPPORT_MIN_RATIO = 0.85;
-
-/**
- * Audit each stacked box's support ratio using **geometric overlap** against
- * the boxes physically below it. Mirrors evaluatePlacement() in
- * packing-advanced.ts so the auditor and packer never disagree on whether a
- * stack is supported (a disagreement would surface as a "floating cargo" RED
- * even though the box is physically flush on its supporter).
- */
-function auditFloatingCargo(pack: AdvancedPackResult): {
-  floatingCount: number;
-  weakStackCount: number;
-} {
-  let floatingCount = 0;
-  let weakStackCount = 0;
-  const placed = pack.placed;
-
-  for (const b of placed) {
-    if (b.z <= 1) continue; // floor box — always supported
-
-    const footprintArea = b.l * b.w;
-    if (footprintArea <= 0) continue;
-
-    let overlapArea = 0;
-    for (const s of placed) {
-      if (s === b) continue;
-      // Supporter's TOP face must equal this box's BOTTOM (within 1 mm).
-      if (Math.abs(s.z + s.h - b.z) > 1) continue;
-      const ox0 = Math.max(b.x, s.x);
-      const oy0 = Math.max(b.y, s.y);
-      const ox1 = Math.min(b.x + b.l, s.x + s.l);
-      const oy1 = Math.min(b.y + b.w, s.y + s.w);
-      const dx = ox1 - ox0;
-      const dy = oy1 - oy0;
-      if (dx > 0 && dy > 0) overlapArea += dx * dy;
-    }
-
-    const ratio = Math.min(1, overlapArea / footprintArea);
-    if (ratio < SUPPORT_MIN_RATIO) floatingCount++;
-    if (ratio < 0.6) weakStackCount++;
-  }
-
-  return { floatingCount, weakStackCount };
+  /**
+   * Pre-computed final-state geometry audit. When supplied, compliance does
+   * NOT recompute it — guarantees the optimiser, worker, and HUD all agree
+   * on which boxes (if any) physically fail. Falls back to validating the
+   * pack on demand when omitted.
+   */
+  geometryAudit?: GeometryAudit;
 }
 
 export function computeComplianceReport(
@@ -153,16 +112,30 @@ export function computeComplianceReport(
     });
   }
 
-  // ── Foundation rules ─────────────────────────────────────────────
-  // 1. Floating cargo / weak foundation
-  const { floatingCount, weakStackCount } = auditFloatingCargo(pack);
+  // ── Foundation rules — derived from the shared geometry validator ────
+  // Single source of truth: same audit the optimiser uses to decide
+  // legal/illegal. Prevents the recompute drift that previously surfaced
+  // RED on plans the optimiser had already cleared.
+  const audit = opts.geometryAudit ?? validateAdvancedPack(pack);
+  const floatingV = audit.violations.find((v) => v.code === "FLOATING");
+  const weakV = audit.violations.find((v) => v.code === "WEAK_SUPPORT");
+  const overlapV = audit.violations.find((v) => v.code === "OVERLAP");
+  const neighbourV = audit.violations.find((v) => v.code === "NEIGHBOUR_GAP");
+  const wallV = audit.violations.find((v) => v.code === "WALL_GAP");
+  const doorV = audit.violations.find((v) => v.code === "DOOR_GAP");
+  const ceilV = audit.violations.find((v) => v.code === "CEILING_GAP");
+  const nonStackV = audit.violations.find((v) => v.code === "NONSTACK_LOADED");
+  const fragileV = audit.violations.find((v) => v.code === "FRAGILE_LOADED");
+
+  const floatingCount = floatingV?.placedIdxs.length ?? 0;
+  const weakStackCount = weakV?.placedIdxs.length ?? 0;
   const floorOk = floatingCount === 0;
   if (!floorOk) {
     score -= 25;
     violations.push({
       type: "RED",
       code: "FLOATING_CARGO",
-      message: `${floatingCount} stacked item${floatingCount > 1 ? "s" : ""} not resting on solid support — risk of collapse`,
+      message: floatingV!.message,
     });
   }
   foundationAudit.push({
@@ -178,7 +151,7 @@ export function computeComplianceReport(
     violations.push({
       type: "RED",
       code: "FOUNDATION_WEAK",
-      message: `${weakStackCount} stacked item${weakStackCount > 1 ? "s" : ""} on < 60% solid contact`,
+      message: weakV!.message,
     });
   }
   foundationAudit.push({
@@ -187,6 +160,38 @@ export function computeComplianceReport(
     ok: stackOk,
     detail: stackOk ? undefined : `${weakStackCount} weak foundation${weakStackCount > 1 ? "s" : ""}`,
   });
+
+  // Geometry-level RED violations — these previously could not be detected
+  // post-pack at all, so visible overlap / neighbour-gap clipping never
+  // surfaced. Each becomes a hard violation with a precise count.
+  if (overlapV) {
+    score -= 30;
+    violations.push({ type: "RED", code: "OVERLAP", message: overlapV.message });
+  }
+  if (neighbourV) {
+    score -= 15;
+    violations.push({ type: "RED", code: "NEIGHBOUR_GAP", message: neighbourV.message });
+  }
+  if (wallV) {
+    score -= 10;
+    violations.push({ type: "RED", code: "WALL_GAP", message: wallV.message });
+  }
+  if (doorV) {
+    score -= 10;
+    violations.push({ type: "RED", code: "DOOR_GAP", message: doorV.message });
+  }
+  if (ceilV) {
+    score -= 10;
+    violations.push({ type: "RED", code: "CEILING_GAP", message: ceilV.message });
+  }
+  if (nonStackV) {
+    score -= 10;
+    violations.push({ type: "RED", code: "NONSTACK_LOADED", message: nonStackV.message });
+  }
+  if (fragileV) {
+    score -= 10;
+    violations.push({ type: "RED", code: "FRAGILE_LOADED", message: fragileV.message });
+  }
 
   // 2. Floor gaps (requires rows)
   const rows = opts.rows;
