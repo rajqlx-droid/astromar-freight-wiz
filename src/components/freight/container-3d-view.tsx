@@ -623,6 +623,7 @@ function SceneContents({
             const flyIn = !recording && !!flyInPlacedSet?.has(i);
             const isActivePallet = !recording && i === activePalletIdx;
             const isNearCeiling = !recording && (nearCeilingPlacedIdxs?.includes(i) ?? false);
+            const sr = supportRatios?.[i];
             return (
               <CargoBox
                 key={i}
@@ -638,6 +639,8 @@ function SceneContents({
                 showCheckmark={isActivePallet}
                 showEdges={showEdges}
                 nearCeiling={isNearCeiling}
+                debugSupport={debugSupport}
+                supportRatio={typeof sr === "number" ? sr : null}
               />
             );
           });
