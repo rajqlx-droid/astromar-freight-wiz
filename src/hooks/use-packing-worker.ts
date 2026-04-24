@@ -39,11 +39,15 @@ interface ScenariosResponse {
   kind: "scenarios";
   result: ScenarioResult[];
 }
+interface OptimiseResponse {
+  kind: "optimise";
+  result: BestPlan;
+}
 interface RecommendResponse {
   kind: "recommend";
   result: RecommendResponseResult;
 }
-type AnyResponse = PackResponse | ScenariosResponse | RecommendResponse;
+type AnyResponse = PackResponse | ScenariosResponse | OptimiseResponse | RecommendResponse;
 
 interface UsePackingWorker {
   /** Pack a single container. */
@@ -54,6 +58,12 @@ interface UsePackingWorker {
     container: ContainerPreset,
     strategies: StrategyId[],
   ) => Promise<ScenarioResult[]>;
+  /**
+   * Internal scenario sweep — tries every strategy at full container
+   * geometry and returns the densest legal plan. Used by the Optimise
+   * loading action.
+   */
+  optimise: (items: CbmItem[], container: ContainerPreset) => Promise<BestPlan>;
   /** Geometry-aware recommendation in one round trip. */
   recommend: (items: CbmItem[]) => Promise<RecommendResponseResult>;
   /** True while at least one job is in flight. */
