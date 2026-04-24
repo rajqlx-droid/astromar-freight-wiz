@@ -124,3 +124,77 @@ export function runAllScenarios(
   return results.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
 
 }
+
+export interface BestPlan {
+  /** The densest legal pack across all tried strategies. */
+  best: ScenarioResult;
+  /** Every strategy result (legal + filtered) for diagnostics. */
+  all: ScenarioResult[];
+}
+
+/**
+ * Internal scenario sweep — runs every strategy at FULL container geometry
+ * (no qty downscale, no stowage haircut), filters out plans with hard
+ * physical violations, and returns the densest survivor by placedCargoCbm.
+ *
+ * Tie-break: more cartons placed → higher compliance score.
+ *
+ * Hard rules enforced via the compliance report:
+ *   - no overlap, no hanging cargo (SUPPORT_MIN_RATIO 0.85 in the packer)
+ *   - 50 mm minimum gap (gap-rules.ts)
+ *   - door / ceiling reserves
+ * The packer itself rejects placements that would violate these — we then
+ * confirm via compliance.canApprove that the *resulting* plan is clean.
+ */
+export function pickBestPlan(
+  items: CbmItem[],
+  container: ContainerPreset,
+): BestPlan {
+  const allStrategies: Array<{ id: StrategyId; name: string }> = [
+    { id: "row-back",     name: "Row: Back → Front" },
+    { id: "weight-first", name: "Heavy First" },
+    { id: "floor-first",  name: "Floor Maximise" },
+    { id: "mixed",        name: "Loader Natural" },
+  ];
+
+  const results: ScenarioResult[] = allStrategies.map((s) => {
+    // No qty scaling here: the optimise path must use 100% of the manifest
+    // against 100% of the container's geometric inner dimensions.
+    const pack = packContainerAdvanced(items, container, s.id);
+    const rows = pack.placed.length > 0 ? buildRows(pack) : [];
+    const compliance = computeComplianceReport(pack, { rows });
+    const placedPct =
+      pack.totalCartons > 0 ? (pack.placedCartons / pack.totalCartons) * 100 : 100;
+    return {
+      strategyId: s.id,
+      strategyName: s.name,
+      pack,
+      utilizationPct: pack.utilizationPct,
+      voidPct: Math.max(0, 100 - pack.utilizationPct),
+      placedPct,
+      cogOk: Math.abs(pack.cogOffsetPct) <= 0.2,
+      compliance,
+      isBest: false,
+      rank: 0,
+    };
+  });
+
+  // Filter: only keep plans without RED violations (overlap, hanging,
+  // gap < 50 mm with vertical overlap, door/ceiling breach).
+  const legal = results.filter((r) => r.compliance.status !== "RED");
+  // If every strategy hit a RED (rare — usually means cargo cannot fit at
+  // all), fall back to the full set so we still return *something* the
+  // shut-out report can subtract from.
+  const pool = legal.length > 0 ? legal : results;
+
+  pool.sort((a, b) => {
+    if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
+      return b.pack.placedCargoCbm - a.pack.placedCargoCbm;
+    if (b.pack.placedCartons !== a.pack.placedCartons)
+      return b.pack.placedCartons - a.pack.placedCartons;
+    return b.compliance.score - a.compliance.score;
+  });
+
+  const ranked = pool.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
+  return { best: ranked[0], all: ranked };
+}

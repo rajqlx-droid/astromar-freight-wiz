@@ -140,7 +140,11 @@ export function ContainerLoadView({
   // Now everything runs in a Worker; the UI keeps responding while jobs run.
   const worker = usePackingWorker();
 
-  // Single-strategy pack using the "row-back" loader.
+  // Multi-strategy sweep: the worker tries every loader strategy at full
+  // container geometry and returns the densest LEGAL plan (no overlap, no
+  // hanging cargo, 50 mm gap rule honoured). Effective CBM is only reduced
+  // when carton dimensions + gap rules physically prevent a tighter fit —
+  // never as a default safety margin.
   const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
     makeEmptyPack(deferredContainer),
   );
@@ -151,9 +155,9 @@ export function ContainerLoadView({
     }
     let cancelled = false;
     worker
-      .pack(deferredItems, deferredContainer)
+      .optimise(deferredItems, deferredContainer)
       .then((res) => {
-        if (!cancelled) setSinglePack(res);
+        if (!cancelled) setSinglePack(res.best.pack);
       })
       .catch(() => {
         /* worker gone */
@@ -161,7 +165,7 @@ export function ContainerLoadView({
     return () => {
       cancelled = true;
     };
-  }, [hasCargo, deferredItems, deferredContainer, worker.pack]);
+  }, [hasCargo, deferredItems, deferredContainer, worker.optimise]);
 
   const activePack: AdvancedPackResult = singlePack;
 

@@ -12,7 +12,8 @@
 
 import type { CbmItem } from "./calculators";
 import { CONTAINERS, type ContainerPreset } from "./packing";
-import { packContainerAdvanced } from "./packing-advanced";
+import type { AdvancedPackResult } from "./packing-advanced";
+import { pickBestPlan } from "./scenario-runner";
 import { CEILING_RESERVE_MM, getGapRule } from "./gap-rules";
 
 /**
@@ -105,6 +106,9 @@ function sumQty(items: CbmItem[]): number {
 
 /**
  * Find smallest single container that physically fits ALL items.
+ * Uses the multi-strategy optimiser so a fit isn't missed because the
+ * default strategy happened to leave residue while another would have
+ * placed everything.
  * Returns null when even a 40HC can't hold the load.
  */
 function fitSingle(items: CbmItem[]): ContainerPreset | null {
@@ -115,26 +119,28 @@ function fitSingle(items: CbmItem[]): ContainerPreset | null {
   for (const c of ASC) {
     if (cbm > USABLE_CBM[c.id]) continue;
     if (weightKg > c.maxPayloadKg) continue;
-    const pack = packContainerAdvanced(items, c);
-    if (pack.placedCartons >= totalQty) return c;
+    const { best } = pickBestPlan(items, c);
+    if (best.pack.placedCartons >= totalQty) return c;
   }
   return null;
 }
 
 /**
  * Compute the cargo shut-out report when the manifest exceeds 40HC capacity.
- * Runs the packer against the 40HC and reports unplaced cartons / cbm / kg.
+ * Runs the multi-strategy optimiser against the 40HC and reports unplaced
+ * cartons / cbm / kg from the densest legal plan.
  */
 function computeShutOut(
   items: CbmItem[],
   reason: CargoShutOut["reason"],
+  pack?: AdvancedPackResult,
 ): CargoShutOut {
-  const pack = packContainerAdvanced(items, MAX_CONTAINER);
+  const result = pack ?? pickBestPlan(items, MAX_CONTAINER).best.pack;
   let cartons = 0;
   let cbm = 0;
   let weightKg = 0;
   items.forEach((it, idx) => {
-    const stat = pack.perItem[idx];
+    const stat = result.perItem[idx];
     const placed = stat?.placed ?? 0;
     const unplaced = Math.max(0, it.qty - placed);
     if (unplaced <= 0) return;
@@ -275,7 +281,10 @@ export function recommendContainers(
   }
 
   // Cargo can't fit in even a 40HC — pin the recommendation to a single 40HC
-  // and surface a shut-out report.
+  // and surface a shut-out report. Run the optimiser ONCE here and reuse its
+  // pack result so the headline number and shut-out totals stay consistent.
+  const bestPlan = pickBestPlan(items, MAX_CONTAINER).best.pack;
+
   let reason: ContainerRecommendation["reason"];
   let reasonDetail: string | undefined;
   let shutOutReason: CargoShutOut["reason"];
@@ -288,11 +297,10 @@ export function recommendContainers(
   } else {
     reason = "exceeds-single-geometry";
     shutOutReason = "exceeds-geometry";
-    const sim = packContainerAdvanced(items, MAX_CONTAINER);
-    reasonDetail = `CBM math (${totalCbm.toFixed(1)} m³) fits a 40ft HC, but height/footprint geometry caps real load at ${sim.placedCartons} of ${totalQty} pieces.`;
+    reasonDetail = `CBM math (${totalCbm.toFixed(1)} m³) fits a 40ft HC, but height/footprint geometry caps real load at ${bestPlan.placedCartons} of ${totalQty} pieces.`;
   }
 
-  const shutOut = computeShutOut(items, shutOutReason);
+  const shutOut = computeShutOut(items, shutOutReason, bestPlan);
   const placedCbm = Math.max(0, totalCbm - shutOut.cbm);
   const placedWt = Math.max(0, totalWt - shutOut.weightKg);
 

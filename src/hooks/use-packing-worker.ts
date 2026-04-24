@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PackingWorker from "@/lib/freight/packing-worker?worker";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
-import type { ScenarioResult, StrategyId } from "@/lib/freight/scenario-runner";
+import type { BestPlan, ScenarioResult, StrategyId } from "@/lib/freight/scenario-runner";
 import type { CbmItem } from "@/lib/freight/calculators";
 import type { ContainerPreset } from "@/lib/freight/packing";
 import type { RecommendResponseResult } from "@/lib/freight/packing-worker";
@@ -39,11 +39,15 @@ interface ScenariosResponse {
   kind: "scenarios";
   result: ScenarioResult[];
 }
+interface OptimiseResponse {
+  kind: "optimise";
+  result: BestPlan;
+}
 interface RecommendResponse {
   kind: "recommend";
   result: RecommendResponseResult;
 }
-type AnyResponse = PackResponse | ScenariosResponse | RecommendResponse;
+type AnyResponse = PackResponse | ScenariosResponse | OptimiseResponse | RecommendResponse;
 
 interface UsePackingWorker {
   /** Pack a single container. */
@@ -54,6 +58,12 @@ interface UsePackingWorker {
     container: ContainerPreset,
     strategies: StrategyId[],
   ) => Promise<ScenarioResult[]>;
+  /**
+   * Internal scenario sweep — tries every strategy at full container
+   * geometry and returns the densest legal plan. Used by the Optimise
+   * loading action.
+   */
+  optimise: (items: CbmItem[], container: ContainerPreset) => Promise<BestPlan>;
   /** Geometry-aware recommendation in one round trip. */
   recommend: (items: CbmItem[]) => Promise<RecommendResponseResult>;
   /** True while at least one job is in flight. */
@@ -142,6 +152,14 @@ export function usePackingWorker(): UsePackingWorker {
     [send],
   );
 
+  const optimise = useCallback<UsePackingWorker["optimise"]>(
+    async (items, container) => {
+      const r = await send<OptimiseResponse>({ kind: "optimise", items, container });
+      return r.result;
+    },
+    [send],
+  );
+
   const recommend = useCallback<UsePackingWorker["recommend"]>(
     async (items) => {
       const r = await send<RecommendResponse>({ kind: "recommend", items });
@@ -153,7 +171,7 @@ export function usePackingWorker(): UsePackingWorker {
   const pending = inflight > 0;
 
   return useMemo<UsePackingWorker>(
-    () => ({ pack, scenarios, recommend, pending }),
-    [pack, scenarios, recommend, pending],
+    () => ({ pack, scenarios, optimise, recommend, pending }),
+    [pack, scenarios, optimise, recommend, pending],
   );
 }
