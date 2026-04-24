@@ -606,12 +606,13 @@ export function packContainerAdvanced(
           if (weightOk) {
             bestPick.z = ev.z;
             bestPick.supporters = ev.supporters;
+            bestPick.supportRatio = ev.supportRatio;
           }
         }
       }
     }
 
-    const { x, y, z, orient, supporters } = bestPick;
+    const { x, y, z, orient, supporters, supportRatio } = bestPick;
     const internalIdx = placedInternal.length;
 
     // Detect rotation vs original dimensions.
@@ -639,6 +640,9 @@ export function packContainerAdvanced(
       sealed: false,
     };
     placedInternal.push(box);
+    // Floor placements are inherently fully supported. Stacked placements
+    // record the geometric overlap ratio captured at the chosen position.
+    placedSupportRatios.push(z === 0 ? 1 : supportRatio);
 
     // Update supporter loads.
     for (const sIdx of supporters) {
