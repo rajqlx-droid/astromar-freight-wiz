@@ -4,7 +4,7 @@ import { LoaderHUD } from "./loader-hud";
 import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+
 import { cn } from "@/lib/utils";
 import {
   CONTAINERS,
@@ -17,10 +17,7 @@ import {
   type PlacedBox,
 } from "@/lib/freight/packing";
 import { type AdvancedPackResult } from "@/lib/freight/packing-advanced";
-import {
-  splitItemsAcrossContainers,
-  type ContainerRecommendation,
-} from "@/lib/freight/container-recommender";
+import { type ContainerRecommendation } from "@/lib/freight/container-recommender";
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
@@ -40,7 +37,7 @@ const Container3DView = lazy(() =>
 
 interface Props {
   items: CbmItem[];
-  /** Smart recommendation from the calculator. Drives multi-container tabbed view. */
+  /** Smart recommendation from the calculator. Kept for callers but no longer used to drive multi-container tabs. */
   recommendation?: ContainerRecommendation;
   /** Manually-applied choice that overrides "auto". */
   forcedChoice?: ContainerId | null;
@@ -53,10 +50,6 @@ interface Props {
   }) => void;
   /** When set, disables the 3D toggle and Loading Video button (CBM gate). */
   optimizationDisabledReason?: string | null;
-  /** Controlled active unit index (multi-container). Falls back to internal state when omitted. */
-  activeUnitIdx?: number;
-  /** Notify parent when the user switches the visible container tab. */
-  onActiveUnitChange?: (idx: number) => void;
 }
 
 type ContainerChoice = "auto" | ContainerId;
@@ -100,13 +93,10 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
 
 export function ContainerLoadView({
   items,
-  recommendation,
   forcedChoice,
   onChoiceChange,
   onReady,
   optimizationDisabledReason,
-  activeUnitIdx,
-  onActiveUnitChange,
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
@@ -117,13 +107,6 @@ export function ContainerLoadView({
 
   const [is3D, setIs3D] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [internalActiveTab, setInternalActiveTab] = useState("0");
-  const activeTab =
-    typeof activeUnitIdx === "number" ? String(activeUnitIdx) : internalActiveTab;
-  const setActiveTab = (v: string) => {
-    setInternalActiveTab(v);
-    onActiveUnitChange?.(Number(v));
-  };
   const [viewerCollapsed, setViewerCollapsed] = useState(false);
   const view3DRef = useRef<Container3DHandle | null>(null);
 
@@ -136,7 +119,6 @@ export function ContainerLoadView({
   const cargoQty = useMemo(() => totalQty(items), [items]);
 
   const hasCargo = cargoCbm > 0 && cargoQty > 0;
-  const isMulti = recommendation?.isMulti === true;
 
   // Geometry-aware auto-pick: smallest container the 3D packer can actually
   // place every piece in (not just one where CBM math fits). For 16 tall
@@ -153,33 +135,10 @@ export function ContainerLoadView({
   const deferredContainer = useDeferredValue(activeContainer);
 
   // ─── Off-main-thread packing via Web Worker ────────────────────────────
-  // The packer can take 10–30 seconds for multi-container loads with hundreds
-  // of cartons. Running it inline froze the page and produced a 36s INP.
+  // The packer can take 10–30 seconds for large loads with hundreds of cartons.
+  // Running it inline froze the page and produced a 36s INP.
   // Now everything runs in a Worker; the UI keeps responding while jobs run.
   const worker = usePackingWorker();
-
-  // Multi-container packs (one per recommended unit).
-  const [multiPacks, setMultiPacks] = useState<AdvancedPackResult[]>([]);
-  useEffect(() => {
-    if (!isMulti || !recommendation) {
-      setMultiPacks([]);
-      return;
-    }
-    let cancelled = false;
-    const buckets = splitItemsAcrossContainers(deferredItems, recommendation);
-    const containers = recommendation.units.map((u) => u.container);
-    worker
-      .multi(buckets, containers)
-      .then((res) => {
-        if (!cancelled) setMultiPacks(res);
-      })
-      .catch(() => {
-        // Worker terminated mid-flight — keep prior result.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredItems, isMulti, recommendation, worker.multi]);
 
   // Single-strategy pack using the "row-back" loader.
   const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
@@ -191,12 +150,8 @@ export function ContainerLoadView({
       return;
     }
     let cancelled = false;
-    const packItems = isMulti
-      ? splitItemsAcrossContainers(deferredItems, recommendation!)[Number(activeTab)] ??
-        deferredItems
-      : deferredItems;
     worker
-      .pack(packItems, deferredContainer)
+      .pack(deferredItems, deferredContainer)
       .then((res) => {
         if (!cancelled) setSinglePack(res);
       })
@@ -206,19 +161,9 @@ export function ContainerLoadView({
     return () => {
       cancelled = true;
     };
-  }, [
-    hasCargo,
-    isMulti,
-    deferredItems,
-    recommendation,
-    activeTab,
-    deferredContainer,
-    worker.pack,
-  ]);
+  }, [hasCargo, deferredItems, deferredContainer, worker.pack]);
 
-  const activePack: AdvancedPackResult = isMulti
-    ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
-    : singlePack;
+  const activePack: AdvancedPackResult = singlePack;
 
   // True when the worker hasn't returned a real pack yet for the current input.
   const isCalculating = worker.pending && activePack.placed.length === 0 && hasCargo;
@@ -247,15 +192,12 @@ export function ContainerLoadView({
       },
       getActivePack: () => activePackRef.current,
     });
-  }, [onReady, is3D, activeTab]);
+  }, [onReady, is3D]);
 
-  const viewerLabelledBy = isMulti ? `container-bucket-tab-${activeTab}` : undefined;
   return (
     <Card
       id="container-load-viewer"
       tabIndex={-1}
-      role={isMulti ? "region" : undefined}
-      aria-labelledby={viewerLabelledBy}
       className="border-2 p-4 outline-none focus-visible:ring-2 focus-visible:ring-brand-navy sm:p-5"
       style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)" }}
     >
@@ -350,59 +292,6 @@ export function ContainerLoadView({
 
       {!hasCargo ? (
         <EmptyState />
-      ) : isMulti && multiPacks.length > 0 ? (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-3 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
-            {multiPacks.map((p, i) => {
-              const allPlaced = p.placedCartons >= p.totalCartons && p.totalCartons > 0;
-              return (
-                <TabsTrigger
-                  key={i}
-                  value={String(i)}
-                  className="flex-1 gap-1.5 text-[11px] sm:text-xs"
-                >
-                  <span className="font-semibold">#{i + 1}</span>
-                  {p.container.name}
-                  <span className="hidden text-muted-foreground sm:inline">
-                    · {p.cargoCbm.toFixed(1)} m³
-                  </span>
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                      allPlaced
-                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-                        : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
-                    )}
-                  >
-                    {p.placedCartons}/{p.totalCartons}
-                  </span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-          {multiPacks.map((p, i) => (
-            <TabsContent key={i} value={String(i)} className="m-0">
-              <SinglePlanBody
-                pack={p}
-                weight={p.weightKg}
-                qty={p.placedCartons}
-                items={items}
-                is3D={is3D}
-                mounted={mounted}
-                view3DRef={view3DRef}
-                isActive={activeTab === String(i)}
-                viewerCollapsed={viewerCollapsed}
-                rollup={{
-                  totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
-                  totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
-                  totalContainers: multiPacks.length,
-                  totalPlaced: multiPacks.reduce((s, x) => s + x.placedCartons, 0),
-                  totalPlanned: multiPacks.reduce((s, x) => s + x.totalCartons, 0),
-                }}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
       ) : (
         <SinglePlanBody
           pack={activePack}
