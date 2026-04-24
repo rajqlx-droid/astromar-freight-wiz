@@ -285,4 +285,3 @@ export function pickBestPlan(
     audit: audits.get(ranked[0].strategyId)!,
   };
 }
-}
