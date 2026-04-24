@@ -488,6 +488,11 @@ function SinglePlanBody({
     null,
   );
 
+  // Support-ratio debug overlay — recolours every cargo box by its
+  // recorded support ratio at placement time. Off by default; toggled from
+  // the viewer toolbar so QA can verify stacking decisions visually.
+  const [debugSupport, setDebugSupport] = useState(false);
+
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
   const [palletIdx, setPalletIdx] = useState(-1);
   const [showForkliftToken, setShowForkliftToken] = useState(true);
