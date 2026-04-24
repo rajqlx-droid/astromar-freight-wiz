@@ -4,7 +4,6 @@
  */
 
 import type { CbmItem } from "./calculators";
-import { packContainerAdvanced } from "./packing-advanced";
 import { pickBestPlan } from "./scenario-runner";
 
 export interface ContainerPreset {
