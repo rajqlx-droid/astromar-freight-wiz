@@ -74,6 +74,7 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
   return {
     container,
     placed: [],
+    supportRatios: [],
     totalCartons: 0,
     placedCartons: 0,
     truncated: false,
@@ -90,6 +91,12 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
     cogLateralOffsetPct: 0,
     nearCeilingPlacedIdxs: [],
     floorCoveragePct: 0,
+    stackingDiagnostics: {
+      rejectedAttempts: 0,
+      unplacedDueToStacking: 0,
+      reasonCounts: { support: 0, sealed: 0, stackWeight: 0, nonStackable: 0 },
+      dominantReason: null,
+    },
   };
 }
 
