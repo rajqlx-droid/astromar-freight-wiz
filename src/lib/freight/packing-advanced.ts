@@ -65,7 +65,11 @@ export interface AdvancedPackResult {
 
 const RENDER_CAP = 500;
 const CELL_MM = 100; // 10cm grid — good resolution vs. perf
-const SUPPORT_MIN_RATIO = 0.9; // ≥ 90% footprint must rest on something solid
+// Support threshold lowered to 0.85 as a defensive backstop. The primary fix
+// is geometric overlap (see evaluatePlacement) which removes the cell-grid
+// quantization penalty that previously blocked stacking of identical cartons
+// whose dimensions weren't a multiple of CELL_MM (e.g. 1219.2 mm cubes).
+const SUPPORT_MIN_RATIO = 0.85;
 const PLACE_STEP_MM = 50; // candidate XY scan stride (finer = tighter packing)
 
 interface ExpandedCarton {
