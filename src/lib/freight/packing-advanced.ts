@@ -561,6 +561,7 @@ export function packContainerAdvanced(
         bestPick!.x = nx;
         bestPick!.y = ny;
         bestPick!.supporters = ev.supporters;
+        bestPick!.supportRatio = ev.supportRatio;
       }
       // Fine 1mm slide for the last sub-coarse gap.
       for (let i = 0; i < COARSE; i++) {
@@ -574,6 +575,7 @@ export function packContainerAdvanced(
         bestPick!.x = nx;
         bestPick!.y = ny;
         bestPick!.supporters = ev.supporters;
+        bestPick!.supportRatio = ev.supportRatio;
       }
     };
     snapAxis("x");
