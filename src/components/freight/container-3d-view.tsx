@@ -1370,6 +1370,32 @@ function CargoBox({
           <meshBasicMaterial color="#f59e0b" transparent opacity={0.75} />
         </mesh>
       )}
+      {/* Support-ratio debug overlay — translucent shell around the box,
+          coloured by stacking quality. Floor placements are blue; stacked
+          placements run red→amber→green by ratio. */}
+      {debugSupport && (
+        <mesh>
+          <boxGeometry args={[lm * 1.05, hm * 1.05, wm * 1.05]} />
+          <meshBasicMaterial
+            color={
+              box.z < 10
+                ? "#3b82f6" // floor — blue
+                : supportRatio == null
+                  ? "#9ca3af" // unknown — grey
+                  : supportRatio >= 0.95
+                    ? "#10b981" // strong — green
+                    : supportRatio >= 0.85
+                      ? "#84cc16" // ok — lime
+                      : supportRatio >= 0.5
+                        ? "#f59e0b" // borderline — amber
+                        : "#ef4444" // weak — red
+            }
+            transparent
+            opacity={0.35}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
     </group>
   );
 }
