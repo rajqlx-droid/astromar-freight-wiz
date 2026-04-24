@@ -11,7 +11,13 @@
  * The id lets the hook drop responses for stale requests without a race.
  */
 import { packContainerAdvanced, type AdvancedPackResult } from "./packing-advanced";
-import { runAllScenarios, type ScenarioResult, type StrategyId } from "./scenario-runner";
+import {
+  runAllScenarios,
+  pickBestPlan,
+  type BestPlan,
+  type ScenarioResult,
+  type StrategyId,
+} from "./scenario-runner";
 import {
   recommendContainers,
   type ContainerRecommendation,
@@ -32,6 +38,11 @@ export type PackingRequest =
       strategies: StrategyId[];
     }
   | {
+      kind: "optimise";
+      items: CbmItem[];
+      container: ContainerPreset;
+    }
+  | {
       kind: "recommend";
       items: CbmItem[];
     };
@@ -43,6 +54,7 @@ export interface RecommendResponseResult {
 export type PackingResponse =
   | { kind: "pack"; result: AdvancedPackResult }
   | { kind: "scenarios"; result: ScenarioResult[] }
+  | { kind: "optimise"; result: BestPlan }
   | { kind: "recommend"; result: RecommendResponseResult };
 
 interface IncomingMessage {
