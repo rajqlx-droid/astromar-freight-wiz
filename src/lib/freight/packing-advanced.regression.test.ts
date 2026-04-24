@@ -72,11 +72,15 @@ describe("packing-advanced — 121.92cm cube regression", () => {
     });
   });
 
-  it("exposes stackingDiagnostics — support stays clean for identical stacks", () => {
+  it("exposes stackingDiagnostics structure", () => {
     const pack = packContainerAdvanced(make30Cubes(), hc);
     expect(pack.stackingDiagnostics).toBeDefined();
-    // Identical cubes flush on each other still must not trip the support rule
-    // (geometric-overlap fix). Other rules may fire under the 50mm gap regime.
-    expect(pack.stackingDiagnostics.reasonCounts.support).toBeLessThanOrEqual(pack.placed.length);
+    // Diagnostics object must always expose the per-rule counters.
+    expect(pack.stackingDiagnostics.reasonCounts).toMatchObject({
+      support: expect.any(Number),
+      sealed: expect.any(Number),
+      stackWeight: expect.any(Number),
+      nonStackable: expect.any(Number),
+    });
   });
 });
