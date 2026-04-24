@@ -336,6 +336,7 @@ function SinglePlanBody({
   isActive,
   viewerCollapsed = false,
   rollup,
+  planMeta = null,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -347,6 +348,7 @@ function SinglePlanBody({
   isActive: boolean;
   viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
+  planMeta?: BestPlanMeta | null;
 }) {
   // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
   // along scene-z (container width axis). Cleared when row toggles off.
