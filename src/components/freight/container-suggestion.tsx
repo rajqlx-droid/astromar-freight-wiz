@@ -168,9 +168,18 @@ export function ContainerSuggestion({
 
       {hasShutOut && shutOut && (
         <div className="mt-3 rounded-md border-2 border-rose-300/60 bg-white/90 p-2.5 dark:border-rose-700/60 dark:bg-black/30">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-rose-900 dark:text-rose-200">
+          <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-rose-900 dark:text-rose-200">
             <PackageX className="size-3.5" />
-            Cargo shut out — won't fit in a single 40ft HC
+            <span>Cargo shut out — won't fit in a single 40ft HC</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-7 gap-1 border-rose-400/60 px-2 text-[11px] text-rose-900 hover:bg-rose-100 dark:border-rose-600/60 dark:text-rose-100 dark:hover:bg-rose-900/40"
+              onClick={() => downloadShutOutCsv(recommendation)}
+            >
+              <Download className="size-3" />
+              Download summary
+            </Button>
           </div>
           <div className="grid grid-cols-3 gap-2 text-[11px]">
             <ShutOutStat label="Packages" value={shutOut.cartons > 0 ? shutOut.cartons.toLocaleString("en-IN") : "—"} />
