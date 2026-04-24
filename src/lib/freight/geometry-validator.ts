@@ -234,7 +234,9 @@ export function validatePackGeometry(
   for (let i = 0; i < placed.length; i++) {
     const b = placed[i];
     const f = flags(b.itemIdx);
-    if (!f.stackable && !f.fragile) continue;
+    // Skip boxes that are both stackable AND not fragile — only restricted
+    // boxes (non-stackable OR fragile) can violate this rule.
+    if (f.stackable && !f.fragile) continue;
     // Find any box whose bottom face rests on b's top.
     for (let j = 0; j < placed.length; j++) {
       if (i === j) continue;
