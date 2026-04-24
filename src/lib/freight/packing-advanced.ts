@@ -676,11 +676,14 @@ export function packContainerAdvanced(
     color: p.color, itemIdx: p.itemIdx, rotated: p.rotated ?? null,
   });
   let placed: PlacedBox[];
+  let supportRatios: number[];
   if (placedInternal.length > RENDER_CAP) {
     truncated = true;
     placed = placedInternal.slice(0, RENDER_CAP).map(toPlaced);
+    supportRatios = placedSupportRatios.slice(0, RENDER_CAP);
   } else {
     placed = placedInternal.map(toPlaced);
+    supportRatios = placedSupportRatios.slice();
   }
 
   // COG along container length (X axis).
