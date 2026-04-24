@@ -1,69 +1,50 @@
-## Optimise loading: run multiple internal scenarios, pick densest legal plan
+# Maximise-CBM Optimiser (internal scenario sweep)
 
-When the user clicks **Optimise loading**, the system will silently try several packing strategies against the **full geometric container** and commit the densest plan that has zero physical violations. Cargo only gets reported as "shut out" if no strategy can fit it.
+## Goal
+When the user clicks **Optimise loading**, silently run multiple packing strategies against the **single 40HC** target and commit the densest *legal* plan. Anything that won't fit becomes the Cargo Shut-out summary.
 
-### Hard rules (the optimiser must NEVER violate these)
+## Hard rules (always enforced)
+- **100% geometric container dimensions** (no stowage haircut). Capacities stay at 20GP 33.23 m³, 40GP 67.78 m³, 40HC 76.34 m³ in `src/lib/freight/packing.ts`. Effective CBM is reduced **only** when carton dimensions + gap rules physically prevent a tighter fit — never as a default safety margin.
+- **Universal 50 mm gap** between neighbours and walls (already in `src/lib/freight/gap-rules.ts`); door 100 mm; ceiling 80 mm.
+- **No hanging / no overlap**: keep `SUPPORT_MIN_RATIO = 0.85` and the existing overlap guard in `packing-advanced.ts`.
+- **Single container only** (40HC max). Multi-container stuffing stays disabled.
 
-1. **Always use 100% of container inner dimensions.**
-   - Use full `inner.l × inner.w × inner.h` from `CONTAINERS` in `src/lib/freight/packing.ts` (20GP 33.23 m³, 40GP 67.78 m³, 40HC 76.34 m³).
-   - Do **not** apply any default safety derate, stowage factor, or "usable %" haircut to the container volume.
-   - The only thing allowed to reduce achievable CBM is the **cargo's own dimensions + the 50 mm gap rule** when they geometrically refuse to tessellate. That's a packing outcome, not a configured cap.
+## Changes
 
-2. **Gap rule comes from the cargo, not the container.**
-   - Apply `getGapRule(packageType)` per item from `src/lib/freight/gap-rules.ts` (currently 50 mm lateral / 50 mm wall / door 100 mm / ceiling 80 mm for every package type).
-   - Vertical stacking stays flush (the existing `zOverlapMm > 1` check in `packing-advanced.ts` is preserved).
+### 1. `src/lib/freight/scenario-runner.ts`
+Add `pickBestPlan(items, container)`:
+- Runs all four strategies (`row-back`, `weight-first`, `floor-first`, `mixed`) via `packContainerAdvanced`.
+- Filters out any pack whose `compliance` report contains hard violations (overlap, hanging, gap < 50 mm on neighbours with vertical overlap > 1 mm).
+- Picks the survivor with the **highest `placedCargoCbm`**; ties broken by `placedCartons`, then `compliance.score`.
+- Returns `{ best: ScenarioResult, all: ScenarioResult[] }` so callers can still inspect.
+- Removes the existing `qty > 300` downscale shortcut for the optimise path (it silently shrinks the manifest and contradicts "use 100% dimensions"). Keep the safeguard only for the legacy `runAllScenarios` callers.
 
-3. **No hanging, no overlapping.**
-   - Keep `SUPPORT_MIN_RATIO = 0.85` in `packing-advanced.ts`.
-   - Keep all existing collision / wall / door / ceiling checks.
-
-4. **Single container only — 40HC max.** The previously-removed multi-container logic stays removed. Anything that doesn't fit becomes Cargo Shut Out.
-
-### Internal scenario sweep
-
-**`src/lib/freight/scenario-runner.ts`** — add `pickBestPlan(items, container)`:
-- Runs four strategies already defined: `row-back`, `weight-first`, `floor-first`, `mixed`.
-- For each result, validates: zero overlaps, all `supportRatios >= 0.85`, no gap-rule violations, no door/ceiling reserve breach.
-- Filters out any plan with violations.
-- Picks the survivor with the **highest `placedCargoCbm`**; ties broken by highest `placedCount`, then lowest COG height.
-- Returns `{ best: ScenarioResult, tried: ScenarioResult[] }` so the caller can show "tried N plans, picked X".
-
-### Worker + hook plumbing
-
-**`src/lib/freight/packing-worker.ts`** — add a new request kind:
+### 2. `src/lib/freight/packing-worker.ts`
+Add a new request kind:
 ```ts
-{ kind: "optimise"; items: CbmItem[]; container: ContainerPreset }
+| { kind: "optimise"; items: CbmItem[]; container: ContainerPreset }
 ```
-Handler calls `pickBestPlan` and returns `{ kind: "optimise"; result: { best, tried } }`.
+Handler calls `pickBestPlan` and posts back `{ kind: "optimise", result: { best, all } }`.
 
-**`src/hooks/use-packing-worker.ts`** — expose `optimise(items, container)` that mirrors the existing `pack()` / `scenarios()` methods (id-based request, drops stale responses).
+### 3. `src/hooks/use-packing-worker.ts`
+Expose `optimise(items, container): Promise<{ best, all }>` mirroring the existing `pack`/`scenarios` methods, with the same stale-id guard.
 
-### Recommender update
+### 4. `src/lib/freight/container-recommender.ts`
+- `fitSingle` (and the 40HC path used by `recommendContainers`) calls `pickBestPlan` instead of a single `packContainerAdvanced` call so the shut-out maths reflects the densest legal pack.
+- Shut-out totals = manifest − `best.pack.placedCartons` / `best.pack.placedCargoCbm` / placed weight. Reason string already covers volume / weight / geometry.
 
-**`src/lib/freight/container-recommender.ts`**:
-- `fitSingle` and `computeShutOut` switch from a single `packContainerAdvanced` call to `pickBestPlan` so shut-out is only reported when **every** strategy fails to place an item.
-- Shut-out CSV (already implemented) keeps showing unplaced packages, CBM, and weight — values now come from the densest plan.
+### 5. `src/components/freight/cbm-calculator.tsx`
+- The **Optimise loading** action calls the new `optimise()` worker method.
+- Commits `best.pack` to the 3D loader, results card, loading-rows panel and the downloadable shut-out CSV (already wired through `container-suggestion.tsx`).
+- No new UI — the scenario sweep is invisible. Existing "Cargo shut out" alert + Download summary keep working.
 
-### UI wiring
+### 6. Tests
+- Extend `src/lib/freight/packing-advanced.regression.test.ts` (or a new `scenario-runner.test.ts`) with:
+  - A manifest that fits → optimiser picks the strategy with the highest CBM and reports zero shut-out.
+  - A manifest that exceeds 40HC → every strategy leaves residue; optimiser still returns the densest legal pack and the shut-out totals are > 0.
+  - A pathological case where one strategy violates the 50 mm gap → that strategy is filtered out.
 
-**`src/components/freight/cbm-calculator.tsx`**:
-- The **Optimise loading** handler calls the new `optimise()` worker method instead of a single-shot pack.
-- 3D loader, results card, PDF, and shut-out panel all consume `result.best.pack` — no new UI surface, no scenario comparison panel reintroduced.
-
-### What stays untouched
-
-- The removed Scenario Comparison UI, multi-container tabs, Support debug toggle, and forklift overlay all stay removed.
-- `pack.supportRatios` continues to drive the existing "Stacking reduced" warnings.
-- PDF, video recording, compliance report, and CSV export consume the chosen `best` plan unchanged.
-
-### Files touched
-
-- `src/lib/freight/scenario-runner.ts` (add `pickBestPlan`)
-- `src/lib/freight/packing-worker.ts` (add `optimise` kind)
-- `src/hooks/use-packing-worker.ts` (expose `optimise()`)
-- `src/lib/freight/container-recommender.ts` (use `pickBestPlan`)
-- `src/components/freight/cbm-calculator.tsx` (call `optimise()` from Optimise button)
-
-### Risk
-
-Low. No type changes leak to UI components beyond the calculator's optimise handler. Container dimensions and gap rules are unchanged — we're just searching harder within the existing physical constraints. Worst case the optimiser returns the same plan a single `packContainerAdvanced` call would have, never a worse one.
+## Out of scope
+- No multi-container suggestions.
+- No new UI for the scenario sweep (Scenario Comparison stays removed).
+- No change to gap values, support ratio, or geometric capacities beyond what's listed.
