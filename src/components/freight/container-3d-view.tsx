@@ -111,6 +111,19 @@ interface Props {
    */
   overlay?: React.ReactNode;
   nearCeilingPlacedIdxs?: number[] | null;
+  /**
+   * When true, every cargo box is overlaid with a translucent tint coloured
+   * by its support ratio (red = weak, amber = borderline, green = strong,
+   * blue = floor). Lets QA verify stacking decisions visually without
+   * re-running the packer.
+   */
+  debugSupport?: boolean;
+  /**
+   * Per-`pack.placed[i]` support ratio at placement time (0..1). Required
+   * when `debugSupport` is true; ignored otherwise. Falls back to
+   * `pack.supportRatios` when not supplied.
+   */
+  supportRatios?: number[] | null;
 }
 
 /**
