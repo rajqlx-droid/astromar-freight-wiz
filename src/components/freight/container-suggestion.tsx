@@ -31,8 +31,8 @@ function downloadShutOutCsv(rec: ContainerRecommendation) {
     ["Metric", "Total manifest", "Loaded in 40HC", "Shut out (left unplaced)"],
     [
       "Packages",
-      "",
-      unit ? Math.max(0, (shutOut.cartons > 0 ? "—" : "—") as unknown as number) : "",
+      "—",
+      "—",
       shutOut.cartons,
     ],
     [
