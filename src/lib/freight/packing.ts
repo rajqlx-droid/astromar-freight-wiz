@@ -204,13 +204,13 @@ export function packContainer(
 }
 
 /**
- * Pick the smallest container that fits all cargo.
+ * Pick the smallest container that fits all cargo, capped at 40HC.
  *
  * Geometry-aware overload: when called with `items`, runs the 3D packer
  * against each container (smallest → largest) and returns the smallest one
- * that physically places every piece. Falls back to the largest container
- * if no preset can hold the load (UI can then show a multi-container
- * recommendation).
+ * that physically places every piece. Falls back to the 40HC (the maximum
+ * supported container) when no preset can hold the load — the recommender
+ * will then surface a "cargo shut out" report for the overflow.
  *
  * Legacy CBM-only call signature `pickOptimalContainer(cargoCbm: number)`
  * is preserved for backwards compatibility.
@@ -218,15 +218,13 @@ export function packContainer(
 export function pickOptimalContainer(cargoCbm: number): ContainerPreset;
 export function pickOptimalContainer(items: CbmItem[]): ContainerPreset;
 export function pickOptimalContainer(arg: number | CbmItem[]): ContainerPreset {
+  const HC = CONTAINERS.find((c) => c.id === "40hc")!;
   if (typeof arg === "number") {
     for (const c of CONTAINERS) {
       if (arg <= c.capCbm) return c;
     }
-    return CONTAINERS[CONTAINERS.length - 1];
+    return HC;
   }
-  // Geometry-aware path. packing-advanced is imported at module top; this is a
-  // safe ESM circular reference because packing-advanced only consumes values
-  // (CONTAINERS, ITEM_COLORS) that are defined synchronously at module init.
   const items = arg;
   let totalQty = 0;
   let cbm = 0;
@@ -237,40 +235,12 @@ export function pickOptimalContainer(arg: number | CbmItem[]): ContainerPreset {
   if (totalQty === 0) return CONTAINERS[0];
 
   for (const c of CONTAINERS) {
-    if (cbm > c.capCbm * 1.05) continue; // CBM pre-filter (allow tiny slack).
+    if (cbm > c.capCbm * 1.05) continue;
     const pack = packContainerAdvanced(items, c);
     if (pack.placedCartons >= totalQty) return c;
   }
-  return CONTAINERS[CONTAINERS.length - 1];
-}
-
-export interface MultiContainerPlan {
-  units: Array<{ container: ContainerPreset; fillCbm: number; fillPct: number }>;
-  totalCbm: number;
-}
-
-/**
- * Greedy split: fill 40HC repeatedly, then add smallest container that
- * accommodates the remainder.
- */
-export function splitMultiContainer(cargoCbm: number): MultiContainerPlan {
-  const hc = CONTAINERS.find((c) => c.id === "40hc")!;
-  const units: MultiContainerPlan["units"] = [];
-  let remaining = cargoCbm;
-
-  while (remaining > hc.capCbm) {
-    units.push({ container: hc, fillCbm: hc.capCbm, fillPct: 100 });
-    remaining -= hc.capCbm;
-  }
-  if (remaining > 0) {
-    const last = pickOptimalContainer(remaining);
-    units.push({
-      container: last,
-      fillCbm: remaining,
-      fillPct: (remaining / last.capCbm) * 100,
-    });
-  }
-  return { units, totalCbm: cargoCbm };
+  // Cap at 40HC — anything more is reported as cargo shut-out by the recommender.
+  return HC;
 }
 
 export function totalCbm(items: CbmItem[]): number {
