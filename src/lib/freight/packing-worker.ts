@@ -86,6 +86,12 @@ self.addEventListener("message", (event: MessageEvent<IncomingMessage>) => {
           result: runAllScenarios(payload.items, payload.container, payload.strategies),
         };
         break;
+      case "optimise":
+        response = {
+          kind: "optimise",
+          result: pickBestPlan(payload.items, payload.container),
+        };
+        break;
       case "recommend": {
         const recommendation = recommendContainers(payload.items);
         response = {
