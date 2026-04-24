@@ -1,45 +1,50 @@
 
 
-## Make the "Get your container optimization plan" banner feel alive — a tiny 3D cargo scene in motion
+## Risk assessment for the manual "sideways OK" toggle
 
-### What the user is asking
+Short answer: **Very low risk. No architectural errors. Two minor edge cases worth knowing.**
 
-Looking at the uploaded screenshot: the small dark-navy promo banner that already lives **inline in the calculator heading row** (the one with the orange "View plan" button, the "FREE" pill, and the orange container icon on the right). They want the static SVG container icon replaced with **something 3D and moving — like cargo**. A tiny moving scene baked into the banner, not a separate full-width section.
+### Why it's safe
 
-### Where this lives today
+The `allowSidewaysRotation` flag already exists end-to-end:
+- It's already on the `CbmItem` type.
+- The packer (`packing-advanced.ts`) already reads it.
+- Downstream consumers (loading rows, 3D view, report, video) already react to it via the packer's output.
+- Saved scenarios and history already serialize it.
 
-`src/routes/freight-intelligence.tsx` lines 585–644 — the desktop inline promo banner shown only when `active === "cbm"`. Right side currently has a flat SVG of a stack of three orange containers (lines 609–617). There's also a slimmer mobile variant lower down (lines 696–720) without the icon.
+We're only changing **one thing**: making an existing static label clickable, wired through the same item-update path that qty / dimension / weight already use. No new state, no new effects, no new data flow.
 
-### The plan
+### The 2 edge cases (and how we handle them)
 
-**1. New component: `src/components/freight/cargo-banner-scene.tsx`**
+**1. Pallets and crates are force-rotated by the packer**
+- `packing-advanced.ts` overrides `allowSidewaysRotation = true` for pallets and crates regardless of the flag.
+- **Risk if ignored:** user clicks "off" on a pallet, expects fixed orientation, but the 3D plan still rotates it → looks like a bug.
+- **Mitigation:** chip is rendered as locked-on and disabled for pallets/crates with a tooltip explaining why. Zero mismatch between UI and packer behavior.
 
-A self-contained CSS-3D micro-scene, ~80 px tall on desktop:
+**2. Existing items / saved scenarios may have `allowSidewaysRotation` undefined**
+- Old history entries created before this field was always set.
+- **Risk if ignored:** chip could render in a confusing in-between state, or `!undefined` toggling could feel unpredictable.
+- **Mitigation:** read with a safe default at the chip site — `undefined → true` for kg-based packages (matches today's display). First click writes an explicit boolean. No migration needed, no crash, no schema change.
 
-- **A perspective stage** (`perspective: 600px`, `transform-style: preserve-3d`) sized to slot into the banner's right side where the current SVG sits
-- **A real 3D shipping container** built from 6 divs (front, back, left, right, top, bottom) in brand-orange with corrugated ridge lines drawn via `repeating-linear-gradient` and tiny ASTROMAR text on the side panel — looks like an actual ISO container, not a flat icon
-- **Continuous gentle motion**: the container slowly rotates on Y-axis (`@keyframes spin-y` 12s linear infinite) and floats up/down ~3 px (`@keyframes float` 4s ease-in-out infinite) so it always reads as "alive" without being distracting
-- **A second smaller container** behind it on a slower offset rotation, half-opacity, to give depth — like a stack passing by
-- **A ground shadow** as a flattened ellipse beneath that scales inversely with the float, so the container actually feels grounded
-- **A faint motion trail** — 3 small orange dots drifting right-to-left across the back plane on a 3s loop, suggesting the container is moving forward through space
-- **`prefers-reduced-motion` gate**: if the user has reduced motion on, animations stop and the container holds at a nice 3/4 hero angle (no jitter, no spin)
-- **Pure CSS**, no Three.js, no new deps, no canvas — keeps bundle weight zero and renders instantly
+### What is NOT at risk
 
-**2. Edit `src/routes/freight-intelligence.tsx`**
+- Packer logic, recommender, loading rows, 3D view, report, video — **no code change**, so no behavior change beyond what the flag already controls.
+- Worker re-run pipeline — reuses the existing debounced item-update path, so no new race conditions.
+- Saved scenarios / history schema — backward compatible via the safe default.
+- Pallet/crate special-case — preserved exactly.
+- Performance — one extra boolean per item, one extra click handler. Negligible.
 
-- **Desktop banner (lines 609–617)**: replace the static `<svg>` container icon block with `<CargoBannerScene />`, positioned exactly where the SVG sat (absolute, right-3, vertically centered, hidden below `lg`)
-- **Mobile banner (lines 696–720)**: keep as-is — too cramped for the 3D scene, the `Sparkles` icon stays
-- No changes to copy, layout, the orange "View plan" button, or the surrounding heading row
+### Could anything break the build or throw at runtime?
 
-### Files touched
+- **TypeScript:** no, the field already exists on `CbmItem`.
+- **Runtime:** no, the updater path is the same one already used by every other field on the row.
+- **SSR / hydration:** no, it's a client-only interactive chip with no server dependency.
 
-- `src/components/freight/cargo-banner-scene.tsx` *(new)*
-- `src/routes/freight-intelligence.tsx` *(swap one icon block)*
+### Verdict
 
-### Out of scope
+Safe to proceed. The only "risk" is the pallet/crate UX mismatch, which we explicitly handle by disabling the chip for those package types.
 
-- The mobile promo strip (stays simple)
-- The calculator, optimizer, compare/history, FAQ, footer
-- No new dependencies (no Three.js / R3F — pure CSS 3D)
-- No changes to colors, copy, or the banner's outer container
+### Files touched (unchanged from prior plan)
+
+- `src/components/freight/cbm-calculator.tsx` *(make the chip a real toggle, default-safe read, lock for pallets/crates)*
 
