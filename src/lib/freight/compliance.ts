@@ -136,8 +136,11 @@ export function computeComplianceReport(
     const unplaced = pack.totalCartons - pack.placedCartons;
     const penalty = Math.min(30, Math.round((unplaced / pack.totalCartons) * 50));
     score -= penalty;
+    // Unplaced cartons = shut-out, NOT a hard physical violation. Surface as
+    // a YELLOW warning so the optimiser can still report "max loaded · shut
+    // out" without flipping the HUD to RED / EXPORT BLOCKED.
     violations.push({
-      type: penalty > 15 ? "RED" : "YELLOW",
+      type: "YELLOW",
       code: "UNPLACED",
       message: `${unplaced} items (${Math.round(100 - placedPct)}%) could not be fitted`,
     });
