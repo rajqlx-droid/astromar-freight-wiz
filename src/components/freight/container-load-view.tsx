@@ -466,11 +466,6 @@ function SinglePlanBody({
     () => buildPalletSequence(pack, rows),
     [pack, rows],
   );
-  const compliance = useMemo(
-    () => computeComplianceReport(pack, { rows }),
-    [pack, rows],
-  );
-
   // Clamp palletIdx if sequence shrinks.
   useEffect(() => {
     if (palletIdx > palletSequence.length - 1) {
