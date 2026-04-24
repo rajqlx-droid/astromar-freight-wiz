@@ -16,10 +16,14 @@ export interface ContainerPreset {
   maxPayloadKg: number;
 }
 
+// Geometric CBM = inner L × W × H (m³), rounded to 2 dp.
+// 20GP: 5.900 × 2.352 × 2.395 = 33.23 m³
+// 40GP: 12.032 × 2.352 × 2.395 = 67.78 m³
+// 40HC: 12.032 × 2.350 × 2.700 = 76.34 m³
 export const CONTAINERS: ContainerPreset[] = [
-  { id: "20gp", name: "20ft GP", inner: { l: 5900, w: 2352, h: 2393 }, capCbm: 30, maxPayloadKg: 28000 },
-  { id: "40gp", name: "40ft GP", inner: { l: 12032, w: 2352, h: 2393 }, capCbm: 60, maxPayloadKg: 26500 },
-  { id: "40hc", name: "40ft HC", inner: { l: 12032, w: 2352, h: 2700 }, capCbm: 70, maxPayloadKg: 26500 },
+  { id: "20gp", name: "20ft GP", inner: { l: 5900, w: 2352, h: 2395 }, capCbm: 33.23, maxPayloadKg: 28000 },
+  { id: "40gp", name: "40ft GP", inner: { l: 12032, w: 2352, h: 2395 }, capCbm: 67.78, maxPayloadKg: 26500 },
+  { id: "40hc", name: "40ft HC", inner: { l: 12032, w: 2350, h: 2700 }, capCbm: 76.34, maxPayloadKg: 26500 },
 ];
 
 /** Searates-style palette — distinct, accessible. */
