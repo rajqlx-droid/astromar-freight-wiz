@@ -65,7 +65,11 @@ export interface AdvancedPackResult {
 
 const RENDER_CAP = 500;
 const CELL_MM = 100; // 10cm grid — good resolution vs. perf
-const SUPPORT_MIN_RATIO = 0.9; // ≥ 90% footprint must rest on something solid
+// Support threshold lowered to 0.85 as a defensive backstop. The primary fix
+// is geometric overlap (see evaluatePlacement) which removes the cell-grid
+// quantization penalty that previously blocked stacking of identical cartons
+// whose dimensions weren't a multiple of CELL_MM (e.g. 1219.2 mm cubes).
+const SUPPORT_MIN_RATIO = 0.85;
 const PLACE_STEP_MM = 50; // candidate XY scan stride (finer = tighter packing)
 
 interface ExpandedCarton {
@@ -247,27 +251,71 @@ export function packContainerAdvanced(
       // Use orientation height (caller passed via l/w but h via c.origH? — we recompute)
     }
 
-    // Support: count cells whose top equals topZ (within 1mm tolerance).
-    let supported = 0;
-    let total = 0;
+    // Support: collect candidate supporter cells and identify supporter boxes.
     let anySealed = false;
     const supporters = new Set<number>();
     for (let cy = cy0; cy < cy1; cy++) {
       for (let cx = cx0; cx < cx1; cx++) {
-        total++;
         const idx = cellIdx(cx, cy);
         if (sealed[idx]) anySealed = true;
         const h = heightMap[idx];
         if (Math.abs(h - topZ) < 1) {
-          supported++;
           const bIdx = topBoxIdx[idx];
           if (bIdx >= 0) supporters.add(bIdx);
         }
       }
     }
+
+    // Compute support ratio.
+    let supportRatio: number;
+    if (topZ === 0) {
+      // Resting on the floor — fully supported by definition.
+      supportRatio = 1;
+    } else {
+      // Geometric overlap: real area of footprint covered by supporter top faces
+      // (at z == topZ within 1 mm), divided by the new box's footprint area.
+      // This removes the cell-grid quantization penalty that previously blocked
+      // stacking when dimensions weren't multiples of CELL_MM.
+      const footprintArea = l * w;
+
+      // Fast path: identical supporter directly below (same footprint, same XY corner
+      // within 1 cm). A box flush on an identical box is by definition fully supported.
+      if (supporters.size === 1) {
+        const onlyIdx = supporters.values().next().value as number;
+        const s = placedInternal[onlyIdx];
+        if (
+          s &&
+          Math.abs(s.x - x) <= 10 &&
+          Math.abs(s.y - y) <= 10 &&
+          Math.abs(s.l - l) <= 10 &&
+          Math.abs(s.w - w) <= 10
+        ) {
+          supportRatio = 1;
+          return { z: topZ, supportRatio, supporters, anySealed };
+        }
+      }
+
+      // General case: sum geometric overlap area across all supporters whose
+      // top face equals topZ.
+      let overlapArea = 0;
+      for (const sIdx of supporters) {
+        const s = placedInternal[sIdx];
+        if (!s) continue;
+        if (Math.abs(s.z + s.h - topZ) > 1) continue; // top face must match
+        const ox0 = Math.max(x, s.x);
+        const oy0 = Math.max(y, s.y);
+        const ox1 = Math.min(x + l, s.x + s.l);
+        const oy1 = Math.min(y + w, s.y + s.w);
+        const dx = ox1 - ox0;
+        const dy = oy1 - oy0;
+        if (dx > 0 && dy > 0) overlapArea += dx * dy;
+      }
+      supportRatio = footprintArea > 0 ? Math.min(1, overlapArea / footprintArea) : 0;
+    }
+
     return {
       z: topZ,
-      supportRatio: total > 0 ? supported / total : 0,
+      supportRatio,
       supporters,
       anySealed,
     };
