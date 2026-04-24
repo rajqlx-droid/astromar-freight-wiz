@@ -1,6 +1,7 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { LoaderHUD } from "./loader-hud";
+import type { BestPlanMeta } from "@/lib/freight/scenario-runner";
 import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -148,16 +149,24 @@ export function ContainerLoadView({
   const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
     makeEmptyPack(deferredContainer),
   );
+  // Optimiser metadata captured from the worker so the HUD shows the same
+  // shut-out / hard-violation reasoning the optimiser used. Recomputing
+  // compliance in the HUD off the pack alone caused drift between the
+  // picker's verdict and the badge.
+  const [planMeta, setPlanMeta] = useState<BestPlanMeta | null>(null);
   useEffect(() => {
     if (!hasCargo) {
       setSinglePack(makeEmptyPack(deferredContainer));
+      setPlanMeta(null);
       return;
     }
     let cancelled = false;
     worker
       .optimise(deferredItems, deferredContainer)
       .then((res) => {
-        if (!cancelled) setSinglePack(res.best.pack);
+        if (cancelled) return;
+        setSinglePack(res.best.pack);
+        setPlanMeta(res.meta);
       })
       .catch(() => {
         /* worker gone */
