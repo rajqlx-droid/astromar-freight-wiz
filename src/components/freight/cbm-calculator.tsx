@@ -774,9 +774,6 @@ export function CbmCalculator({ items, setItems }: Props) {
           recommendation={recommendation}
           currentChoice={forcedChoice ?? "auto"}
           onApply={setForcedChoice}
-          activeUnitIdx={activeUnitIdx}
-          onUnitSelect={handleUnitSelect}
-          unitStats={unitStats}
         />
         {ceilingReport.headline && (
           <div className="rounded-lg border-2 border-amber-400/60 bg-amber-50 p-3 text-sm dark:bg-amber-950/20 sm:p-4">
@@ -806,8 +803,6 @@ export function CbmCalculator({ items, setItems }: Props) {
           recommendation={recommendation}
           forcedChoice={forcedChoice}
           onChoiceChange={setForcedChoice}
-          activeUnitIdx={activeUnitIdx}
-          onActiveUnitChange={setActiveUnitIdx}
           onReady={handleViewerReady}
         />
       </div>
