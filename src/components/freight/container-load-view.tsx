@@ -37,7 +37,7 @@ const Container3DView = lazy(() =>
 
 interface Props {
   items: CbmItem[];
-  /** Smart recommendation from the calculator. Drives multi-container tabbed view. */
+  /** Smart recommendation from the calculator. Kept for callers but no longer used to drive multi-container tabs. */
   recommendation?: ContainerRecommendation;
   /** Manually-applied choice that overrides "auto". */
   forcedChoice?: ContainerId | null;
@@ -50,10 +50,6 @@ interface Props {
   }) => void;
   /** When set, disables the 3D toggle and Loading Video button (CBM gate). */
   optimizationDisabledReason?: string | null;
-  /** Controlled active unit index (multi-container). Falls back to internal state when omitted. */
-  activeUnitIdx?: number;
-  /** Notify parent when the user switches the visible container tab. */
-  onActiveUnitChange?: (idx: number) => void;
 }
 
 type ContainerChoice = "auto" | ContainerId;
@@ -97,13 +93,10 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
 
 export function ContainerLoadView({
   items,
-  recommendation,
   forcedChoice,
   onChoiceChange,
   onReady,
   optimizationDisabledReason,
-  activeUnitIdx,
-  onActiveUnitChange,
 }: Props) {
   const [internalChoice, setInternalChoice] = useState<ContainerChoice>("auto");
   const choice: ContainerChoice = forcedChoice ?? internalChoice;
@@ -114,13 +107,6 @@ export function ContainerLoadView({
 
   const [is3D, setIs3D] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [internalActiveTab, setInternalActiveTab] = useState("0");
-  const activeTab =
-    typeof activeUnitIdx === "number" ? String(activeUnitIdx) : internalActiveTab;
-  const setActiveTab = (v: string) => {
-    setInternalActiveTab(v);
-    onActiveUnitChange?.(Number(v));
-  };
   const [viewerCollapsed, setViewerCollapsed] = useState(false);
   const view3DRef = useRef<Container3DHandle | null>(null);
 
