@@ -111,6 +111,19 @@ interface Props {
    */
   overlay?: React.ReactNode;
   nearCeilingPlacedIdxs?: number[] | null;
+  /**
+   * When true, every cargo box is overlaid with a translucent tint coloured
+   * by its support ratio (red = weak, amber = borderline, green = strong,
+   * blue = floor). Lets QA verify stacking decisions visually without
+   * re-running the packer.
+   */
+  debugSupport?: boolean;
+  /**
+   * Per-`pack.placed[i]` support ratio at placement time (0..1). Required
+   * when `debugSupport` is true; ignored otherwise. Falls back to
+   * `pack.supportRatios` when not supplied.
+   */
+  supportRatios?: number[] | null;
 }
 
 /**
@@ -119,7 +132,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0, activePalletIdx = null, nextPalletIdx = null, followCam = false, showForkliftToken = false, overlay = null, nearCeilingPlacedIdxs = null },
+  { pack, height = 420, shufflePreview = null, visiblePlacedSet = null, hideDoors = false, gapHeatmapRow = null, flyInPlacedSet = null, flyInKey = 0, activePalletIdx = null, nextPalletIdx = null, followCam = false, showForkliftToken = false, overlay = null, nearCeilingPlacedIdxs = null, debugSupport = false, supportRatios = null },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -267,6 +280,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             followCam={followCam}
             showForkliftToken={showForkliftToken}
             nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
+            debugSupport={debugSupport}
+            supportRatios={supportRatios ?? pack.supportRatios ?? null}
           />
         </Suspense>
       </Canvas>
@@ -440,6 +455,8 @@ function SceneContents({
   followCam,
   showForkliftToken,
   nearCeilingPlacedIdxs,
+  debugSupport,
+  supportRatios,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -457,6 +474,8 @@ function SceneContents({
   followCam: boolean;
   showForkliftToken: boolean;
   nearCeilingPlacedIdxs: number[] | null;
+  debugSupport: boolean;
+  supportRatios: number[] | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -604,6 +623,7 @@ function SceneContents({
             const flyIn = !recording && !!flyInPlacedSet?.has(i);
             const isActivePallet = !recording && i === activePalletIdx;
             const isNearCeiling = !recording && (nearCeilingPlacedIdxs?.includes(i) ?? false);
+            const sr = supportRatios?.[i];
             return (
               <CargoBox
                 key={i}
@@ -619,6 +639,8 @@ function SceneContents({
                 showCheckmark={isActivePallet}
                 showEdges={showEdges}
                 nearCeiling={isNearCeiling}
+                debugSupport={debugSupport}
+                supportRatio={typeof sr === "number" ? sr : null}
               />
             );
           });
@@ -1180,6 +1202,8 @@ function CargoBox({
   showCheckmark = false,
   showEdges = true,
   nearCeiling = false,
+  debugSupport = false,
+  supportRatio = null,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1193,6 +1217,10 @@ function CargoBox({
   showCheckmark?: boolean;
   showEdges?: boolean;
   nearCeiling?: boolean;
+  /** When true, render a translucent shell coloured by `supportRatio`. */
+  debugSupport?: boolean;
+  /** 0..1 placement support ratio (1 = floor / fully supported). */
+  supportRatio?: number | null;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1340,6 +1368,32 @@ function CargoBox({
         <mesh position={[0, hm / 2 + 0.012, 0]}>
           <boxGeometry args={[lm * 1.04, 0.018, wm * 1.04]} />
           <meshBasicMaterial color="#f59e0b" transparent opacity={0.75} />
+        </mesh>
+      )}
+      {/* Support-ratio debug overlay — translucent shell around the box,
+          coloured by stacking quality. Floor placements are blue; stacked
+          placements run red→amber→green by ratio. */}
+      {debugSupport && (
+        <mesh>
+          <boxGeometry args={[lm * 1.05, hm * 1.05, wm * 1.05]} />
+          <meshBasicMaterial
+            color={
+              box.z < 10
+                ? "#3b82f6" // floor — blue
+                : supportRatio == null
+                  ? "#9ca3af" // unknown — grey
+                  : supportRatio >= 0.95
+                    ? "#10b981" // strong — green
+                    : supportRatio >= 0.85
+                      ? "#84cc16" // ok — lime
+                      : supportRatio >= 0.5
+                        ? "#f59e0b" // borderline — amber
+                        : "#ef4444" // weak — red
+            }
+            transparent
+            opacity={0.35}
+            depthWrite={false}
+          />
         </mesh>
       )}
     </group>

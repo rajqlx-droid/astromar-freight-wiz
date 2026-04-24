@@ -74,6 +74,7 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
   return {
     container,
     placed: [],
+    supportRatios: [],
     totalCartons: 0,
     placedCartons: 0,
     truncated: false,
@@ -90,6 +91,12 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
     cogLateralOffsetPct: 0,
     nearCeilingPlacedIdxs: [],
     floorCoveragePct: 0,
+    stackingDiagnostics: {
+      rejectedAttempts: 0,
+      unplacedDueToStacking: 0,
+      reasonCounts: { support: 0, sealed: 0, stackWeight: 0, nonStackable: 0 },
+      dominantReason: null,
+    },
   };
 }
 
@@ -481,6 +488,11 @@ function SinglePlanBody({
     null,
   );
 
+  // Support-ratio debug overlay — recolours every cargo box by its
+  // recorded support ratio at placement time. Off by default; toggled from
+  // the viewer toolbar so QA can verify stacking decisions visually.
+  const [debugSupport, setDebugSupport] = useState(false);
+
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
   const [palletIdx, setPalletIdx] = useState(-1);
   const [showForkliftToken, setShowForkliftToken] = useState(true);
@@ -639,6 +651,8 @@ function SinglePlanBody({
                     followCam={isPlaying}
                     showForkliftToken={showForkliftToken && currentStep != null}
                     nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
+                    debugSupport={debugSupport}
+                    supportRatios={pack.supportRatios ?? null}
                     overlay={
                       stepMode ? (
                         <LoaderHUD
@@ -666,6 +680,13 @@ function SinglePlanBody({
                         />
                       ) : null
                     }
+                  />
+                  {/* Support-ratio debug overlay toggle. Sits in the top-left
+                      corner of the viewer so it never collides with the
+                      preset/fullscreen controls in the top-right. */}
+                  <SupportDebugToggle
+                    on={debugSupport}
+                    onToggle={() => setDebugSupport((v) => !v)}
                   />
                 </div>
               </Suspense>
@@ -1150,4 +1171,42 @@ function shade(hex: string, amt: number): string {
     Math.max(0, Math.min(255, Math.round(c + (amt > 0 ? 255 - c : c) * amt)));
   const to = (c: number) => adj(c).toString(16).padStart(2, "0");
   return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+/* ---------------- Support-ratio debug toggle (top-left HUD chip) ---------------- */
+
+/**
+ * Tiny on-canvas toggle that switches the 3D viewer into "support overlay"
+ * mode. When on, every cargo box is recolored by its placement support
+ * ratio (red = weak, amber = borderline, green = strong, blue = floor).
+ * Used by ops/QA to verify stacking decisions without re-running the packer.
+ */
+function SupportDebugToggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={on}
+      title={
+        on
+          ? "Hide support-ratio overlay (cargo returns to item colors)"
+          : "Show support-ratio overlay — color cargo by stacking quality"
+      }
+      className={cn(
+        "absolute left-2 top-2 z-10 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold shadow-sm backdrop-blur transition-colors",
+        on
+          ? "border-emerald-400 bg-emerald-50/95 text-emerald-900 hover:bg-emerald-100"
+          : "border-brand-navy/30 bg-background/85 text-brand-navy hover:bg-brand-navy/10",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "inline-block size-2 rounded-full",
+          on ? "bg-emerald-500" : "bg-muted-foreground/50",
+        )}
+      />
+      Support {on ? "ON" : "debug"}
+    </button>
+  );
 }

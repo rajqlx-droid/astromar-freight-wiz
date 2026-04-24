@@ -38,6 +38,13 @@ export type PackStrategy = "auto" | "row-back" | "weight-first" | "floor-first" 
 export interface AdvancedPackResult {
   container: ContainerPreset;
   placed: PlacedBox[];
+  /**
+   * Support ratio (0..1) recorded at placement time for each `placed[i]`.
+   * 1 = floor or fully-supported stack, <0.85 only ever appears in degraded
+   * scenarios (won't occur with the current SUPPORT_MIN_RATIO gate).
+   * Used by the 3D debug overlay to colour-code stacking decisions.
+   */
+  supportRatios: number[];
   totalCartons: number;
   placedCartons: number;
   truncated: boolean;
@@ -61,6 +68,32 @@ export interface AdvancedPackResult {
   cogLateralOffsetPct: number;
   nearCeilingPlacedIdxs: number[];
   floorCoveragePct: number;
+  /**
+   * Diagnostics about cartons the packer wanted to stack but rejected because
+   * a stacking rule fired. Drives the user-facing "stacking reduced" warning.
+   * `count` is the number of carton instances rejected for stacking reasons
+   * (these may still have placed on the floor of a later container, or been
+   * counted as unplaced — the field describes packing behaviour, not the
+   * final placement outcome).
+   */
+  stackingDiagnostics: {
+    /** Total candidate placements rejected by a stacking rule. */
+    rejectedAttempts: number;
+    /** Cartons that ended up unplaced AND failed at least one stacking rule. */
+    unplacedDueToStacking: number;
+    /** Per-rule rejection counts. Same keys as `dominantReason`. */
+    reasonCounts: {
+      support: number;
+      sealed: number;
+      stackWeight: number;
+      nonStackable: number;
+    };
+    /**
+     * The rule that triggered most often — drives the warning copy.
+     * `null` when no stacking rule fired.
+     */
+    dominantReason: "support" | "sealed" | "stackWeight" | "nonStackable" | null;
+  };
 }
 
 const RENDER_CAP = 500;
@@ -213,8 +246,24 @@ export function packContainerAdvanced(
   let frontierX = 0;
 
   const placedInternal: PlacedInternal[] = [];
+  const placedSupportRatios: number[] = [];
   let placedCount = 0;
   let truncated = false;
+
+  // Stacking diagnostics — counts how often each rule rejected a candidate
+  // placement during the search. Used to surface a user-facing warning
+  // explaining why stacking was reduced.
+  const stackingReasonCounts = {
+    support: 0,
+    sealed: 0,
+    stackWeight: 0,
+    nonStackable: 0,
+  };
+  let totalStackingRejections = 0;
+  // For each carton currently being placed, remember the dominant stacking
+  // rule that fired during its scan. If the carton ends up unplaced, this
+  // tells us which rule (if any) cost it a placement.
+  let unplacedDueToStacking = 0;
 
   const cellIdx = (cx: number, cy: number) => cy * cellsX + cx;
 
@@ -337,8 +386,12 @@ export function packContainerAdvanced(
       z: number;
       orient: Orientation;
       supporters: Set<number>;
+      supportRatio: number;
     } | null = null;
     let lastReason: string | undefined;
+    // Track stacking-rule rejections seen by THIS carton so we can attribute
+    // an unplaced result to the most-frequent rule.
+    const cartonRejects = { support: 0, sealed: 0, stackWeight: 0, nonStackable: 0 };
 
     for (const o of orients) {
       // Candidate XY positions on a coarse grid.
@@ -363,16 +416,19 @@ export function packContainerAdvanced(
           // Non-stackable must rest on the floor.
           if (!c.stackable && ev.z > 0) {
             lastReason ||= "Non-stackable — no floor space remaining";
+            cartonRejects.nonStackable++;
             continue;
           }
           // Sealed (fragile) cells block further stacking.
           if (ev.anySealed) {
             lastReason ||= "Cannot stack on fragile item below";
+            cartonRejects.sealed++;
             continue;
           }
           // Support ratio.
           if (ev.z > 0 && ev.supportRatio < SUPPORT_MIN_RATIO) {
             lastReason ||= "Insufficient support below";
+            cartonRejects.support++;
             continue;
           }
           // Stack-weight: every supporter must be able to take +c.weight on top of its existing load.
@@ -383,6 +439,7 @@ export function packContainerAdvanced(
             if (s.maxStackWeightKg > 0 && s.loadKg + c.weight > s.maxStackWeightKg) {
               weightOk = false;
               lastReason ||= "Exceeds max stack weight of item below";
+              cartonRejects.stackWeight++;
               break;
             }
           }
@@ -416,14 +473,32 @@ export function packContainerAdvanced(
             x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
           if (score < bestScore) {
             bestScore = score;
-            bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters };
+            bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters, supportRatio: ev.supportRatio };
           }
         }
       }
     }
 
+    // Roll up this carton's stacking-rule rejections into the global counters
+    // BEFORE deciding whether to bail out so warnings stay accurate even when
+    // most rejections eventually find a non-stacked floor placement instead.
+    stackingReasonCounts.support += cartonRejects.support;
+    stackingReasonCounts.sealed += cartonRejects.sealed;
+    stackingReasonCounts.stackWeight += cartonRejects.stackWeight;
+    stackingReasonCounts.nonStackable += cartonRejects.nonStackable;
+    const cartonRejectTotal =
+      cartonRejects.support +
+      cartonRejects.sealed +
+      cartonRejects.stackWeight +
+      cartonRejects.nonStackable;
+    totalStackingRejections += cartonRejectTotal;
+
     if (!bestPick) {
       perItemReason[c.itemIdx] ||= lastReason || "Container full";
+      // If at least one stacking rule fired during this carton's scan, charge
+      // the unplaced result to stacking. (A "container full" miss with zero
+      // stacking rejections is genuine capacity exhaustion.)
+      if (cartonRejectTotal > 0) unplacedDueToStacking++;
       continue;
     }
 
@@ -486,6 +561,7 @@ export function packContainerAdvanced(
         bestPick!.x = nx;
         bestPick!.y = ny;
         bestPick!.supporters = ev.supporters;
+        bestPick!.supportRatio = ev.supportRatio;
       }
       // Fine 1mm slide for the last sub-coarse gap.
       for (let i = 0; i < COARSE; i++) {
@@ -499,6 +575,7 @@ export function packContainerAdvanced(
         bestPick!.x = nx;
         bestPick!.y = ny;
         bestPick!.supporters = ev.supporters;
+        bestPick!.supportRatio = ev.supportRatio;
       }
     };
     snapAxis("x");
@@ -529,12 +606,13 @@ export function packContainerAdvanced(
           if (weightOk) {
             bestPick.z = ev.z;
             bestPick.supporters = ev.supporters;
+            bestPick.supportRatio = ev.supportRatio;
           }
         }
       }
     }
 
-    const { x, y, z, orient, supporters } = bestPick;
+    const { x, y, z, orient, supporters, supportRatio } = bestPick;
     const internalIdx = placedInternal.length;
 
     // Detect rotation vs original dimensions.
@@ -562,6 +640,9 @@ export function packContainerAdvanced(
       sealed: false,
     };
     placedInternal.push(box);
+    // Floor placements are inherently fully supported. Stacked placements
+    // record the geometric overlap ratio captured at the chosen position.
+    placedSupportRatios.push(z === 0 ? 1 : supportRatio);
 
     // Update supporter loads.
     for (const sIdx of supporters) {
@@ -595,11 +676,14 @@ export function packContainerAdvanced(
     color: p.color, itemIdx: p.itemIdx, rotated: p.rotated ?? null,
   });
   let placed: PlacedBox[];
+  let supportRatios: number[];
   if (placedInternal.length > RENDER_CAP) {
     truncated = true;
     placed = placedInternal.slice(0, RENDER_CAP).map(toPlaced);
+    supportRatios = placedSupportRatios.slice(0, RENDER_CAP);
   } else {
     placed = placedInternal.map(toPlaced);
+    supportRatios = placedSupportRatios.slice();
   }
 
   // COG along container length (X axis).
@@ -667,9 +751,24 @@ export function packContainerAdvanced(
   let placedWeightKg = 0;
   for (const p of placedInternal) placedWeightKg += p.weight;
 
+  // Pick the rule that fired most often as the dominant cause.
+  let dominantReason: AdvancedPackResult["stackingDiagnostics"]["dominantReason"] = null;
+  {
+    let bestN = 0;
+    (Object.keys(stackingReasonCounts) as Array<keyof typeof stackingReasonCounts>).forEach(
+      (k) => {
+        if (stackingReasonCounts[k] > bestN) {
+          bestN = stackingReasonCounts[k];
+          dominantReason = k;
+        }
+      },
+    );
+  }
+
   return {
     container,
     placed,
+    supportRatios,
     totalCartons: expanded.length,
     placedCartons: placedCount,
     truncated,
@@ -692,6 +791,12 @@ export function packContainerAdvanced(
     cogLateralOffsetPct,
     nearCeilingPlacedIdxs,
     floorCoveragePct,
+    stackingDiagnostics: {
+      rejectedAttempts: totalStackingRejections,
+      unplacedDueToStacking,
+      reasonCounts: { ...stackingReasonCounts },
+      dominantReason,
+    },
   };
 }
 

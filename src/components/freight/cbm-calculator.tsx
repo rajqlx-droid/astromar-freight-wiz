@@ -197,15 +197,54 @@ export function CbmCalculator({ items, setItems }: Props) {
     const wu = activePack.weightUtilizationPct;
     const d = activePack.densityPct;
     const weightLimited = wu - u > 15;
+
+    // Stacking-rule warning: surfaced when at least one carton went unplaced
+    // because a stacking rule fired during its placement scan. The dominant
+    // rule (most-frequent rejection) drives the explanation copy so the user
+    // knows exactly what to relax (e.g. weight cap) or accept (e.g. fragility).
+    const sd = activePack.stackingDiagnostics;
+    const stackingNotice =
+      sd && sd.unplacedDueToStacking > 0 && sd.dominantReason
+        ? (() => {
+            const ruleCopy: Record<
+              NonNullable<typeof sd.dominantReason>,
+              { title: string; body: string }
+            > = {
+              support: {
+                title: "Stacking reduced — insufficient support below",
+                body: `${sd.unplacedDueToStacking} carton(s) didn't fit because the box(es) they would sit on don't cover at least 85% of their footprint. Try grouping identical SKUs together or use a more uniform package size.`,
+              },
+              sealed: {
+                title: "Stacking reduced — fragile cargo on top",
+                body: `${sd.unplacedDueToStacking} carton(s) couldn't stack: a fragile item is already on top of the column below. Mark items as non-fragile if they actually are stackable, or load fragile cargo last.`,
+              },
+              stackWeight: {
+                title: "Stacking reduced — max stack-weight reached",
+                body: `${sd.unplacedDueToStacking} carton(s) would exceed the "max stack weight" of an item below. Raise the limit on those items if their packaging supports it, or split the load.`,
+              },
+              nonStackable: {
+                title: "Stacking reduced — non-stackable items",
+                body: `${sd.unplacedDueToStacking} carton(s) didn't fit because the items below are flagged "non-stackable" and floor space ran out. Allow stacking on those items, or use a larger container.`,
+              },
+            };
+            const c = ruleCopy[sd.dominantReason];
+            return { tone: "warn" as const, title: c.title, body: c.body };
+          })()
+        : undefined;
+
     return {
       ...baseResult,
-      notice: weightLimited
-        ? {
-            tone: "warn" as const,
-            title: "Weight-limited cargo",
-            body: "Adding more boxes won't help — this load hits the container's weight cap before it fills the volume. Consider a higher-payload container (e.g. 40HC heavy-duty) or split across two shipments.",
-          }
-        : undefined,
+      // Stacking warning takes precedence — it tells the user *why* cartons
+      // were lost, which is more actionable than the weight-limited tip.
+      notice:
+        stackingNotice ??
+        (weightLimited
+          ? {
+              tone: "warn" as const,
+              title: "Weight-limited cargo",
+              body: "Adding more boxes won't help — this load hits the container's weight cap before it fills the volume. Consider a higher-payload container (e.g. 40HC heavy-duty) or split across two shipments.",
+            }
+          : undefined),
       items: [
         ...baseResult.items,
         {
