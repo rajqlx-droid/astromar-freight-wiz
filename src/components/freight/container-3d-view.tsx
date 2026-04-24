@@ -1202,6 +1202,8 @@ function CargoBox({
   showCheckmark = false,
   showEdges = true,
   nearCeiling = false,
+  debugSupport = false,
+  supportRatio = null,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1215,6 +1217,10 @@ function CargoBox({
   showCheckmark?: boolean;
   showEdges?: boolean;
   nearCeiling?: boolean;
+  /** When true, render a translucent shell coloured by `supportRatio`. */
+  debugSupport?: boolean;
+  /** 0..1 placement support ratio (1 = floor / fully supported). */
+  supportRatio?: number | null;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
