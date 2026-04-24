@@ -181,7 +181,7 @@ export function ContainerLoadView({
     };
   }, [deferredItems, isMulti, recommendation, worker.multi]);
 
-  // Single-strategy pack ("row-back"). Scenario comparison UI was removed.
+  // Single-strategy pack using the "row-back" loader.
   const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
     makeEmptyPack(deferredContainer),
   );
@@ -450,7 +450,6 @@ function SinglePlanBody({
   const [shufflePreview, setShufflePreview] = useState<Map<number, number> | null>(
     null,
   );
-
 
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
   const [palletIdx, setPalletIdx] = useState(-1);
