@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PackingWorker from "@/lib/freight/packing-worker?worker";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
-import type { ScenarioResult, StrategyId } from "@/lib/freight/scenario-runner";
+import type { BestPlan, ScenarioResult, StrategyId } from "@/lib/freight/scenario-runner";
 import type { CbmItem } from "@/lib/freight/calculators";
 import type { ContainerPreset } from "@/lib/freight/packing";
 import type { RecommendResponseResult } from "@/lib/freight/packing-worker";
