@@ -106,6 +106,9 @@ function sumQty(items: CbmItem[]): number {
 
 /**
  * Find smallest single container that physically fits ALL items.
+ * Uses the multi-strategy optimiser so a fit isn't missed because the
+ * default strategy happened to leave residue while another would have
+ * placed everything.
  * Returns null when even a 40HC can't hold the load.
  */
 function fitSingle(items: CbmItem[]): ContainerPreset | null {
@@ -116,8 +119,8 @@ function fitSingle(items: CbmItem[]): ContainerPreset | null {
   for (const c of ASC) {
     if (cbm > USABLE_CBM[c.id]) continue;
     if (weightKg > c.maxPayloadKg) continue;
-    const pack = packContainerAdvanced(items, c);
-    if (pack.placedCartons >= totalQty) return c;
+    const { best } = pickBestPlan(items, c);
+    if (best.pack.placedCartons >= totalQty) return c;
   }
   return null;
 }
