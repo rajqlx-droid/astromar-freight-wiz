@@ -281,7 +281,10 @@ export function recommendContainers(
   }
 
   // Cargo can't fit in even a 40HC — pin the recommendation to a single 40HC
-  // and surface a shut-out report.
+  // and surface a shut-out report. Run the optimiser ONCE here and reuse its
+  // pack result so the headline number and shut-out totals stay consistent.
+  const bestPlan = pickBestPlan(items, MAX_CONTAINER).best.pack;
+
   let reason: ContainerRecommendation["reason"];
   let reasonDetail: string | undefined;
   let shutOutReason: CargoShutOut["reason"];
@@ -294,11 +297,10 @@ export function recommendContainers(
   } else {
     reason = "exceeds-single-geometry";
     shutOutReason = "exceeds-geometry";
-    const sim = packContainerAdvanced(items, MAX_CONTAINER);
-    reasonDetail = `CBM math (${totalCbm.toFixed(1)} m³) fits a 40ft HC, but height/footprint geometry caps real load at ${sim.placedCartons} of ${totalQty} pieces.`;
+    reasonDetail = `CBM math (${totalCbm.toFixed(1)} m³) fits a 40ft HC, but height/footprint geometry caps real load at ${bestPlan.placedCartons} of ${totalQty} pieces.`;
   }
 
-  const shutOut = computeShutOut(items, shutOutReason);
+  const shutOut = computeShutOut(items, shutOutReason, bestPlan);
   const placedCbm = Math.max(0, totalCbm - shutOut.cbm);
   const placedWt = Math.max(0, totalWt - shutOut.weightKg);
 
