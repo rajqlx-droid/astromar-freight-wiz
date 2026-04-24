@@ -4,10 +4,73 @@
  * shows a "Cargo shut out" warning with the number of cartons / volume that
  * cannot be loaded so the user can adjust their manifest.
  */
-import { AlertTriangle, Lightbulb, PackageX, Sparkles } from "lucide-react";
+import { AlertTriangle, Download, Lightbulb, PackageX, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ContainerRecommendation } from "@/lib/freight/container-recommender";
+
+function downloadShutOutCsv(rec: ContainerRecommendation) {
+  const { shutOut, totalCbm, totalWeightKg, units, summary, reason } = rec;
+  if (!shutOut) return;
+  const unit = units[0];
+  const reasonLabel =
+    reason === "exceeds-single-cbm"
+      ? "Exceeds 40HC usable volume"
+      : reason === "exceeds-single-weight"
+        ? "Exceeds 40HC payload"
+        : reason === "exceeds-single-geometry"
+          ? "Geometry prevents full placement in 40HC"
+          : "Within 40HC capacity";
+  const rows: (string | number)[][] = [
+    ["Cargo Shut-Out Summary"],
+    ["Generated", new Date().toISOString()],
+    ["Recommended container", summary],
+    ["Reason", reasonLabel],
+    [],
+    ["Metric", "Total manifest", "Loaded in 40HC", "Shut out (left unplaced)"],
+    [
+      "Packages",
+      "",
+      unit ? Math.max(0, (shutOut.cartons > 0 ? "—" : "—") as unknown as number) : "",
+      shutOut.cartons,
+    ],
+    [
+      "Volume (m³)",
+      totalCbm.toFixed(3),
+      unit ? unit.fillCbm.toFixed(3) : "",
+      shutOut.cbm.toFixed(3),
+    ],
+    [
+      "Weight (kg)",
+      totalWeightKg.toFixed(2),
+      unit ? unit.fillWeightKg.toFixed(2) : "",
+      shutOut.weightKg.toFixed(2),
+    ],
+    [],
+    ["Note", "Reduce quantities, change packaging, or split the shipment to load the excess separately."],
+  ];
+  const csv = rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const s = String(cell ?? "");
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(","),
+    )
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cargo-shutout-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast.success("Shut-out summary downloaded");
+}
 
 interface Props {
   recommendation: ContainerRecommendation;
