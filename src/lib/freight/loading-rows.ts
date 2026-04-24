@@ -26,8 +26,15 @@ export interface RowGroup {
    * re-shuffle to close before sealing the container.
    */
   wallUtilizationPct: number;
-  /** True when wallUtilizationPct < 90% — flagged for re-shuffle. */
+  /** True when wallUtilizationPct < 90% AND below the row's geometric ceiling — flagged for re-shuffle. */
   gapWarning: boolean;
+  /**
+   * Maximum wall utilisation physically achievable for this row given its
+   * cargo footprint and the universal 50 mm gap rule. When the row is
+   * already at this ceiling, no slack warning should fire — the geometry
+   * itself caps how tight the pack can be.
+   */
+  maxAchievableUtilizationPct: number;
 }
 
 /** Minimum back-wall floor coverage before we flag a gap warning. */
