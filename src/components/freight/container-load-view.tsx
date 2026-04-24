@@ -181,7 +181,7 @@ export function ContainerLoadView({
     };
   }, [deferredItems, isMulti, recommendation, worker.multi]);
 
-  // Single-strategy pack ("row-back"). Scenario comparison UI was removed.
+  // Single-strategy pack using the "row-back" loader.
   const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
     makeEmptyPack(deferredContainer),
   );
