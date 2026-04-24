@@ -528,6 +528,7 @@ function SinglePlanBody({
                           onToggleForklift={() => setShowForkliftToken((v) => !v)}
                           pack={pack}
                           rows={rows}
+                          planMeta={planMeta}
                           onJumpToRow={(rowIdx1Based) => {
                             // Jump the stepper to the first pallet of that row.
                             const target = palletSequence.findIndex(
