@@ -125,11 +125,31 @@ export function runAllScenarios(
 
 }
 
+export interface ShutOutTotals {
+  /** Cartons left unplaced by the densest legal plan. */
+  cartons: number;
+  /** Volume of unplaced cartons in m³. */
+  cbm: number;
+  /** Weight of unplaced cartons in kg. */
+  weightKg: number;
+}
+
+export interface BestPlanMeta {
+  /** Cartons / CBM / weight the densest plan could not place. null when nothing was shut out. */
+  shutOut: ShutOutTotals | null;
+  /** True when at least one strategy passed every hard physical check. */
+  allLegal: boolean;
+  /** Hard violation messages from the chosen plan's compliance report (overlap, hanging, weight overload, gap with vertical overlap, ceiling). */
+  hardViolations: string[];
+}
+
 export interface BestPlan {
   /** The densest legal pack across all tried strategies. */
   best: ScenarioResult;
   /** Every strategy result (legal + filtered) for diagnostics. */
   all: ScenarioResult[];
+  /** Aggregated decision metadata for the HUD / recommender. */
+  meta: BestPlanMeta;
 }
 
 /**
