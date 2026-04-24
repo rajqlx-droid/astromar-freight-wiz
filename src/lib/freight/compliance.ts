@@ -38,55 +38,13 @@ export interface ComplianceReport {
 export interface ComplianceOptions {
   /** Pre-computed row groups from `loading-rows.buildRows`. Required to evaluate FLOOR_GAP. */
   rows?: RowGroup[];
-}
-
-// Match the packer (packing-advanced.ts) — both must agree or the auditor
-// flags clean stacks as "floating". 0.85 is the same defensive backstop the
-// placer uses; geometric overlap (below) eliminates the cell-grid penalty
-// that previously misjudged stacks of dimensions not divisible by 100 mm.
-const SUPPORT_MIN_RATIO = 0.85;
-
-/**
- * Audit each stacked box's support ratio using **geometric overlap** against
- * the boxes physically below it. Mirrors evaluatePlacement() in
- * packing-advanced.ts so the auditor and packer never disagree on whether a
- * stack is supported (a disagreement would surface as a "floating cargo" RED
- * even though the box is physically flush on its supporter).
- */
-function auditFloatingCargo(pack: AdvancedPackResult): {
-  floatingCount: number;
-  weakStackCount: number;
-} {
-  let floatingCount = 0;
-  let weakStackCount = 0;
-  const placed = pack.placed;
-
-  for (const b of placed) {
-    if (b.z <= 1) continue; // floor box — always supported
-
-    const footprintArea = b.l * b.w;
-    if (footprintArea <= 0) continue;
-
-    let overlapArea = 0;
-    for (const s of placed) {
-      if (s === b) continue;
-      // Supporter's TOP face must equal this box's BOTTOM (within 1 mm).
-      if (Math.abs(s.z + s.h - b.z) > 1) continue;
-      const ox0 = Math.max(b.x, s.x);
-      const oy0 = Math.max(b.y, s.y);
-      const ox1 = Math.min(b.x + b.l, s.x + s.l);
-      const oy1 = Math.min(b.y + b.w, s.y + s.w);
-      const dx = ox1 - ox0;
-      const dy = oy1 - oy0;
-      if (dx > 0 && dy > 0) overlapArea += dx * dy;
-    }
-
-    const ratio = Math.min(1, overlapArea / footprintArea);
-    if (ratio < SUPPORT_MIN_RATIO) floatingCount++;
-    if (ratio < 0.6) weakStackCount++;
-  }
-
-  return { floatingCount, weakStackCount };
+  /**
+   * Pre-computed final-state geometry audit. When supplied, compliance does
+   * NOT recompute it — guarantees the optimiser, worker, and HUD all agree
+   * on which boxes (if any) physically fail. Falls back to validating the
+   * pack on demand when omitted.
+   */
+  geometryAudit?: GeometryAudit;
 }
 
 export function computeComplianceReport(
