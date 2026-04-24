@@ -316,6 +316,7 @@ export function ContainerLoadView({
           view3DRef={view3DRef}
           isActive
           viewerCollapsed={viewerCollapsed}
+          planMeta={planMeta}
         />
       )}
     </Card>
