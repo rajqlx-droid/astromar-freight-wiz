@@ -39,15 +39,11 @@ interface ScenariosResponse {
   kind: "scenarios";
   result: ScenarioResult[];
 }
-interface MultiResponse {
-  kind: "multi";
-  result: AdvancedPackResult[];
-}
 interface RecommendResponse {
   kind: "recommend";
   result: RecommendResponseResult;
 }
-type AnyResponse = PackResponse | ScenariosResponse | MultiResponse | RecommendResponse;
+type AnyResponse = PackResponse | ScenariosResponse | RecommendResponse;
 
 interface UsePackingWorker {
   /** Pack a single container. */
@@ -58,12 +54,7 @@ interface UsePackingWorker {
     container: ContainerPreset,
     strategies: StrategyId[],
   ) => Promise<ScenarioResult[]>;
-  /** Pack a set of buckets across containers (multi-container splits). */
-  multi: (
-    buckets: CbmItem[][],
-    containers: ContainerPreset[],
-  ) => Promise<AdvancedPackResult[]>;
-  /** Geometry-aware recommendation + per-bucket packs in one round trip. */
+  /** Geometry-aware recommendation in one round trip. */
   recommend: (items: CbmItem[]) => Promise<RecommendResponseResult>;
   /** True while at least one job is in flight. */
   pending: boolean;
