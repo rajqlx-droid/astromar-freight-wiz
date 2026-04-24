@@ -1,6 +1,7 @@
 import type { AdvancedPackResult } from "./packing-advanced";
 import { CEILING_RESERVE_MM } from "./gap-rules";
 import type { RowGroup } from "./loading-rows";
+import { validateAdvancedPack, type GeometryAudit } from "./geometry-validator";
 
 export type ComplianceStatus = "GREEN" | "YELLOW" | "RED";
 
