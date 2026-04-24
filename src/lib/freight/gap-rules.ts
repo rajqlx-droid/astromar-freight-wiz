@@ -20,9 +20,11 @@ export interface GapRule {
 
 }
 
+// Universal 50 mm minimum gap rule applied to every package type.
+// Ensures no hanging or overlapping cargo and provides handling clearance.
 export const GAP_RULES_MM: Record<string, GapRule> = {
 
-  carton: { minGap: 20, wallMin: 30, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Edge protectors mandatory" },
+  carton: { minGap: 50, wallMin: 50, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "50mm clearance all sides" },
 
   pallet: { minGap: 50, wallMin: 50, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Forklift access 50mm all sides" },
 
@@ -30,9 +32,9 @@ export const GAP_RULES_MM: Record<string, GapRule> = {
 
   crate:  { minGap: 50, wallMin: 50, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Fork access required" },
 
-  bale:   { minGap: 30, wallMin: 40, maxGap: 100, doorMin: 100, ceilingMin: 80, notes: "Compression gaps monitored" },
+  bale:   { minGap: 50, wallMin: 50, maxGap: 100, doorMin: 100, ceilingMin: 80, notes: "Compression gaps monitored" },
 
-  bag:    { minGap: 20, wallMin: 30, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Stack weight limit applies" },
+  bag:    { minGap: 50, wallMin: 50, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "50mm spacing for stack stability" },
 
 };
 
