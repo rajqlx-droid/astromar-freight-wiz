@@ -208,13 +208,10 @@ export function ContainerLoadView({
     });
   }, [onReady, is3D, activeTab]);
 
-  const viewerLabelledBy = isMulti ? `container-bucket-tab-${activeTab}` : undefined;
   return (
     <Card
       id="container-load-viewer"
       tabIndex={-1}
-      role={isMulti ? "region" : undefined}
-      aria-labelledby={viewerLabelledBy}
       className="border-2 p-4 outline-none focus-visible:ring-2 focus-visible:ring-brand-navy sm:p-5"
       style={{ borderColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)" }}
     >
