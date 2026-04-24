@@ -44,8 +44,6 @@ export interface ComplianceOptions {
 // placer uses; geometric overlap (below) eliminates the cell-grid penalty
 // that previously misjudged stacks of dimensions not divisible by 100 mm.
 const SUPPORT_MIN_RATIO = 0.85;
-const FLOOR_GAP_RED_ROWS = 3;
-const FLOOR_GAP_RED_PCT = 75;
 
 /**
  * Audit each stacked box's support ratio using **geometric overlap** against
@@ -136,8 +134,11 @@ export function computeComplianceReport(
     const unplaced = pack.totalCartons - pack.placedCartons;
     const penalty = Math.min(30, Math.round((unplaced / pack.totalCartons) * 50));
     score -= penalty;
+    // Unplaced cartons = shut-out, NOT a hard physical violation. Surface as
+    // a YELLOW warning so the optimiser can still report "max loaded · shut
+    // out" without flipping the HUD to RED / EXPORT BLOCKED.
     violations.push({
-      type: penalty > 15 ? "RED" : "YELLOW",
+      type: "YELLOW",
       code: "UNPLACED",
       message: `${unplaced} items (${Math.round(100 - placedPct)}%) could not be fitted`,
     });
@@ -192,16 +193,25 @@ export function computeComplianceReport(
   let floorGapOk = true;
   let gapRowIdxs: number[] = [];
   if (rows && rows.length > 0) {
-    const gapRows = rows.filter((r) => r.gapWarning);
+    // Only flag rows that are below BOTH the configured threshold AND their
+    // own physical ceiling. A row already at its geometric maximum (e.g.
+    // 1066.8 mm cubes in a 2350 mm wide container — max 2 across at 90.8%)
+    // cannot be re-shuffled tighter, so it must not produce a slack warning.
+    const gapRows = rows.filter(
+      (r) =>
+        r.gapWarning &&
+        r.wallUtilizationPct < r.maxAchievableUtilizationPct - 0.5,
+    );
     gapRowIdxs = gapRows.map((r) => r.rowIdx + 1);
-    const worstPct = Math.min(100, ...gapRows.map((r) => r.wallUtilizationPct));
     floorGapOk = gapRows.length === 0;
     if (gapRows.length > 0) {
       const penalty = Math.min(20, gapRows.length * 5);
       score -= penalty;
-      const isRed = gapRows.length >= FLOOR_GAP_RED_ROWS || worstPct < FLOOR_GAP_RED_PCT;
+      // Floor-gap is a packing efficiency warning, not a hard physical
+      // violation. Always YELLOW — never RED — so it cannot single-handedly
+      // block export on an otherwise legal pack.
       violations.push({
-        type: isRed ? "RED" : "YELLOW",
+        type: "YELLOW",
         code: "FLOOR_GAP",
         message: `${gapRows.length} row${gapRows.length > 1 ? "s" : ""} have floor gaps — re-shuffle to close before sealing`,
         rowIdxs: gapRowIdxs,

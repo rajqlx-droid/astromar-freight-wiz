@@ -26,8 +26,15 @@ export interface RowGroup {
    * re-shuffle to close before sealing the container.
    */
   wallUtilizationPct: number;
-  /** True when wallUtilizationPct < 90% — flagged for re-shuffle. */
+  /** True when wallUtilizationPct < 90% AND below the row's geometric ceiling — flagged for re-shuffle. */
   gapWarning: boolean;
+  /**
+   * Maximum wall utilisation physically achievable for this row given its
+   * cargo footprint and the universal 50 mm gap rule. When the row is
+   * already at this ceiling, no slack warning should fire — the geometry
+   * itself caps how tight the pack can be.
+   */
+  maxAchievableUtilizationPct: number;
 }
 
 /** Minimum back-wall floor coverage before we flag a gap warning. */
@@ -350,7 +357,41 @@ export function buildRows(
     const wallAreaMm2 = pack.container.inner.w * rowDepthMm;
     const wallUtilizationPct =
       wallAreaMm2 > 0 ? Math.min(100, (bottomFootprintMm2 / wallAreaMm2) * 100) : 0;
-    const gapWarning = wallUtilizationPct < WALL_GAP_WARNING_THRESHOLD_PCT;
+
+    // Geometric ceiling: how tight CAN this row physically be packed given
+    // the smallest bottom-layer footprint width + the 50 mm gap rule? If the
+    // current utilisation is already at this ceiling, the slack is
+    // irreducible — no re-shuffle can close it. Suppresses false-positive
+    // FLOOR_GAP warnings on rows like 1066.8 mm cubes in a 2350 mm wide HC
+    // (max 2 across = 90.8%, below the 90% threshold but already optimal).
+    const containerW = pack.container.inner.w;
+    const minGap = 50; // universal neighbour gap (gap-rules.ts)
+    const wallMin = 50; // universal wall gap
+    const floorBoxes = r.boxes.filter((b) => b.z < 10);
+    let maxAchievableUtilizationPct = 100;
+    if (floorBoxes.length > 0 && rowDepthMm > 0) {
+      // Use the narrowest bottom-layer footprint as the limiting cell — that's
+      // the box that determines how many can sit side-by-side.
+      const narrowestW = Math.min(...floorBoxes.map((b) => b.w));
+      const narrowestL = Math.min(...floorBoxes.map((b) => b.l));
+      if (narrowestW > 0) {
+        const usableWidth = Math.max(0, containerW - 2 * wallMin + minGap);
+        const fitsAcross = Math.max(1, Math.floor(usableWidth / (narrowestW + minGap)));
+        const fitsDeep = Math.max(1, Math.floor((rowDepthMm + minGap) / (narrowestL + minGap)));
+        const idealFootprint = fitsAcross * fitsDeep * narrowestW * narrowestL;
+        maxAchievableUtilizationPct =
+          wallAreaMm2 > 0
+            ? Math.min(100, (idealFootprint / wallAreaMm2) * 100)
+            : 100;
+      }
+    }
+    // Use the smaller of the configured threshold or the row's physical
+    // ceiling — never warn about slack the cargo geometry itself enforces.
+    const effectiveThreshold = Math.min(
+      WALL_GAP_WARNING_THRESHOLD_PCT,
+      maxAchievableUtilizationPct - 0.5, // tiny epsilon for FP rounding
+    );
+    const gapWarning = wallUtilizationPct < effectiveThreshold;
     return {
       rowIdx: i,
       xStart: r.xStart,
@@ -365,6 +406,7 @@ export function buildRows(
       needsSeparator,
       wallUtilizationPct,
       gapWarning,
+      maxAchievableUtilizationPct,
     };
   });
 }

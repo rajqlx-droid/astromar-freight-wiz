@@ -17,14 +17,16 @@ import { pickBestPlan } from "./scenario-runner";
 import { CEILING_RESERVE_MM, getGapRule } from "./gap-rules";
 
 /**
- * Usable CBM by container — used as a fast pre-filter before running the
- * (more expensive) geometric packer. These match Searates / Maersk
- * practical limits (≈ 85% of geometric volume).
+ * Usable CBM by container — kept as an alias of the raw geometric capacity
+ * (`container.capCbm`) so callers and tests that still reference this map
+ * keep working. Per the 100%-geometry rule, we no longer apply a stowage
+ * haircut here; effective CBM is reduced ONLY when the packer's gap rules
+ * physically prevent a tighter fit.
  */
 export const USABLE_CBM: Record<ContainerPreset["id"], number> = {
-  "20gp": 30,
-  "40gp": 60,
-  "40hc": 70,
+  "20gp": CONTAINERS.find((c) => c.id === "20gp")!.capCbm,
+  "40gp": CONTAINERS.find((c) => c.id === "40gp")!.capCbm,
+  "40hc": CONTAINERS.find((c) => c.id === "40hc")!.capCbm,
 };
 
 export interface RecommendedUnit {
