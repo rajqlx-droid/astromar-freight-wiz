@@ -855,20 +855,28 @@ function ContainerShell({
 
 /* --------------- Wooden pallet (under every floor-level box) --------------- */
 
-function WoodenPallet({ lm, wm }: { lm: number; wm: number }) {
+function WoodenPallet({ lm, wm, bottomY = 0 }: { lm: number; wm: number; bottomY?: number }) {
   // Pallet look: top deck planks with gaps, 3×3 feet blocks, 3 bottom runners.
-  // Height = 12 cm total. Sits centred under the box.
+  // Height = 12 cm total. The pallet's TOP face sits at local y = bottomY
+  // (the cargo box's bottom), and the rest of its body extends DOWN into the
+  // floor. This keeps the cargo at its true z coordinate so stacked boxes
+  // align perfectly with the boxes they rest on (no visual interpenetration).
   const TOP = "#b8895a";
   const BOT = "#8a6038";
   const planks = Math.max(5, Math.round(wm / 0.18));
   const plankW = wm / planks;
+  // Top deck centre = bottomY - 0.011 (deck thickness = 0.022, half = 0.011).
+  // Block centre   = bottomY - 0.06  (block height = 0.06, top of block = bottomY - 0.03)
+  const deckY = bottomY - 0.011;
+  const blockY = bottomY - 0.06;
+  const runnerY = bottomY - 0.105;
   return (
-    <group position={[0, -0.06, 0]}>
+    <group>
       {Array.from({ length: planks }).map((_, i) => {
         if (i % 2 === 1 && i !== planks - 1) return null;
         const z = -wm / 2 + plankW * (i + 0.5);
         return (
-          <mesh key={`p-${i}`} position={[0, 0.05, z]} castShadow receiveShadow>
+          <mesh key={`p-${i}`} position={[0, deckY, z]} castShadow receiveShadow>
             <boxGeometry args={[lm * 0.98, 0.022, plankW * 0.85]} />
             <meshStandardMaterial color={TOP} roughness={0.85} />
           </mesh>
@@ -876,14 +884,14 @@ function WoodenPallet({ lm, wm }: { lm: number; wm: number }) {
       })}
       {[-lm * 0.4, 0, lm * 0.4].map((px, ix) =>
         [-wm * 0.4, 0, wm * 0.4].map((pz, iz) => (
-          <mesh key={`b-${ix}-${iz}`} position={[px, 0, pz]} castShadow>
+          <mesh key={`b-${ix}-${iz}`} position={[px, blockY, pz]} castShadow>
             <boxGeometry args={[lm * 0.12, 0.06, wm * 0.12]} />
             <meshStandardMaterial color={BOT} roughness={0.9} />
           </mesh>
         )),
       )}
       {[-lm * 0.4, 0, lm * 0.4].map((px, i) => (
-        <mesh key={`r-${i}`} position={[px, -0.045, 0]} castShadow receiveShadow>
+        <mesh key={`r-${i}`} position={[px, runnerY, 0]} castShadow receiveShadow>
           <boxGeometry args={[lm * 0.1, 0.022, wm * 0.98]} />
           <meshStandardMaterial color={BOT} roughness={0.9} />
         </mesh>
@@ -1245,7 +1253,7 @@ function CargoBox({
 
   return (
     <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale * 1.001}>
-      {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} />}
+      {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[Math.max(lm, wm) * 0.55, Math.max(lm, wm) * 0.7, 32]} />
