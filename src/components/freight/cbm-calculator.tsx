@@ -335,7 +335,6 @@ export function CbmCalculator({ items, setItems }: Props) {
       .then((res) => {
         if (cancelled) return;
         setWorkerRecommendation(res.recommendation);
-        setWorkerBucketPacks(res.bucketPacks);
       })
       .catch(() => {
         // Swallow — if the worker fails we keep the fast CBM recommendation
@@ -351,7 +350,6 @@ export function CbmCalculator({ items, setItems }: Props) {
   useEffect(() => {
     if (!showOptimization) {
       setWorkerRecommendation(null);
-      setWorkerBucketPacks([]);
     }
   }, [showOptimization]);
 
