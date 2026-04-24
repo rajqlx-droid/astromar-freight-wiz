@@ -1,67 +1,103 @@
-# End-to-End Packing Pipeline Fix
+# Extended End-to-End Packing and Geometry Fix
 
-Combines both previously-proposed plans into a single implementation pass. Goal: eliminate "VIOLATIONS / EXPORT BLOCKED" false positives that come from logic mismatches between the optimiser, recommender, audit, and HUD — while preserving the 100% geometric capacity + 50 mm gap rule.
+Goal: eliminate repeated overlap, floating, gap, and “empty full space” failures by tightening both the physical packing engine and the validation pipeline. Keep the existing hard rules unchanged: 100% container geometry, no default CBM haircut, 50 mm gap rule, 100 mm door reserve, 80 mm ceiling reserve, support ratio 0.85, single-container max 40HC.
 
-## Hard rules (unchanged)
-- 100% geometric container dimensions in `src/lib/freight/packing.ts` (20GP 33.23 m³, 40GP 67.78 m³, 40HC 76.34 m³). No stowage haircut.
-- Universal 50 mm neighbour/wall gap, 100 mm door, 80 mm ceiling (`src/lib/freight/gap-rules.ts`).
-- `SUPPORT_MIN_RATIO = 0.85` everywhere (packer + audit). No hanging, no overlap.
-- Single 40HC max — no multi-container stuffing.
+## What is additionally broken
+1. **3D false-overlap rendering**: floor cargo is visually lifted by a rendered wooden pallet in `src/components/freight/container-3d-view.tsx`, while stacked cargo uses raw pack `z`. This can make clean stacks look interpenetrated in 3D even when the pack math is legal.
+2. **No final geometry validator**: `src/lib/freight/packing-advanced.ts` rejects bad candidates during placement, but there is no shared post-pack validator that rechecks the final placed set for pairwise overlap, neighbour gaps, wall/door/ceiling clearance, and unsupported stacks.
+3. **Support / gap logic is still placement-local**: candidate checks are done box-by-box against the current state. After snap passes and final placement, the system does not produce a canonical “physics audit” object from the final geometry.
+4. **Row slack ceiling is approximate for mixed rows**: `loading-rows.ts` uses the narrowest footprint to estimate `maxAchievableUtilizationPct`, which can still misclassify mixed-size rows and leave avoidable empty bands.
+5. **HUD drift still exists**: `loader-hud.tsx` still recomputes compliance locally instead of rendering the exact optimiser-side audit/report.
+6. **Coverage gaps in tests**: current tests cover irreducible slack and cube stacking, but not final-state overlap detection, stacked mixed-SKU support, snap-induced regressions, or 3D/view-model alignment.
 
-## Root causes found in audit
-1. **Split-brain pipeline**: `pickOptimalContainer` in `packing.ts` runs a single-strategy pack, while the 3D loader uses `pickBestPlan`. The auto-selected container can disagree with the rendered plan, producing red HUD on a plan the optimiser already rejected.
-2. **Irreducible-slack false positive**: `FLOOR_GAP` audit in `compliance.ts` flags rows whose width utilisation is below ~90% even when cargo footprint × n + (n+1)·50 mm physically cannot exceed the inner width (e.g. 1066.8 mm cubes in 2350 mm — max 2 across = 90.8%). HUD then reports RED on a physically optimal pack.
-3. **Capacity drift**: `container-recommender.ts` still applies legacy "usable CBM" haircuts (~85%), inconsistent with the 100% rule and causing the recommender to under-promise vs. what the optimiser actually places.
-4. **Blocked vs. shut-out conflation**: When cargo legitimately exceeds 40HC capacity, every strategy returns residue; the HUD shows "EXPORT BLOCKED" instead of distinguishing "physically legal pack, but cargo shut out".
-5. **Compliance recompute drift**: UI recomputes compliance from the pack instead of consuming the optimiser's report, so two slightly different audits can disagree on the same plan.
+## Implementation
 
-## Changes
+### 1. Add a shared final geometry validator
+Create a shared validator in `src/lib/freight` that consumes the final `placed[]` set and produces a canonical audit report for:
+- pairwise 3D overlap/interpenetration
+- neighbour gap violations only when boxes overlap vertically
+- wall side clearance
+- door reserve breach
+- ceiling reserve breach
+- unsupported / weakly supported stacks using geometric overlap
+- non-stackable cargo carrying load above it
+- fragile/sealed columns carrying extra load above them
 
-### 1. `src/lib/freight/packing.ts`
-- `pickOptimalContainer` calls `pickBestPlan` (via the worker path when available, sync fallback otherwise) and selects the container whose densest legal plan maximises placedCargoCbm. Removes the single-strategy shortcut so picker + visualiser always agree.
+This validator becomes the single source of truth for “hard physical violation” decisions.
 
-### 2. `src/lib/freight/scenario-runner.ts`
-- `pickBestPlan` already exists. Add to the returned `BestPlan`:
-  - `meta.shutOut: { cartons: number; cbm: number; weightKg: number } | null`
-  - `meta.allLegal: boolean` (true if at least one strategy passed all hard checks)
-- Keep current fallback ordering (legal-first, then fewest reds, then highest score) but tag the result so the UI can distinguish "best legal pack with shut-out" from "no legal pack found".
+### 2. Tighten `packing-advanced.ts`
+Update the packer so final placement uses the same validator logic the audit uses:
+- use orientation-aware height checks consistently
+- validate the final snapped candidate before commit using the shared validator rules
+- ensure snap-to-neighbour cannot create post-snap gap or overlap regressions
+- explicitly track when a candidate was rejected by geometry, support, stack-weight, wall, door, or ceiling constraints
+- expose richer diagnostics so unplaced cargo can be distinguished from “rejected because unsafe to stack or fit”
 
-### 3. `src/lib/freight/loading-rows.ts`
-- Add `maxAchievableUtilizationPct` to `RowGroup`, computed from cargo footprint, gap rule, and inner width/length: `floor((W - wallMin·2 + minGap) / (cargoW + minGap))` × cargoW / W.
-- Used by the audit so a row at its physical maximum cannot trip a slack warning.
+### 3. Make compliance consume the shared validator
+Refactor `src/lib/freight/compliance.ts` so it stops inferring hard failures indirectly and instead maps the final geometry validator result into compliance items.
+- RED only for true physical failures
+- YELLOW for efficiency/shut-out/slack advisories
+- preserve the irreducible-slack fix, but base it on more exact row geometry
 
-### 4. `src/lib/freight/compliance.ts`
-- `FLOOR_GAP` rule: compare actual utilisation against `min(targetPct, maxAchievableUtilizationPct)`. If the row is already at its geometric ceiling, do not flag.
-- Keep `SUPPORT_MIN_RATIO = 0.85` (already aligned).
-- Geometric-overlap support check stays as fixed previously.
-- Distinguish hard violations (overlap, hanging, gap < 50 mm with vertical overlap > 1 mm, door/ceiling < min) from soft warnings (slack, fill efficiency). Only hard violations trigger RED.
+### 4. Improve row geometry in `loading-rows.ts`
+Replace the current approximate `maxAchievableUtilizationPct` logic with a more exact row-floor packing ceiling based on the actual bottom-layer footprints present in that row.
+- calculate the true occupied floor intervals along width and depth
+- distinguish unavoidable slack from poor arrangement
+- keep gap warnings only for reducible voids
 
-### 5. `src/lib/freight/container-recommender.ts`
-- Remove the 0.85 / "usable CBM" haircuts. Capacity headroom checks use raw geometric CBM.
-- `fitSingle` consumes `pickBestPlan` (already wired) and propagates `meta.shutOut` into the recommendation so the UI shows shut-out totals instead of "blocked".
+### 5. Pass optimiser audit end-to-end
+Update `scenario-runner.ts`, `packing-worker.ts`, `use-packing-worker.ts`, and `container-load-view.tsx` so the optimiser returns:
+- chosen pack
+- canonical validator/audit report for that chosen pack
+- shut-out totals
+- all-legal flag
+- hard violation reasons
 
-### 6. `src/lib/freight/packing-worker.ts` & `src/hooks/use-packing-worker.ts`
-- `optimise` response includes the new `meta` (shutOut, allLegal) and the optimiser's compliance report so the UI never recomputes.
-- Hook exposes the meta on the resolved value.
+The UI should render that report directly instead of recomputing locally.
 
-### 7. `src/components/freight/container-load-view.tsx`
-- Consume `meta.shutOut` and `meta.allLegal` from the optimise result and pass to the HUD instead of recomputing.
+### 6. Fix 3D visual alignment
+Update `src/components/freight/container-3d-view.tsx` so the rendered box positions match the physical pack model exactly.
+- remove or rebalance the extra visual pallet lift that makes floor cargo appear higher than packed coordinates
+- keep pallet visuals decorative only if they do not change perceived contact planes
+- verify stacked boxes, roof clearance, and floor contact all visually match `placed[]`
 
-### 8. `src/components/freight/loader-hud.tsx`
-- Three states instead of two:
-  - GREEN — `allLegal` and no shut-out: "READY TO LOAD".
-  - AMBER — `allLegal` and shut-out > 0: "MAX LOADED · SHUT-OUT REPORT" with cartons/CBM/kg left behind.
-  - RED — `!allLegal`: "EXPORT BLOCKED" with the specific hard-violation reasons from the optimiser's compliance report.
-- Show the compliance score as "Score: NN" without coupling colour to score thresholds.
+### 7. Update HUD behaviour
+Update `src/components/freight/loader-hud.tsx` to consume the optimiser-provided audit/validator result directly.
+- GREEN: legal pack, no shut-out
+- AMBER: legal max-loaded pack with shut-out or efficiency warnings
+- RED: actual physical failure from validator
+- display score separately from legal/blocked state
 
-### 9. Tests
-- Extend `src/lib/freight/scenario-runner.test.ts`:
-  - 1066.8 mm cubes in 40HC → AMBER state, no FLOOR_GAP false positive, shut-out reported correctly when manifest exceeds 76.34 m³.
-  - Manifest fits cleanly → GREEN, zero shut-out.
-  - Forced overlap fixture → RED with the overlap reason surfaced.
-- Add a `compliance.irreducible-slack.test.ts` covering the new `maxAchievableUtilizationPct` gate.
+### 8. Expand tests
+Extend tests to cover:
+- mixed-size stacked loads with exact support validation
+- final-state overlap detection on forced-bad fixtures
+- post-snap gap preservation
+- non-stackable cargo never carrying upper load
+- fragile/sealed columns not accepting further stacking
+- 3D alignment expectations for floor vs stacked cargo coordinates
+- mixed-row irreducible slack vs reducible slack
+
+## Technical details
+- Keep 100% geometric dimensions; do not reduce CBM by default.
+- Only real cargo dimensions plus gap/clearance rules may reduce effective loaded CBM.
+- Use one shared geometry/physics validator for packer, compliance, worker, and HUD.
+- Separate physical illegality from loading inefficiency.
+- Keep the optimiser legal-first; only fall back when every strategy is illegal, and surface that explicitly.
+
+## Files likely involved
+- `src/lib/freight/packing-advanced.ts`
+- `src/lib/freight/compliance.ts`
+- `src/lib/freight/loading-rows.ts`
+- `src/lib/freight/scenario-runner.ts`
+- `src/lib/freight/packing-worker.ts`
+- `src/hooks/use-packing-worker.ts`
+- `src/components/freight/container-load-view.tsx`
+- `src/components/freight/loader-hud.tsx`
+- `src/components/freight/container-3d-view.tsx`
+- freight geometry/compliance test files
 
 ## Out of scope
-- No change to gap values, support ratio, or geometric capacities beyond what's listed.
-- No multi-container suggestions.
-- No re-introduction of the Scenario Comparison UI — the sweep stays internal.
+- No change to container dimensions or gap-rule constants
+- No multi-container stuffing
+- No default capacity haircut or safety margin rollback
