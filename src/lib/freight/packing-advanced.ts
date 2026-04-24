@@ -246,8 +246,24 @@ export function packContainerAdvanced(
   let frontierX = 0;
 
   const placedInternal: PlacedInternal[] = [];
+  const placedSupportRatios: number[] = [];
   let placedCount = 0;
   let truncated = false;
+
+  // Stacking diagnostics — counts how often each rule rejected a candidate
+  // placement during the search. Used to surface a user-facing warning
+  // explaining why stacking was reduced.
+  const stackingReasonCounts = {
+    support: 0,
+    sealed: 0,
+    stackWeight: 0,
+    nonStackable: 0,
+  };
+  let totalStackingRejections = 0;
+  // For each carton currently being placed, remember the dominant stacking
+  // rule that fired during its scan. If the carton ends up unplaced, this
+  // tells us which rule (if any) cost it a placement.
+  let unplacedDueToStacking = 0;
 
   const cellIdx = (cx: number, cy: number) => cy * cellsX + cx;
 
