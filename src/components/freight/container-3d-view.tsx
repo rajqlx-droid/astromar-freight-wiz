@@ -280,6 +280,8 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             followCam={followCam}
             showForkliftToken={showForkliftToken}
             nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
+            debugSupport={debugSupport}
+            supportRatios={supportRatios ?? pack.supportRatios ?? null}
           />
         </Suspense>
       </Canvas>
@@ -453,6 +455,8 @@ function SceneContents({
   followCam,
   showForkliftToken,
   nearCeilingPlacedIdxs,
+  debugSupport,
+  supportRatios,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -470,6 +474,8 @@ function SceneContents({
   followCam: boolean;
   showForkliftToken: boolean;
   nearCeilingPlacedIdxs: number[] | null;
+  debugSupport: boolean;
+  supportRatios: number[] | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
