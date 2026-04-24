@@ -96,7 +96,8 @@ export function runAllScenarios(
     // Build rows once per scenario so the foundation-rules audit (FLOOR_GAP)
     // sees the same row groupings the loading-rows panel surfaces.
     const rows = pack.placed.length > 0 ? buildRows(pack) : [];
-    const compliance = computeComplianceReport(pack, { rows });
+    const geometryAudit = validateAdvancedPack(pack);
+    const compliance = computeComplianceReport(pack, { rows, geometryAudit });
     const placedPct =
       pack.totalCartons > 0 ? (pack.placedCartons / pack.totalCartons) * 100 : 100;
     return {
