@@ -1,62 +1,75 @@
+## Diagnose "floating + overlapping" cargo in 3D loading view
 
+### What your screenshot tells us
 
-## Why only 9 cartons fit, no stacking — and how to fix it
+- Cargo: **1066.8 × 1066.8 × 1066.8 mm** cubes (3.5 ft), 40 units, 40HC container.
+- HUD: **40/40 placed**, **100 COMPLIANT**, last frame of the loading sequence ("STACK ON" step 40/40).
+- Container inner: **12032 × 2352 × 2700 mm**.
 
-### Your input
-- 30 cartons at **121.92 × 121.92 × 121.92 cm**, **500 kg each** (4 ft cubes)
-- Container 40HC inner: 12032 × 2352 × 2700 mm
+### Geometric reality check (this load is solvable)
 
-### Two separate things are happening
+```
+Width  : 2 × 1066.8 = 2133.6 mm  → fits in 2352 (218 mm slack) ✓ 2-wide
+Length : 11 × 1066.8 = 11734.8 mm → fits in 12032 with 100 mm door reserve ✓ 11-long
+Height : 2 × 1066.8 = 2133.6 mm  → fits in 2700 with 80 mm ceiling reserve ✓ 2-tier
+Slots  : 2 × 11 × 2 = 44 ≥ 40 ✓
+```
 
-**1. Side-by-side: physically impossible (not a bug)**
-Two cartons side-by-side = 2 × 1219.2 = **2438.4 mm**, but the 40HC inner width is only **2352 mm**. So only **1 carton per row** is geometrically possible. This is correct.
+So 40 cubes **should** sit as a clean 2 × 11 × 2 grid (with 1 short row on top). The packer reporting "40/40 placed" matches this — the issue is what you see, not what was computed.
 
-**2. Stacking: blocked by a quantization bug (the real problem)**
-The packer should stack a second carton on top of each floor carton (2 × 1219.2 = 2438.4 mm < 2620 mm usable height). It refuses to, and the root cause is in `packing-advanced.ts`:
+### What's actually wrong (3 candidate causes — to verify before fixing)
 
-- The support check uses a **100 mm cell grid** (`CELL_MM = 100`).
-- A 1219.2 mm carton footprint covers `ceil(1219.2/100) = 13` cells per side → **169 cells** under the footprint.
-- The real carton only fills `(1219.2/100)² ≈ 148.6` cells worth.
-- Support ratio = 148.6 / 169 ≈ **0.879**.
-- The packer requires `SUPPORT_MIN_RATIO = 0.9`. **0.879 < 0.9 → stacking rejected.**
+**1. Cargo loading rules ARE being honoured by the packer**
+The current `packing-advanced.ts` enforces:
+- Floor / skyline support (geometric overlap ≥ 0.85, no floating allowed at placement time).
+- Inter-item `minGap` (carton = 20mm) enforced both during scan AND re-checked after the snap pass.
+- Wall clearance `wallMin` (carton = 30mm), door reserve 100mm, ceiling reserve 80mm.
+- Stack-weight, fragile-sealing, non-stackable on floor only.
+- Z is set to the actual top of supporting cells — not floating.
 
-So every dimension that is not a clean multiple of 100 mm (122 cm, 75 cm, 45 cm, etc.) suffers from this quantization penalty even when the upper carton is *identical* to the one below it.
+So if 40/40 placed and 100 compliant, the **stored coordinates are valid** (no overlap, no float). The "audit" wouldn't return 100 if any of the rules above were violated.
 
-Result: 9 cartons line up floor-only along the 12 m length, then the remaining 21 spill into 2 more containers — exactly what your PDF shows.
+**2. The visual you're seeing is the loading-video / row-step animation, not the rest state**
+The HUD "Replay / 0.5× / 1× / 2×" controls are running `transformsForFrame` from `loading-video.ts`, which animates each box flying in from the door. At intermediate frames boxes are deliberately mid-air or staged outside the container — that is **animation staging**, not the final layout. We need to confirm whether the "floating + overlapping" you see is:
+   - mid-animation (expected, harmless), or
+   - the final frame after playback ends (a real bug).
 
-### The fix
+The screenshot shows frame 40/40 = last frame, so this is the rest state — meaning we should look at the rendered geometry vs `pack.placed[i]`.
 
-Change the support check so it measures **actual footprint overlap**, not quantized cell coverage. Two complementary changes inside `evaluatePlacement` in `src/lib/freight/packing-advanced.ts`:
+**3. Most likely real bug — Y stride collapses 2-wide rows into a single visual row**
+The `score` weights are `x * 10000 + z * 100 + y * 0.1 + …`. The `y` weight is **0.1**, which is so low it's basically a tiebreak. Combined with the snap pass that slides to `y = 0` whenever support permits, every cube tends to snap to **y = 30 mm** (wall clearance). That gives a 2-wide row only if the SECOND cube in the same x-slot also fits — but the snap pass pulls each cube as far back-and-left as possible, so the second cube of a pair gets dropped at `y = 1066.8 + 30 + 20 = 1116.8 mm`, leaving a **1235 mm dead lane** along the right wall. Result: 40 cubes form a single-file row stacked 2-tall instead of a 2-wide × 2-tall arrangement → only ~20 columns × 2 tiers needed → 12.03 m / 1.087 m = 11 columns → cubes overflow into a cramped corridor and the visual reads as "all crammed together overlapping the wall".
 
-1. **Identical-supporter shortcut.** If the only supporter directly below has the same `(l, w)` footprint and the same `(x, y)` corner (within 1 cm), treat support as 100% — a carton sitting flush on an identical carton is by definition fully supported.
+That matches what your image shows: a continuous green wall with no visible 2-wide layout, the right side of the container looking empty, and "Pallet 40 of 40 · row 10 / 10".
 
-2. **Real-area support ratio (fallback for non-identical stacks).** Instead of `supported / total` cells, compute the geometric overlap area between the new box footprint and the union of supporting boxes' top faces, divided by the new box's footprint area. This eliminates the cell-rounding penalty for any dimension.
+### What I'll do (read-only investigation first)
 
-3. **Lower the threshold safely.** Drop `SUPPORT_MIN_RATIO` from `0.9` to `0.85` as a defensive backstop. 0.85 is still safe for real-world stacking (industry standard for ISTA/CTU is 80–90%) and matches the quantization tolerance for sub-100 mm dimensions.
+1. Reproduce the 1066.8 mm × 40 case in the existing debug test harness and dump:
+   - Final `pack.placed[]` coordinates (x, y, z, l, w, h).
+   - Floor coverage, frontier X, supportRatios.
+   - Confirm whether boxes are 2-wide or single-file along Y.
+2. If single-file is confirmed → the fix is in the **scoring + snap order**, not the renderer:
+   - Increase the y-weight in the score so the packer prefers filling the width before advancing forward (currently it doesn't — back-wall fill works in X, never in Y).
+   - Add a "row-fill in Y" pass that, once a column is started at a given x, attempts to drop a sibling at `y = 0 + l + minGap` before moving to the next x.
+3. If 2-wide is correct in the data but the **render** shows them overlapping → the bug is in `Container3DView`'s coordinate transform (likely a units mismatch where `mm` is rendered as `mm/1000` for position but `mm` for size, or vice versa).
 
-### Files touched
+### What I will NOT change in this investigation
 
-- `src/lib/freight/packing-advanced.ts` — update `evaluatePlacement` to return geometric overlap support ratio, add identical-stack shortcut, lower threshold to 0.85.
+- Packer support / floating rules (already correct — geometric overlap, real Z resting plane).
+- Audit / compliance scoring.
+- The animation system (fly-in is intentional staging during playback).
 
-### Expected result for your scenario
+### Deliverable
 
-- Floor row: 9 cartons along the 12 m length (unchanged — this is the geometric max for 1219.2 mm cartons with door reserve and gaps).
-- Stack: a **second tier** of 9 cartons on top → 18 placed in one container.
-- Remaining 12 cartons fit in a second container (also stacked 2 tiers, 9 + 3) → **2 containers instead of 3+** for this load.
-- Weight per stacked column: 1000 kg, well under cargo limits.
-- The "GAP — RE-SHUFFLE" warning will also go away because wall-utilization improves once the cargo is stacked rather than spread across 9+ rows.
+A short diagnostic write-up with the actual `placed[]` dump for your 1066.8 × 40 case, the root cause identified (scoring vs renderer vs animation), and a follow-up plan for the targeted fix. No code changes in this step — once we confirm the cause I'll come back with a focused fix plan you can approve.
 
-### Safety / no-risk checklist
+### Files I'll read
 
-- The geometric support ratio is **stricter or equal** to the cell-based one in every realistic case — it cannot create floating cargo.
-- Identical-stack shortcut only applies when the box below has the same footprint AND same XY corner — no risk of authorising weak stacks.
-- `maxStackWeightKg`, `fragile`, `stackable=false`, sealed columns, and door/ceiling reserves are all untouched.
-- 3D view, loading rows, report, and video read from `placed[]` and stay correct automatically.
-- No type changes, no schema changes, no UI changes.
+- `src/lib/freight/packing-advanced.ts` (already reviewed — scoring/snap confirmed as suspect)
+- `src/components/freight/container-3d-view.tsx` (`CargoBox` transform pipeline + `transformsForFrame` end-state)
+- `src/lib/freight/loading-video.ts` (`transformsForFrame` for final-frame correctness)
+- `src/lib/freight/loading-rows.ts` (row grouping — relevant if rows are computed wrongly)
 
-### Out of scope (intentionally not changed)
+### Files I'll touch (in the follow-up plan, not now)
 
-- Width-side packing — 2 cartons side-by-side is geometrically impossible in any standard ocean container; nothing to fix there.
-- Strategy/scoring — the existing back-to-front + bottom-first scoring is correct once the support bug is removed.
-- Cell size — keeping `CELL_MM = 100` for performance; the geometric overlap fix doesn't need a finer grid.
-
+- Most likely just `src/lib/freight/packing-advanced.ts` (scoring weights + width-fill heuristic).
+- Possibly nothing else if the renderer is innocent.
