@@ -386,8 +386,12 @@ export function packContainerAdvanced(
       z: number;
       orient: Orientation;
       supporters: Set<number>;
+      supportRatio: number;
     } | null = null;
     let lastReason: string | undefined;
+    // Track stacking-rule rejections seen by THIS carton so we can attribute
+    // an unplaced result to the most-frequent rule.
+    const cartonRejects = { support: 0, sealed: 0, stackWeight: 0, nonStackable: 0 };
 
     for (const o of orients) {
       // Candidate XY positions on a coarse grid.
