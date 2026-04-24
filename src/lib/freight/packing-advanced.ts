@@ -454,10 +454,15 @@ export function packContainerAdvanced(
           for (const pb of placedInternal) {
             if (Math.abs(pb.x - x) > o.l + checkRange) continue;
             if (Math.abs(pb.y - y) > o.w + checkRange) continue;
+            // Vertical relationship: a box directly stacked on another (top of pb
+            // meets bottom of new box, or vice-versa) is supported contact —
+            // NOT a gap violation. Only enforce the lateral gap when boxes
+            // overlap vertically by more than 1mm (true side-by-side neighbours).
+            const zOverlapMm = Math.min(ev.z + o.h, pb.z + pb.h) - Math.max(ev.z, pb.z);
+            if (zOverlapMm <= 1) continue; // stacked or non-overlapping in Z
             const xOv = x < pb.x + pb.l + gRule.minGap && x + o.l + gRule.minGap > pb.x;
             const yOv = y < pb.y + pb.w + gRule.minGap && y + o.w + gRule.minGap > pb.y;
-            const zOv = ev.z < pb.z + pb.h && ev.z + o.h > pb.z;
-            if (xOv && yOv && zOv) { gapViolation = true; break; }
+            if (xOv && yOv) { gapViolation = true; break; }
           }
           if (gapViolation) continue;
 
