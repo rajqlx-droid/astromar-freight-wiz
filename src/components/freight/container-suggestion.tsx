@@ -4,10 +4,73 @@
  * shows a "Cargo shut out" warning with the number of cartons / volume that
  * cannot be loaded so the user can adjust their manifest.
  */
-import { AlertTriangle, Lightbulb, PackageX, Sparkles } from "lucide-react";
+import { AlertTriangle, Download, Lightbulb, PackageX, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ContainerRecommendation } from "@/lib/freight/container-recommender";
+
+function downloadShutOutCsv(rec: ContainerRecommendation) {
+  const { shutOut, totalCbm, totalWeightKg, units, summary, reason } = rec;
+  if (!shutOut) return;
+  const unit = units[0];
+  const reasonLabel =
+    reason === "exceeds-single-cbm"
+      ? "Exceeds 40HC usable volume"
+      : reason === "exceeds-single-weight"
+        ? "Exceeds 40HC payload"
+        : reason === "exceeds-single-geometry"
+          ? "Geometry prevents full placement in 40HC"
+          : "Within 40HC capacity";
+  const rows: (string | number)[][] = [
+    ["Cargo Shut-Out Summary"],
+    ["Generated", new Date().toISOString()],
+    ["Recommended container", summary],
+    ["Reason", reasonLabel],
+    [],
+    ["Metric", "Total manifest", "Loaded in 40HC", "Shut out (left unplaced)"],
+    [
+      "Packages",
+      "—",
+      "—",
+      shutOut.cartons,
+    ],
+    [
+      "Volume (m³)",
+      totalCbm.toFixed(3),
+      unit ? unit.fillCbm.toFixed(3) : "",
+      shutOut.cbm.toFixed(3),
+    ],
+    [
+      "Weight (kg)",
+      totalWeightKg.toFixed(2),
+      unit ? unit.fillWeightKg.toFixed(2) : "",
+      shutOut.weightKg.toFixed(2),
+    ],
+    [],
+    ["Note", "Reduce quantities, change packaging, or split the shipment to load the excess separately."],
+  ];
+  const csv = rows
+    .map((row) =>
+      row
+        .map((cell) => {
+          const s = String(cell ?? "");
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(","),
+    )
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `cargo-shutout-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast.success("Shut-out summary downloaded");
+}
 
 interface Props {
   recommendation: ContainerRecommendation;
@@ -105,9 +168,18 @@ export function ContainerSuggestion({
 
       {hasShutOut && shutOut && (
         <div className="mt-3 rounded-md border-2 border-rose-300/60 bg-white/90 p-2.5 dark:border-rose-700/60 dark:bg-black/30">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-rose-900 dark:text-rose-200">
+          <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-rose-900 dark:text-rose-200">
             <PackageX className="size-3.5" />
-            Cargo shut out — won't fit in a single 40ft HC
+            <span>Cargo shut out — won't fit in a single 40ft HC</span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-7 gap-1 border-rose-400/60 px-2 text-[11px] text-rose-900 hover:bg-rose-100 dark:border-rose-600/60 dark:text-rose-100 dark:hover:bg-rose-900/40"
+              onClick={() => downloadShutOutCsv(recommendation)}
+            >
+              <Download className="size-3" />
+              Download summary
+            </Button>
           </div>
           <div className="grid grid-cols-3 gap-2 text-[11px]">
             <ShutOutStat label="Packages" value={shutOut.cartons > 0 ? shutOut.cartons.toLocaleString("en-IN") : "—"} />
