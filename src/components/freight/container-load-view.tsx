@@ -1162,5 +1162,3 @@ function shade(hex: string, amt: number): string {
   return `#${to(r)}${to(g)}${to(b)}`;
 }
 
-/* ---------------- Support-ratio debug toggle (top-left HUD chip) ---------------- */
-
