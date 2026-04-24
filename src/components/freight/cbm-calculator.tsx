@@ -966,7 +966,9 @@ function buildSummary(it: CbmItem): string {
   bits.push(it.packageType ?? "carton");
   if (it.stackable === false) bits.push("no-stack");
   if (it.fragile) bits.push("fragile");
-  if (it.allowSidewaysRotation !== false) bits.push("sideways OK");
+  // Note: sideways state is rendered as its own dedicated toggle chip next
+  // to the packing-options pill, so we intentionally omit it from this
+  // joined-text summary to avoid duplication.
   if (it.allowAxisRotation) bits.push("tip OK");
   if ((it.maxStackWeightKg ?? 0) > 0) bits.push(`max ${it.maxStackWeightKg}kg`);
   return bits.join(" · ");
@@ -1343,6 +1345,54 @@ const CbmRow = memo(function CbmRow({
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1">
+          {(() => {
+            const isRigidUnit = it.packageType === "crate" || it.packageType === "pallet";
+            const sidewaysOn = isRigidUnit ? true : it.allowSidewaysRotation !== false;
+            const tip = isRigidUnit
+              ? "Pallets and crates are always rotatable (4-way entry)."
+              : sidewaysOn
+                ? "Sideways rotation allowed. Click to lock orientation."
+                : "Orientation locked. Click to allow 90° sideways rotation.";
+            return (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-pressed={sidewaysOn}
+                      aria-label={
+                        isRigidUnit
+                          ? "Sideways rotation locked on for pallets/crates"
+                          : sidewaysOn
+                            ? "Disable sideways rotation"
+                            : "Enable sideways rotation"
+                      }
+                      disabled={isRigidUnit}
+                      onClick={() => {
+                        if (isRigidUnit) return;
+                        onUpdatePacking(it.id, { allowSidewaysRotation: !sidewaysOn });
+                      }}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                        sidewaysOn
+                          ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
+                          : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
+                        isRigidUnit && "cursor-not-allowed opacity-80",
+                      )}
+                    >
+                      <span aria-hidden>{sidewaysOn ? "↻" : "⛔"}</span>
+                      <span className="truncate">
+                        {sidewaysOn ? "sideways OK" : "fixed orientation"}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-[220px] text-xs">
+                    {tip}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            );
+          })()}
           <Popover open={popoverOpen} onOpenChange={onPopoverOpenChange}>
             <PopoverTrigger asChild>
               <button
