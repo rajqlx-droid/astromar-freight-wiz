@@ -651,6 +651,8 @@ function SinglePlanBody({
                     followCam={isPlaying}
                     showForkliftToken={showForkliftToken && currentStep != null}
                     nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
+                    debugSupport={debugSupport}
+                    supportRatios={pack.supportRatios ?? null}
                     overlay={
                       stepMode ? (
                         <LoaderHUD
@@ -678,6 +680,13 @@ function SinglePlanBody({
                         />
                       ) : null
                     }
+                  />
+                  {/* Support-ratio debug overlay toggle. Sits in the top-left
+                      corner of the viewer so it never collides with the
+                      preset/fullscreen controls in the top-right. */}
+                  <SupportDebugToggle
+                    on={debugSupport}
+                    onToggle={() => setDebugSupport((v) => !v)}
                   />
                 </div>
               </Suspense>
