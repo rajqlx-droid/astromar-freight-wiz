@@ -133,7 +133,6 @@ export function ContainerLoadView({
   const cargoQty = useMemo(() => totalQty(items), [items]);
 
   const hasCargo = cargoCbm > 0 && cargoQty > 0;
-  const isMulti = recommendation?.isMulti === true;
 
   // Geometry-aware auto-pick: smallest container the 3D packer can actually
   // place every piece in (not just one where CBM math fits). For 16 tall
@@ -150,33 +149,10 @@ export function ContainerLoadView({
   const deferredContainer = useDeferredValue(activeContainer);
 
   // ─── Off-main-thread packing via Web Worker ────────────────────────────
-  // The packer can take 10–30 seconds for multi-container loads with hundreds
-  // of cartons. Running it inline froze the page and produced a 36s INP.
+  // The packer can take 10–30 seconds for large loads with hundreds of cartons.
+  // Running it inline froze the page and produced a 36s INP.
   // Now everything runs in a Worker; the UI keeps responding while jobs run.
   const worker = usePackingWorker();
-
-  // Multi-container packs (one per recommended unit).
-  const [multiPacks, setMultiPacks] = useState<AdvancedPackResult[]>([]);
-  useEffect(() => {
-    if (!isMulti || !recommendation) {
-      setMultiPacks([]);
-      return;
-    }
-    let cancelled = false;
-    const buckets = splitItemsAcrossContainers(deferredItems, recommendation);
-    const containers = recommendation.units.map((u) => u.container);
-    worker
-      .multi(buckets, containers)
-      .then((res) => {
-        if (!cancelled) setMultiPacks(res);
-      })
-      .catch(() => {
-        // Worker terminated mid-flight — keep prior result.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredItems, isMulti, recommendation, worker.multi]);
 
   // Single-strategy pack using the "row-back" loader.
   const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
@@ -188,12 +164,8 @@ export function ContainerLoadView({
       return;
     }
     let cancelled = false;
-    const packItems = isMulti
-      ? splitItemsAcrossContainers(deferredItems, recommendation!)[Number(activeTab)] ??
-        deferredItems
-      : deferredItems;
     worker
-      .pack(packItems, deferredContainer)
+      .pack(deferredItems, deferredContainer)
       .then((res) => {
         if (!cancelled) setSinglePack(res);
       })
@@ -203,19 +175,9 @@ export function ContainerLoadView({
     return () => {
       cancelled = true;
     };
-  }, [
-    hasCargo,
-    isMulti,
-    deferredItems,
-    recommendation,
-    activeTab,
-    deferredContainer,
-    worker.pack,
-  ]);
+  }, [hasCargo, deferredItems, deferredContainer, worker.pack]);
 
-  const activePack: AdvancedPackResult = isMulti
-    ? multiPacks[Number(activeTab)] ?? multiPacks[0] ?? singlePack
-    : singlePack;
+  const activePack: AdvancedPackResult = singlePack;
 
   // True when the worker hasn't returned a real pack yet for the current input.
   const isCalculating = worker.pending && activePack.placed.length === 0 && hasCargo;
