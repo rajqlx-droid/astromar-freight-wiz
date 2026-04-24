@@ -58,7 +58,7 @@ import {
   type GeometricCeilingReport,
 } from "@/lib/freight/container-recommender";
 import { usePackingWorker } from "@/hooks/use-packing-worker";
-import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
+
 
 import { ContainerSuggestion } from "@/components/freight/container-suggestion";
 import { CbmDebugPanel } from "@/components/freight/cbm-debug-panel";
