@@ -751,9 +751,24 @@ export function packContainerAdvanced(
   let placedWeightKg = 0;
   for (const p of placedInternal) placedWeightKg += p.weight;
 
+  // Pick the rule that fired most often as the dominant cause.
+  let dominantReason: AdvancedPackResult["stackingDiagnostics"]["dominantReason"] = null;
+  {
+    let bestN = 0;
+    (Object.keys(stackingReasonCounts) as Array<keyof typeof stackingReasonCounts>).forEach(
+      (k) => {
+        if (stackingReasonCounts[k] > bestN) {
+          bestN = stackingReasonCounts[k];
+          dominantReason = k;
+        }
+      },
+    );
+  }
+
   return {
     container,
     placed,
+    supportRatios,
     totalCartons: expanded.length,
     placedCartons: placedCount,
     truncated,
@@ -776,6 +791,12 @@ export function packContainerAdvanced(
     cogLateralOffsetPct,
     nearCeilingPlacedIdxs,
     floorCoveragePct,
+    stackingDiagnostics: {
+      rejectedAttempts: totalStackingRejections,
+      unplacedDueToStacking,
+      reasonCounts: { ...stackingReasonCounts },
+      dominantReason,
+    },
   };
 }
 
