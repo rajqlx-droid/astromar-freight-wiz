@@ -1,5 +1,7 @@
-import { packContainerAdvanced } from "../packing-advanced";
-import { CONTAINERS } from "../packing";
+import { packContainerAdvanced } from "./packing-advanced";
+import { CONTAINERS } from "./packing";
+import type { PlacedBox } from "./packing";
+import type { ContainerPreset } from "./packing";
 import { describe, it } from "vitest";
 
 describe("debug", () => {
