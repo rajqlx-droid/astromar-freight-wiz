@@ -451,7 +451,6 @@ function SinglePlanBody({
     null,
   );
 
-
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
   const [palletIdx, setPalletIdx] = useState(-1);
   // Forklift visuals are disabled — kept as a no-op state so the HUD prop
