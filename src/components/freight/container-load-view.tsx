@@ -192,7 +192,7 @@ export function ContainerLoadView({
       },
       getActivePack: () => activePackRef.current,
     });
-  }, [onReady, is3D, activeTab]);
+  }, [onReady, is3D]);
 
   return (
     <Card
