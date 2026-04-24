@@ -127,18 +127,20 @@ function fitSingle(items: CbmItem[]): ContainerPreset | null {
 
 /**
  * Compute the cargo shut-out report when the manifest exceeds 40HC capacity.
- * Runs the packer against the 40HC and reports unplaced cartons / cbm / kg.
+ * Runs the multi-strategy optimiser against the 40HC and reports unplaced
+ * cartons / cbm / kg from the densest legal plan.
  */
 function computeShutOut(
   items: CbmItem[],
   reason: CargoShutOut["reason"],
+  pack?: AdvancedPackResult,
 ): CargoShutOut {
-  const pack = packContainerAdvanced(items, MAX_CONTAINER);
+  const result = pack ?? pickBestPlan(items, MAX_CONTAINER).best.pack;
   let cartons = 0;
   let cbm = 0;
   let weightKg = 0;
   items.forEach((it, idx) => {
-    const stat = pack.perItem[idx];
+    const stat = result.perItem[idx];
     const placed = stat?.placed ?? 0;
     const unplaced = Math.max(0, it.qty - placed);
     if (unplaced <= 0) return;
