@@ -1,6 +1,6 @@
-# Extended End-to-End Packing and Geometry Fix
+# Extended End-to-End Packing and Geometry Fix — COMPLETE
 
-Goal: eliminate repeated overlap, floating, gap, and “empty full space” failures by tightening both the physical packing engine and the validation pipeline. Keep the existing hard rules unchanged: 100% container geometry, no default CBM haircut, 50 mm gap rule, 100 mm door reserve, 80 mm ceiling reserve, support ratio 0.85, single-container max 40HC.
+Status: ✅ All 8 work items shipped. 43 tests passing. The shared geometry validator is now the single source of truth across packer, compliance, scenario runner, worker, HUD, and 3D viewer.
 
 ## What is additionally broken
 1. **3D false-overlap rendering**: floor cargo is visually lifted by a rendered wooden pallet in `src/components/freight/container-3d-view.tsx`, while stacked cargo uses raw pack `z`. This can make clean stacks look interpenetrated in 3D even when the pack math is legal.

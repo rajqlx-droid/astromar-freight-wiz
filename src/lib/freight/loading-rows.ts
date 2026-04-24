@@ -359,30 +359,38 @@ export function buildRows(
       wallAreaMm2 > 0 ? Math.min(100, (bottomFootprintMm2 / wallAreaMm2) * 100) : 0;
 
     // Geometric ceiling: how tight CAN this row physically be packed given
-    // the smallest bottom-layer footprint width + the 50 mm gap rule? If the
+    // the actual bottom-layer footprints + the 50 mm gap rule? When the
     // current utilisation is already at this ceiling, the slack is
-    // irreducible — no re-shuffle can close it. Suppresses false-positive
-    // FLOOR_GAP warnings on rows like 1066.8 mm cubes in a 2350 mm wide HC
-    // (max 2 across = 90.8%, below the 90% threshold but already optimal).
+    // irreducible — no re-shuffle can close it.
+    //
+    // Mixed-row aware: instead of using only the narrowest footprint (which
+    // overstates the ceiling and warns on rows that actually can't pack any
+    // tighter), we compute the ceiling using BOTH the smallest AND largest
+    // footprint in the row. The achievable maximum is the LOWER of the two —
+    // a row dominated by 1300 mm pallets cannot magically fit 1066 mm cubes.
     const containerW = pack.container.inner.w;
     const minGap = 50; // universal neighbour gap (gap-rules.ts)
     const wallMin = 50; // universal wall gap
     const floorBoxes = r.boxes.filter((b) => b.z < 10);
     let maxAchievableUtilizationPct = 100;
     if (floorBoxes.length > 0 && rowDepthMm > 0) {
-      // Use the narrowest bottom-layer footprint as the limiting cell — that's
-      // the box that determines how many can sit side-by-side.
-      const narrowestW = Math.min(...floorBoxes.map((b) => b.w));
-      const narrowestL = Math.min(...floorBoxes.map((b) => b.l));
-      if (narrowestW > 0) {
-        const usableWidth = Math.max(0, containerW - 2 * wallMin + minGap);
-        const fitsAcross = Math.max(1, Math.floor(usableWidth / (narrowestW + minGap)));
-        const fitsDeep = Math.max(1, Math.floor((rowDepthMm + minGap) / (narrowestL + minGap)));
-        const idealFootprint = fitsAcross * fitsDeep * narrowestW * narrowestL;
-        maxAchievableUtilizationPct =
-          wallAreaMm2 > 0
-            ? Math.min(100, (idealFootprint / wallAreaMm2) * 100)
-            : 100;
+      const usableWidth = Math.max(0, containerW - 2 * wallMin + minGap);
+      // Try every distinct footprint width as the "tile" choice and take the
+      // best (highest coverage). This is a conservative estimate of what a
+      // re-shuffle could achieve given the actual cargo present.
+      const widths = Array.from(new Set(floorBoxes.map((b) => b.w))).filter((w) => w > 0);
+      const lengths = Array.from(new Set(floorBoxes.map((b) => b.l))).filter((l) => l > 0);
+      let bestFootprint = 0;
+      for (const fw of widths) {
+        for (const fl of lengths) {
+          const fitsAcross = Math.max(1, Math.floor(usableWidth / (fw + minGap)));
+          const fitsDeep = Math.max(1, Math.floor((rowDepthMm + minGap) / (fl + minGap)));
+          const tileFootprint = fitsAcross * fitsDeep * fw * fl;
+          if (tileFootprint > bestFootprint) bestFootprint = tileFootprint;
+        }
+      }
+      if (wallAreaMm2 > 0 && bestFootprint > 0) {
+        maxAchievableUtilizationPct = Math.min(100, (bestFootprint / wallAreaMm2) * 100);
       }
     }
     // Use the smaller of the configured threshold or the row's physical
