@@ -655,22 +655,9 @@ function SceneContents({
         {!recording && gapHeatmapRow && (
           <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
         )}
-        {/* Lightweight forklift token — slides in from the door to the active
-            pallet column. No animations during recording. */}
-        {!recording && showForkliftToken && activeBox && (
-          <LightForkliftToken box={activeBox} containerL={Cm.l} />
-        )}
+        {/* Forklift visuals removed per user request — cargo loads directly
+            into its slot without a forklift token in the 3D view or video. */}
       </group>
-
-      {/* Forklift — only visible while recording and a box is being carried */}
-      {recording && staging?.forkliftActive && (
-        <Forklift
-          x={staging.forkliftX}
-          z={staging.forkliftZ}
-          forkY={staging.forkliftY}
-          headYaw={staging.headYaw}
-        />
-      )}
 
       {/* Dimension labels — hidden during recording for clean video frames */}
       {!recording && (

@@ -495,7 +495,9 @@ function SinglePlanBody({
 
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
   const [palletIdx, setPalletIdx] = useState(-1);
-  const [showForkliftToken, setShowForkliftToken] = useState(true);
+  // Forklift visuals are disabled — kept as a no-op state so the HUD prop
+  // contracts stay intact without rendering anything in the 3D scene.
+  const [showForkliftToken, setShowForkliftToken] = useState(false);
   const [speed, setSpeed] = useState<0.5 | 1 | 2>(1);
 
   // Row groups (back wall → door). Re-derived only when the pack changes.
