@@ -414,11 +414,6 @@ export function ContainerLoadView({
           view3DRef={view3DRef}
           isActive
           viewerCollapsed={viewerCollapsed}
-          scenarios={scenarios}
-          selectedStrategyId={selectedStrategyId}
-          setSelectedStrategyId={setSelectedStrategyId}
-          compareStrategies={compareStrategies}
-          setCompareStrategies={setCompareStrategies}
         />
       )}
     </Card>
