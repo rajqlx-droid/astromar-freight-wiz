@@ -306,59 +306,6 @@ export function ContainerLoadView({
 
       {!hasCargo ? (
         <EmptyState />
-      ) : isMulti && multiPacks.length > 0 ? (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-3 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted/50 p-1">
-            {multiPacks.map((p, i) => {
-              const allPlaced = p.placedCartons >= p.totalCartons && p.totalCartons > 0;
-              return (
-                <TabsTrigger
-                  key={i}
-                  value={String(i)}
-                  className="flex-1 gap-1.5 text-[11px] sm:text-xs"
-                >
-                  <span className="font-semibold">#{i + 1}</span>
-                  {p.container.name}
-                  <span className="hidden text-muted-foreground sm:inline">
-                    · {p.cargoCbm.toFixed(1)} m³
-                  </span>
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
-                      allPlaced
-                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-                        : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200",
-                    )}
-                  >
-                    {p.placedCartons}/{p.totalCartons}
-                  </span>
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-          {multiPacks.map((p, i) => (
-            <TabsContent key={i} value={String(i)} className="m-0">
-              <SinglePlanBody
-                pack={p}
-                weight={p.weightKg}
-                qty={p.placedCartons}
-                items={items}
-                is3D={is3D}
-                mounted={mounted}
-                view3DRef={view3DRef}
-                isActive={activeTab === String(i)}
-                viewerCollapsed={viewerCollapsed}
-                rollup={{
-                  totalCbm: multiPacks.reduce((s, x) => s + x.cargoCbm, 0),
-                  totalWeightKg: multiPacks.reduce((s, x) => s + x.weightKg, 0),
-                  totalContainers: multiPacks.length,
-                  totalPlaced: multiPacks.reduce((s, x) => s + x.placedCartons, 0),
-                  totalPlanned: multiPacks.reduce((s, x) => s + x.totalCartons, 0),
-                }}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
       ) : (
         <SinglePlanBody
           pack={activePack}
