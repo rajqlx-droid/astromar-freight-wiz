@@ -152,6 +152,14 @@ export function usePackingWorker(): UsePackingWorker {
     [send],
   );
 
+  const optimise = useCallback<UsePackingWorker["optimise"]>(
+    async (items, container) => {
+      const r = await send<OptimiseResponse>({ kind: "optimise", items, container });
+      return r.result;
+    },
+    [send],
+  );
+
   const recommend = useCallback<UsePackingWorker["recommend"]>(
     async (items) => {
       const r = await send<RecommendResponse>({ kind: "recommend", items });
@@ -163,7 +171,7 @@ export function usePackingWorker(): UsePackingWorker {
   const pending = inflight > 0;
 
   return useMemo<UsePackingWorker>(
-    () => ({ pack, scenarios, recommend, pending }),
-    [pack, scenarios, recommend, pending],
+    () => ({ pack, scenarios, optimise, recommend, pending }),
+    [pack, scenarios, optimise, recommend, pending],
   );
 }
