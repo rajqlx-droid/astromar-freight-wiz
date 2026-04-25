@@ -23,8 +23,6 @@ interface Props {
   onNext: () => void;
   onReset: () => void;
   onSpeedChange: (s: 0.5 | 1 | 2) => void;
-  showForklift: boolean;
-  onToggleForklift: () => void;
   pack?: AdvancedPackResult | null;
   rows?: RowGroup[];
   /**
