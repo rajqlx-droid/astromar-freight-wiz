@@ -1566,6 +1566,8 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
   const PALLET_H = 0.12;
   const loadH = Math.max(0.05, hm - PALLET_H);
   const wrapColor = "#a8c5d8";
+  const fillColor = color || "#bcd";
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(fillColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <group position={[0, -hm / 2 + PALLET_H / 2, 0]}>
@@ -1574,7 +1576,7 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
       <mesh castShadow receiveShadow position={[0, -hm / 2 + PALLET_H + loadH / 2, 0]}>
         <boxGeometry args={[lm * 0.96, loadH, wm * 0.96]} />
         <meshStandardMaterial
-          color={color || "#bcd"}
+          color={fillColor}
           roughness={0.4}
           metalness={0.1}
           transparent
@@ -1583,8 +1585,13 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
           emissiveIntensity={hovered ? 0.25 : 0.05}
         />
         {showEdges && (
-          <Edges scale={0.999} color="#5a7a90">
-            <lineBasicMaterial color="#5a7a90" />
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
           </Edges>
         )}
       </mesh>
