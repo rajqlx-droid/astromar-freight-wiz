@@ -444,7 +444,6 @@ function SceneContents({
       <InvalidateOnChange
         deps={[
           preset,
-          recording ? frame : -1,
           flyInPlacedSet ? flyInPlacedSet.size : 0,
           flyInKey,
           activePalletIdx ?? -1,
@@ -456,7 +455,6 @@ function SceneContents({
           hideDoors ? 1 : 0,
         ]}
         animate={
-          !!recording ||
           followCam ||
           (flyInPlacedSet?.size ?? 0) > 0 ||
           nextPalletIdx != null ||
