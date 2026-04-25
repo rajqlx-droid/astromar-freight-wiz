@@ -1249,6 +1249,13 @@ function CargoBox({
   // Staging offset (relative to slot): up by container height, +x toward door.
   const stageOffsetX = Math.max(2, containerL * 0.55);
   const stageOffsetY = Math.max(1.2, containerH * 0.7);
+  // Fraction of the animation spent travelling horizontally over the cargo
+  // before descending vertically into the slot. Keeps the box clear of
+  // already-placed neighbours instead of tunneling through them on a
+  // straight-line path from staging to slot.
+  const PHASE_SPLIT = 0.45;
+  const easeInOutCubic = (t: number) =>
+    t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
   // Only subscribe to the per-frame loop while this box is actively flying in.
   // Idle boxes (the common case after load) register zero useFrame callbacks.
@@ -1259,15 +1266,35 @@ function CargoBox({
     if (animStartRef.current === null) animStartRef.current = 0;
     animStartRef.current += delta;
     const t = Math.min(1, animStartRef.current / FLY_DURATION);
-    // Ease-out cubic
-    const e = 1 - Math.pow(1 - t, 3);
-    const dx = stageOffsetX * (1 - e);
-    const dy = stageOffsetY * (1 - e);
+    // Phase 1 (0..PHASE_SPLIT): glide horizontally above the cargo, staying
+    //   at full height — no contact with neighbours.
+    // Phase 2 (PHASE_SPLIT..1): descend vertically into the slot — clear of
+    //   horizontal neighbours by construction (the only thing in this column
+    //   is the supporter, which is already rendered).
+    let dx: number;
+    let dy: number;
+    if (t < PHASE_SPLIT) {
+      const p = easeInOutCubic(t / PHASE_SPLIT);
+      dx = stageOffsetX * (1 - p);
+      dy = stageOffsetY;
+    } else {
+      const p = easeInOutCubic((t - PHASE_SPLIT) / (1 - PHASE_SPLIT));
+      dx = 0;
+      dy = stageOffsetY * (1 - p);
+    }
     g.position.set(cx + dx, cy + palletLift + dy, cz);
   });
 
+  // Initial JSX position: while flyIn is active, render at the staging point
+  // so the very first committed frame (before useFrame runs) shows the box
+  // up-and-toward-the-door instead of flashing at its final slot. Once flyIn
+  // turns off, JSX returns to the slot and the box stays put.
+  const initialPosition: [number, number, number] = flyIn
+    ? [cx + stageOffsetX, cy + palletLift + stageOffsetY, cz]
+    : [cx, cy + palletLift, cz];
+
   return (
-    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
+    <group ref={groupRef} position={initialPosition} scale={scale}>
       {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
