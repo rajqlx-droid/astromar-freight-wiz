@@ -1422,17 +1422,65 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
   );
 }
 
+/** Build a rounded-cone profile for a tied bag ear. Returns the lathe
+ *  points: a soft taper from base → middle → upper → tip with the tip
+ *  rounded over so the silhouette reads as fabric pinched together with
+ *  a string tie. Memoised by base radius / height in the caller. */
+function buildEarProfile(baseR: number, height: number): THREE.Vector2[] {
+  const tipY = height;
+  return [
+    new THREE.Vector2(0.001, 0),                       // start at axis (closed base)
+    new THREE.Vector2(baseR * 1.0,  height * 0.05),    // flare out at base
+    new THREE.Vector2(baseR * 0.85, height * 0.30),    // mid taper
+    new THREE.Vector2(baseR * 0.55, height * 0.55),    // pinch (tie point)
+    new THREE.Vector2(baseR * 0.65, height * 0.72),    // small bulge above tie
+    new THREE.Vector2(baseR * 0.30, height * 0.92),    // upper taper
+    new THREE.Vector2(0.001, tipY),                    // close at tip
+  ];
+}
+
 function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
   // Sack-style bag: a soft rounded box at the real L × H × W footprint, plus
-  // two small "ear" nubs at the top length-ends to suggest the tied / carry
-  // pinch-points of an industrial bag. Ears scale with the bag so they stay
-  // proportionate from a 25 kg cement sack to a 1-tonne FIBC.
+  // two tapered "ear" cones at the top length-ends suggesting the tied /
+  // pinch-point corners of an industrial bag. Ears scale with the bag so
+  // they stay proportionate from a 25 kg cement sack to a 1-tonne FIBC.
+  const { jute } = useContext(BagTextureContext);
   const minDim = Math.min(lm, hm, wm);
   const corner = Math.max(0.02, Math.min(minDim * 0.18, minDim * 0.45));
-  const earR = Math.max(0.015, Math.min(hm, wm) * 0.12);
-  const earOffsetX = lm / 2 - earR * 0.4; // tucked just inside the top edge
-  const earOffsetY = hm / 2 + earR * 0.55; // poking above the top face
+  const earBaseR = Math.max(0.015, Math.min(hm, wm) * 0.12);
+  const earHeight = Math.max(0.03, Math.min(hm, wm) * 0.22);
+  const earOffsetX = lm / 2 - earBaseR * 0.6; // tucked just inside the top edge
+  const earOffsetY = hm / 2;                  // base sits flush on top face
+  const tieY = earHeight * 0.55;              // tie band at the pinch
   const sackColor = color || "#c4a574";
+  const tieColor = "#5b4226";                 // tonally darker cord
+
+  // Procedural jute texture is built lazily and cached per colour.
+  const juteMap = useMemo(
+    () => (jute ? makeJuteTexture(sackColor) : null),
+    [jute, sackColor],
+  );
+  // Repeat scaling so the weave size stays plausible regardless of bag size.
+  const fabricMap = useMemo(() => {
+    if (!juteMap) return null;
+    const t = juteMap.clone();
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(Math.max(2, lm * 4), Math.max(2, hm * 4));
+    t.needsUpdate = true;
+    return t;
+  }, [juteMap, lm, hm]);
+
+  const earProfile = useMemo(
+    () => buildEarProfile(earBaseR, earHeight),
+    [earBaseR, earHeight],
+  );
+
+  // When jute is on we drop the colour tint to white so the texture's tones
+  // come through cleanly; otherwise keep the existing solid-colour material.
+  const bodyColor = jute ? "#ffffff" : sackColor;
+  const earColor = jute ? "#ffffff" : sackColor;
+
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       {/* Main sack body — rounded box at the bag's actual dimensions. */}
@@ -1445,30 +1493,35 @@ function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoin
         receiveShadow
       >
         <meshStandardMaterial
-          color={sackColor}
+          color={bodyColor}
+          map={fabricMap ?? undefined}
           roughness={0.95}
           metalness={0}
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
       </RoundedBox>
-      {/* Two carrying "ears" at the top length-ends. */}
+      {/* Two tapered ear-ties at the top length-ends. */}
       {[-1, 1].map((sign) => (
-        <mesh
-          key={sign}
-          position={[sign * earOffsetX, earOffsetY, 0]}
-          castShadow
-          receiveShadow
-        >
-          <sphereGeometry args={[earR, 12, 10]} />
-          <meshStandardMaterial
-            color={sackColor}
-            roughness={0.95}
-            metalness={0}
-            emissive={hovered ? tiltColor : "#000000"}
-            emissiveIntensity={hovered ? 0.25 : 0}
-          />
-        </mesh>
+        <group key={sign} position={[sign * earOffsetX, earOffsetY, 0]}>
+          {/* Lathed cone — fabric pinched into a tied tip. */}
+          <mesh castShadow receiveShadow>
+            <latheGeometry args={[earProfile, 18]} />
+            <meshStandardMaterial
+              color={earColor}
+              map={fabricMap ?? undefined}
+              roughness={0.95}
+              metalness={0}
+              emissive={hovered ? tiltColor : "#000000"}
+              emissiveIntensity={hovered ? 0.25 : 0}
+            />
+          </mesh>
+          {/* Thin "string" tie at the pinch point. */}
+          <mesh position={[0, tieY, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <torusGeometry args={[earBaseR * 0.6, earBaseR * 0.09, 6, 14]} />
+            <meshStandardMaterial color={tieColor} roughness={0.7} metalness={0} />
+          </mesh>
+        </group>
       ))}
     </group>
   );
