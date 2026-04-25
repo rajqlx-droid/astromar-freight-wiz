@@ -457,37 +457,24 @@ export function packContainerAdvanced(
       if (ratio < SUPPORT_MIN_RATIO) return false;
     }
 
-    // Pairwise neighbour-gap check. Two boxes are illegal when the AABB
-    // distance on every axis is < minGap. A box stacked directly on top of
-    // its supporter is fine because the X/Y projections overlap (negative
-    // gap on those axes) but Z gap = 0 — which is allowed (the supporter
-    // case). The illegal pattern is: all three axis gaps below `minGap`,
-    // i.e. the boxes are within `minGap` of intersecting on every axis.
-    const GAP_EPS = 0.001; // mm — float drift tolerance
+    // Pairwise legality check. Mirrors geometry-validator.ts:
+    //   - Real intersection (overlap on every axis) → reject.
+    //   - Boxes that share a vertical band (gz < 0) must keep ≥ minGap
+    //     clearance on at least one of the lateral axes.
+    //   - Boxes stacked above/below (gz ≥ 0) are exempt — vertical adjacency
+    //     is the supporter relationship, not lateral crowding.
+    const GAP_EPS = 0.5;
     const minClear = minGap - GAP_EPS;
     for (const p of placedInternal) {
-      // Vertical relationship: stack-on-top is allowed (top of p ≈ bottom of new).
-      const zStackOnTop = Math.abs(p.z + p.h - z) <= 1;
-      const zStackUnder = Math.abs(z + h - p.z) <= 1;
-      if (zStackOnTop || zStackUnder) {
-        // This is a stacking adjacency — only block when there is real
-        // intersection on every axis (the existing strict overlap rule).
-        const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
-        const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
-        const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
-        if (ox > 0.5 && oy > 0.5 && oz > 0.5) return false;
-        continue;
-      }
-      // Lateral / general neighbour: enforce minGap clearance on at least
-      // one axis. Axis "gap" is the separation distance (negative when the
-      // projections overlap on that axis).
       const gx = Math.max(p.x - (x + l), x - (p.x + p.l));
       const gy = Math.max(p.y - (y + w), y - (p.y + p.w));
       const gz = Math.max(p.z - (z + h), z - (p.z + p.h));
-      // Boxes are clear if at least one axis has ≥ minGap separation.
-      if (gx >= minClear || gy >= minClear || gz >= minClear) continue;
-      // Otherwise they crowd each other — illegal.
-      return false;
+      // Real 3-axis intersection.
+      if (gx < -GAP_EPS && gy < -GAP_EPS && gz < -GAP_EPS) return false;
+      // No vertical sharing → no lateral crowding to enforce.
+      if (gz >= -GAP_EPS) continue;
+      // Vertical band shared — both lateral axes must keep ≥ minGap clear.
+      if (gx < minClear && gy < minClear) return false;
     }
     return true;
   }
