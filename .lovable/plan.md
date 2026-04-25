@@ -1,103 +1,87 @@
-# Extended End-to-End Packing and Geometry Fix — COMPLETE
+## Root cause of the "19 boxes floating with no support below" audit
 
-Status: ✅ All 8 work items shipped. 43 tests passing. The shared geometry validator is now the single source of truth across packer, compliance, scenario runner, worker, HUD, and 3D viewer.
+The HUD copy is correct — the packer is **really committing 19 boxes into thin air**. Three concrete bugs in `src/lib/freight/packing-advanced.ts` cooperate to produce this:
 
-## What is additionally broken
-1. **3D false-overlap rendering**: floor cargo is visually lifted by a rendered wooden pallet in `src/components/freight/container-3d-view.tsx`, while stacked cargo uses raw pack `z`. This can make clean stacks look interpenetrated in 3D even when the pack math is legal.
-2. **No final geometry validator**: `src/lib/freight/packing-advanced.ts` rejects bad candidates during placement, but there is no shared post-pack validator that rechecks the final placed set for pairwise overlap, neighbour gaps, wall/door/ceiling clearance, and unsupported stacks.
-3. **Support / gap logic is still placement-local**: candidate checks are done box-by-box against the current state. After snap passes and final placement, the system does not produce a canonical “physics audit” object from the final geometry.
-4. **Row slack ceiling is approximate for mixed rows**: `loading-rows.ts` uses the narrowest footprint to estimate `maxAchievableUtilizationPct`, which can still misclassify mixed-size rows and leave avoidable empty bands.
-5. **HUD drift still exists**: `loader-hud.tsx` still recomputes compliance locally instead of rendering the exact optimiser-side audit/report.
-6. **Coverage gaps in tests**: current tests cover irreducible slack and cube stacking, but not final-state overlap detection, stacked mixed-SKU support, snap-induced regressions, or 3D/view-model alignment.
+### Bug 1 — Cell-grid over-sampling inflates `topZ`
+In `evaluatePlacement` (lines 285-297) the footprint scan uses:
+```
+cx1 = Math.ceil((x + l) / CELL_MM)
+```
+For a 1066.8 mm cube at x=0 this samples cells 0..10 → covers 0..1100 mm, i.e. **33 mm beyond the box's real edge**. If any previously-placed taller box overlaps that 33 mm strip, its top-Z is pulled into `topZ`, the new box is committed at that elevated z, and its **actual footprint floats over the empty area** to the left.
 
-## Implementation
+### Bug 2 — `topZ` chosen without checking whether the supporters actually cover the footprint
+`topZ` is the **max** height-map value under the (over-sampled) footprint (lines 290-297). The support-ratio check at line 429 then asks "of cells whose top equals topZ, what fraction of the real footprint do they cover?" — but **only cells equal to topZ count**. If the tall column covers ≥85% the gate passes; the area below sits over shorter supporters whose tops are below `topZ`, so those parts of the box are unsupported. The placer commits anyway.
 
-### 1. Add a shared final geometry validator
-Create a shared validator in `src/lib/freight` that consumes the final `placed[]` set and produces a canonical audit report for:
-- pairwise 3D overlap/interpenetration
-- neighbour gap violations only when boxes overlap vertically
-- wall side clearance
-- door reserve breach
-- ceiling reserve breach
-- unsupported / weakly supported stacks using geometric overlap
-- non-stackable cargo carrying load above it
-- fragile/sealed columns carrying extra load above them
+### Bug 3 — Validator's stricter `EPS_MM = 1` exposes #1/#2
+`geometry-validator.ts` line 224 only counts a supporter when `|s.z + s.h − b.z| ≤ 1 mm`. Float32 height-map quantization adds sub-mm drift, so even legal stacks of 1066.8 mm cubes occasionally lose one supporter and cross the FLOATING threshold.
 
-This validator becomes the single source of truth for “hard physical violation” decisions.
+### Secondary: snap & z-snap pass don't re-validate against the *true* footprint
+`snapAxis` (line 513) and the z-snap block (line 592) call `evaluatePlacement` again, inheriting the same over-sampling. They can also slide a box backwards into a position where it's now over a shorter cell column without lowering z.
 
-### 2. Tighten `packing-advanced.ts`
-Update the packer so final placement uses the same validator logic the audit uses:
-- use orientation-aware height checks consistently
-- validate the final snapped candidate before commit using the shared validator rules
-- ensure snap-to-neighbour cannot create post-snap gap or overlap regressions
-- explicitly track when a candidate was rejected by geometry, support, stack-weight, wall, door, or ceiling constraints
-- expose richer diagnostics so unplaced cargo can be distinguished from “rejected because unsafe to stack or fit”
+---
 
-### 3. Make compliance consume the shared validator
-Refactor `src/lib/freight/compliance.ts` so it stops inferring hard failures indirectly and instead maps the final geometry validator result into compliance items.
-- RED only for true physical failures
-- YELLOW for efficiency/shut-out/slack advisories
-- preserve the irreducible-slack fix, but base it on more exact row geometry
+## Fix plan
 
-### 4. Improve row geometry in `loading-rows.ts`
-Replace the current approximate `maxAchievableUtilizationPct` logic with a more exact row-floor packing ceiling based on the actual bottom-layer footprints present in that row.
-- calculate the true occupied floor intervals along width and depth
-- distinguish unavoidable slack from poor arrangement
-- keep gap warnings only for reducible voids
+### 1. `src/lib/freight/packing-advanced.ts` — exact-footprint sampling
 
-### 5. Pass optimiser audit end-to-end
-Update `scenario-runner.ts`, `packing-worker.ts`, `use-packing-worker.ts`, and `container-load-view.tsx` so the optimiser returns:
-- chosen pack
-- canonical validator/audit report for that chosen pack
-- shut-out totals
-- all-legal flag
-- hard violation reasons
+- Replace the `Math.ceil` cell expansion with a half-open interval that only samples cells whose **center** lies inside the footprint:
+  ```
+  cx0 = Math.floor(x / CELL_MM)
+  cx1 = Math.ceil((x + l) / CELL_MM)
+  // for each (cx, cy):
+  const cellMidX = cx * CELL_MM + CELL_MM / 2;
+  const cellMidY = cy * CELL_MM + CELL_MM / 2;
+  if (cellMidX < x || cellMidX > x + l) continue;
+  if (cellMidY < y || cellMidY > y + w) continue;
+  ```
+- For boxes whose footprint is smaller than 1.5 × CELL_MM, fall back to a **geometric supporter scan** that ignores the height-map entirely and looks at every box in `placedInternal` whose top face overlaps the candidate footprint. This guarantees correctness for sub-grid boxes (1066.8 mm cubes are right on the boundary).
+- Cap `topZ` at the **highest top-face whose XY footprint actually overlaps the candidate**. If no supporter overlaps, `topZ = 0` (floor).
 
-The UI should render that report directly instead of recomputing locally.
+### 2. `src/lib/freight/packing-advanced.ts` — pre-commit geometry guard
+Just before pushing a box into `placedInternal` (around line 647), call a lightweight `wouldBeLegal(candidateBox, placedInternal, container)` helper that runs the same overlap, support-ratio, and gap checks the validator uses. If it fails:
+- log the rejection into `stackingReasonCounts` (extend with a `geometryGuard` bucket),
+- mark the carton as unplaced,
+- continue to the next carton.
 
-### 6. Fix 3D visual alignment
-Update `src/components/freight/container-3d-view.tsx` so the rendered box positions match the physical pack model exactly.
-- remove or rebalance the extra visual pallet lift that makes floor cargo appear higher than packed coordinates
-- keep pallet visuals decorative only if they do not change perceived contact planes
-- verify stacked boxes, roof clearance, and floor contact all visually match `placed[]`
+This is the final airlock: **nothing illegal can ever be committed**, regardless of which earlier check missed it. With this in place, `geometry-validator.ts` is guaranteed to report `allLegal === true` for every produced pack.
 
-### 7. Update HUD behaviour
-Update `src/components/freight/loader-hud.tsx` to consume the optimiser-provided audit/validator result directly.
-- GREEN: legal pack, no shut-out
-- AMBER: legal max-loaded pack with shut-out or efficiency warnings
-- RED: actual physical failure from validator
-- display score separately from legal/blocked state
+### 3. `src/lib/freight/packing-advanced.ts` — snap pass uses geometric supporter check
+In `snapAxis` (line 513) and the z-snap block (line 592) replace the height-map `evaluatePlacement` re-call with the geometric supporter scan from Fix 1. Snap must never move a box into a position the height-map says is fine but the geometry says is floating.
 
-### 8. Expand tests
-Extend tests to cover:
-- mixed-size stacked loads with exact support validation
-- final-state overlap detection on forced-bad fixtures
-- post-snap gap preservation
-- non-stackable cargo never carrying upper load
-- fragile/sealed columns not accepting further stacking
-- 3D alignment expectations for floor vs stacked cargo coordinates
-- mixed-row irreducible slack vs reducible slack
+### 4. `src/lib/freight/geometry-validator.ts` — bump EPS to absorb Float32 drift
+- `EPS_MM: 1 → 2`. Height-map values are stored in `Float32Array`; for box dimensions around 1000–3000 mm the rounding is well under 0.5 mm, but accumulating two adds (`z + h`) can push past 1 mm. 2 mm is still tight enough to catch any real floating gap (smallest carton dimension we accept is 50 mm).
+- In the WALL_GAP band check (lines 113-115), require the offending coordinate to be **at least EPS_MM away from 0 and from the wall** before flagging — prevents 0.4 mm float drift from raising false WALL_GAP for boxes physically sitting at y=0.
 
-## Technical details
-- Keep 100% geometric dimensions; do not reduce CBM by default.
-- Only real cargo dimensions plus gap/clearance rules may reduce effective loaded CBM.
-- Use one shared geometry/physics validator for packer, compliance, worker, and HUD.
-- Separate physical illegality from loading inefficiency.
-- Keep the optimiser legal-first; only fall back when every strategy is illegal, and surface that explicitly.
+### 5. `src/lib/freight/packing-advanced.ts` — height-map writes use exact cells
+After committing a box (lines 658-671), only update cells whose centers are inside the real footprint (same half-open interval as Fix 1). This stops the next placement from inheriting an inflated `topZ` halo around every committed box.
 
-## Files likely involved
-- `src/lib/freight/packing-advanced.ts`
-- `src/lib/freight/compliance.ts`
-- `src/lib/freight/loading-rows.ts`
-- `src/lib/freight/scenario-runner.ts`
-- `src/lib/freight/packing-worker.ts`
-- `src/hooks/use-packing-worker.ts`
-- `src/components/freight/container-load-view.tsx`
-- `src/components/freight/loader-hud.tsx`
-- `src/components/freight/container-3d-view.tsx`
-- freight geometry/compliance test files
+### 6. Regression tests — `src/lib/freight/packing-advanced.regression.test.ts`
+Add three deterministic cases:
+- **40 × 1066.8 mm cubes in a 40HC** — assert `allLegal === true`, all 40 placed, zero floating.
+- **41 × 1066.8 mm cubes** — assert `allLegal === true`, 40 placed, 1 in `shutOut`, HUD path is AMBER (no FLOATING).
+- **Mixed 800 mm + 1100 mm cartons** — assert no FLOATING, no WALL_GAP, no NEIGHBOUR_GAP for a 50-carton mix.
 
-## Out of scope
-- No change to container dimensions or gap-rule constants
-- No multi-container stuffing
-- No default capacity haircut or safety margin rollback
+### 7. `src/lib/freight/geometry-validator.test.ts`
+Add a "supporter resolution" case: stack three 1066.8 mm cubes at z = 0, 1066.8, 2133.6 → assert support ratios are exactly 1, 1, 1 with EPS = 2.
+
+---
+
+## Why this finally closes the loop
+
+| Layer | Before | After |
+|---|---|---|
+| Placer evaluates topZ | over-samples cells outside footprint | only counts cells whose centers are inside |
+| Placer commits | trusts grid even when supporters miss footprint | runs `wouldBeLegal` airlock first |
+| Snap pass | inherits same over-sampling | uses geometric supporter scan |
+| Validator | EPS 1 mm, fights Float32 drift | EPS 2 mm, exact-equal logic |
+| HUD | RED FLOATING on legal-looking packs | matches ground truth |
+
+**Files touched:**
+- `src/lib/freight/packing-advanced.ts` (Fixes 1, 2, 3, 5)
+- `src/lib/freight/geometry-validator.ts` (Fix 4)
+- `src/lib/freight/packing-advanced.regression.test.ts` (Fix 6, new cases)
+- `src/lib/freight/geometry-validator.test.ts` (Fix 7, new case)
+
+No UI / HUD / 3D viewer changes required — those were corrected in the previous round and will simply start showing GREEN/AMBER as soon as the packer stops emitting floating boxes.
+
+**Approve to implement in one shot.**

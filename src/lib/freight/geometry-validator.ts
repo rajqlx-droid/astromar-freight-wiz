@@ -31,8 +31,16 @@ export const HARD = {
   MIN_DOOR_GAP_MM: DOOR_RESERVE_MM,
   /** Minimum support ratio for a stacked box. */
   MIN_SUPPORT_RATIO: 0.85,
-  /** Tolerance for floating-point coordinate equality (mm). */
-  EPS_MM: 1,
+  /**
+   * Tolerance for floating-point coordinate equality (mm).
+   *
+   * Bumped from 1 → 2 mm to absorb Float32 height-map drift introduced by
+   * the packer's accumulated z + h additions for non-grid-aligned cartons
+   * (e.g. 1066.8 mm cubes). Still tight enough to catch real floating gaps —
+   * the smallest legal carton dimension is 50 mm, and visible "floating"
+   * artifacts in the renderer start around ~5 mm.
+   */
+  EPS_MM: 2,
 } as const;
 
 export type HardViolationCode =
@@ -226,7 +234,12 @@ export function validatePackGeometry(
     }
     const ratio = Math.min(1, overlapArea / footArea);
     supportRatios[i] = ratio;
-    if (ratio < HARD.EPS_MM) floating.push(i);
+    // FLOATING = essentially zero support (≤ 5% of footprint covered).
+    // WEAK_SUPPORT = some support but below SUPPORT_MIN_RATIO.
+    // (Bug fix: ratio is a 0..1 fraction; previously compared against
+    // EPS_MM which is millimetres — a unit mismatch that mis-flagged real
+    // stacks once EPS was bumped above 1.)
+    if (ratio < 0.05) floating.push(i);
     else if (ratio < HARD.MIN_SUPPORT_RATIO) weak.push(i);
   }
 
