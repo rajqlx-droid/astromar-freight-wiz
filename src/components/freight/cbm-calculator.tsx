@@ -971,31 +971,36 @@ function renderPackingPopoverContent({
           checked={it.fragile === true}
           onChange={(v) => updatePacking(it.id, { fragile: v })}
         />
-        {isRigidUnit(it.packageType) ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-            <strong className="font-semibold">{it.packageType === "pallet" ? "Pallets" : "Crates"} ship in fixed orientation.</strong>{" "}
-            {it.packageType === "pallet"
-              ? "4-way entry pallets may rotate L↔W on the floor, but never tip."
-              : "Crates may rotate L↔W on the floor, but never tip onto a side."}
-          </div>
-        ) : (
-          <>
-            <ToggleRow
-              title="Can lay sideways"
-              desc="Packer may rotate 90° on the floor (swap L↔W)."
-              checked={it.allowSidewaysRotation !== false}
-              onChange={(v) => updatePacking(it.id, { allowSidewaysRotation: v })}
-            />
-            {!it.fragile && (
+        {(() => {
+          const policy = getRotationPolicy(it.packageType);
+          const sidewaysDisabled = !policy.canSideways;
+          const axisDisabled = !policy.canAxis || it.fragile === true;
+          const axisReason = !policy.canAxis
+            ? policy.axisReason
+            : it.fragile
+              ? "Fragile cargo cannot tip onto a side."
+              : undefined;
+          return (
+            <>
               <ToggleRow
-                title="Can stand on side"
-                desc="Packer may tip it onto its side. Non-fragile only."
-                checked={it.allowAxisRotation === true}
-                onChange={(v) => updatePacking(it.id, { allowAxisRotation: v })}
+                title="Can lay sideways (90° L↔W)"
+                desc="Packer may rotate 90° on the floor (swap length and width)."
+                checked={!sidewaysDisabled && it.allowSidewaysRotation === true}
+                onChange={(v) => updatePacking(it.id, { allowSidewaysRotation: v })}
+                disabled={sidewaysDisabled}
+                disabledReason={policy.sidewaysReason}
               />
-            )}
-          </>
-        )}
+              <ToggleRow
+                title="Can stand on side (tip H↔L/W)"
+                desc="Packer may tip it onto its side to fill upper headroom."
+                checked={!axisDisabled && it.allowAxisRotation === true}
+                onChange={(v) => updatePacking(it.id, { allowAxisRotation: v })}
+                disabled={axisDisabled}
+                disabledReason={axisReason}
+              />
+            </>
+          );
+        })()}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
