@@ -1,82 +1,80 @@
-# High-contrast cargo colors + clear borders + adjacency-aware coloring
+# Fix overlap/float artefacts during walkthrough playback
 
-## Goal
+## What the user sees
 
-Make every distinct cargo item in the 3D simulation immediately distinguishable, put a clear contrasting border on every package so any overlap between neighbours is obvious, and ensure the color picked for each placed box always **contrasts with whatever is touching it** — so two boxes flush against each other never share the same fill.
+When the optimizer finishes, the static 3D view shows every box at its exact validated slot — zero overlap, zero floating. As soon as the user clicks **Play** or **Next**, boxes appear to **overlap each other** and **some hover in mid-air**. Once the walkthrough finishes (or is reset), everything snaps back to the perfect view.
 
-## Problems with the current rendering
+## End-to-end trace of the playback path
 
-1. **Palette is too short and too similar** — only 8 colors, the 9th SKU loops back to teal, teal/cyan and yellow/lime are nearly identical hues.
-2. **Same-SKU adjacency** — when one SKU has 200 cartons, every neighbour is the same color, so internal seams are invisible.
-3. **Borders are inconsistent** — drums, bales, and bags have no outline at all; cartons/crates/pallets have outlines but in fixed colors that disappear on dark or brown fills.
+1. `container-load-view.tsx` builds two derived structures from `pack.placed`:
+   - `palletSequence` = ordered loader steps via `buildPalletSequence(pack, rows)`. Each step carries `placedIdx` (= `pack.placed.indexOf(box)`).
+   - `visiblePlacedIdxs` = `Set` of `placedIdx` for steps `0..palletIdx`.
+   - `flyInIdxs` = `Set` containing only `currentStep.placedIdx`.
+2. `Container3DView` forwards these to `SceneContents`, which maps `pack.placed` → `<CargoBox>` and skips boxes whose index is NOT in `visiblePlacedIdxs`.
+3. Inside `CargoBox`:
+   - The mesh group has JSX `position={[cx, cy + palletLift, cz]}` — **the final slot**.
+   - When `flyIn === true`, a `useFrame` callback overrides the position imperatively to `(cx + dx, cy + dy, cz)` where `dx, dy` ease from the staging offset down to zero over 600 ms.
+   - The staging offset is `+stageOffsetX` toward the door (+x in scene space) and `+stageOffsetY` upward. So the new box swoops **down-and-back** from above the door into its slot.
 
-## What changes
+## Root causes (two distinct bugs)
 
-### 1. New 20-color high-contrast palette (`src/lib/freight/packing.ts`)
+### Bug 1 — "Overlapping": fly-in path passes through already-placed cargo
 
-Replace the 8-color `ITEM_COLORS` array with a curated **20-color** palette engineered for maximum hue separation and stable mid-tone luminance (so every box reads against both the dark container interior and the wooden pallet floor). The sequence interleaves warm/cool so the first 10 SKUs (covers virtually every real shipment) all sit on opposite hue arcs.
+The staging position is **up + toward the door**. The slot is **inside the container, possibly at the back wall**. The straight-line interpolation between them passes through every box that is between the slot and the door. Mid-animation, the new box visibly intersects and tunnels through those neighbours. To the user this reads as "the boxes are overlapping during play".
 
-```text
-#ef4444  red          #06b6d4  cyan
-#f97316  orange       #3b82f6  blue
-#eab308  amber        #8b5cf6  violet
-#84cc16  lime         #ec4899  pink
-#10b981  emerald      #f43f5e  rose
-#14b8a6  teal         #a855f7  purple
-#22c55e  green        #0ea5e9  sky
-#facc15  yellow       #d946ef  fuchsia
-#fb7185  coral        #2dd4bf  aqua
-#fbbf24  gold         #c084fc  lavender
-```
+The earlier fix that switched bag/drum/bale shapes to opaque borders made this **more visible** — you can now clearly see the new box clipping through its predecessors instead of it being lost in similar-coloured fills.
 
-Modulo wraparound only kicks in past 20 SKUs.
+### Bug 2 — "Floating": one-frame flash at the slot before staging kicks in
 
-### 2. Adjacency-aware color shifting (the "no two touching boxes share a color" rule)
+The JSX prop `position={[cx, cy + palletLift, cz]}` is the **final slot**. `useFrame` only runs after React commits, so on the very first frame after `flyIn` flips true, the box is rendered AT its slot for one frame, then jumps to the staging position, then animates back. This is a brief visible "double" at the destination — looks like the box ghosts through whatever sits next to it.
 
-This is the new piece. The packer assigns one base color per **SKU** (item index → palette). When we render, we walk the placed boxes and, for any box whose **neighbour shares its base color**, we shift the rendered fill to a contrasting variant so the seam is always visible.
+### Bug 3 — "Floating" (real): cross-rank stacked boxes
 
-How it works:
+`buildRows` clusters by floor-pallet x-start with a 200 mm tolerance and assigns each stacked box to the rank whose floor pallets it covers most. Edge case: a stacked box that bridges two ranks gets assigned to whichever has greater overlap. If the picked rank's floor pallet sits at a different x than the stacked box's true supporter, the **supporter box belongs to a later rank** and is therefore not yet visible during the walkthrough — the stacked box appears to float.
 
-- A new helper `assignDisplayColors(placed)` runs once after packing (cheap — N²ish but N is bounded by container capacity, ~few thousand max, and we use a spatial hash keyed by 100 mm cell so it's effectively O(N)).
-- Two boxes are "touching" if their AABBs share a face (`|gap| < 2 mm` in one axis and overlap in the other two).
-- For each box we compute the set of base colors of its touching neighbours. If the box's own base color is in that set, we pick from **two precomputed shade variants** of the same hue (a lighter tint and a darker shade, both ~25 % luminance offset). We pick whichever variant differs most from every touching neighbour's current rendered color.
-- Result: a single-SKU wall of 200 cartons renders as a **subtle 3-tone checkerboard** of the same hue family — the overall color still tells you "this is SKU A", but every individual carton has a visible border with its neighbour. Mixed-SKU loads keep their distinct base hues unchanged because the SKUs themselves already differ.
-- Helpers exported: `lighten(hex, amount)`, `darken(hex, amount)`, `pickEdgeColor(hex)`.
+This is rare but real. The `placedIdx` ordering in `buildPalletSequence` is per-row, so a box added in row N may depend on a supporter that the row builder has filed under row N+1.
 
-This runs purely on the render side. The packer's `box.color` still holds the SKU base color (used by legends, the load report, the per-item stats panel). The 3D view consumes a parallel `displayColor` map.
+## Fixes
 
-### 3. Always-on contrast borders for every package type
+### Fix 1 — Curved fly-in path that clears the cargo column
 
-Border color is computed from each box's **rendered** fill via `pickEdgeColor(fill)`: returns near-black `#0b1220` when the fill's perceived luminance ≥ 0.5, near-white `#f8fafc` otherwise. Used everywhere edges render.
+Replace the straight-line ease-out with a two-phase path:
 
-Edges are added to the three shapes that currently lack them:
+- **Phase 1 (0 → 0.45):** ease horizontally from `(cx + stageOffsetX, cy + stageOffsetY, cz)` to `(cx, cy + stageOffsetY, cz)` — the box flies along the top of the container until it is directly over its slot. No horizontal pass through other boxes.
+- **Phase 2 (0.45 → 1.0):** ease straight down from `(cx, cy + stageOffsetY, cz)` to `(cx, cy, cz)` — the box descends vertically into its slot, mirroring how a real crane / forklift lowers cargo from above. The vertical descent is clear of horizontal neighbours by construction (anything in this column would be the supporter, and the supporter renders before this step).
 
-- **DrumShape**: `<Edges>` overlay on the cylinder (drei draws silhouette + crease lines).
-- **BaleShape**: edges on the main bale box, in addition to the existing dark bands.
-- **BagShape**: edges on the rounded sack body so two adjacent bags of the same SKU show a clear seam.
+Both phases use ease-in-out cubic so the transition between them is smooth. Total duration unchanged at 600 ms.
 
-### 4. Adaptive edge colors for shapes that already have them
+### Fix 2 — Hide the box for one frame until useFrame seats it
 
-- **CartonShape**: replace fixed `#1f2937` with `pickEdgeColor(displayColor)`.
-- **CrateShape**: replace `#3a2818` with `pickEdgeColor(displayColor)` (currently brown-on-brown is invisible).
-- **PalletShape**: replace `#5a7a90` with `pickEdgeColor(displayColor)`.
+When `flyIn === true` and `animStartRef.current === null`, render the group with `visible={false}` so the brief one-frame flash at the final slot is invisible. The first useFrame tick sets `animStartRef.current = 0` and toggles a tiny `staged` ref; from that point on the group is visible and `useFrame` keeps the position correct. Cheap, no extra renders.
 
-Edges keep their `polygonOffset` settings to prevent z-fighting; new edges on drums/bales/bags use the same trick.
+Equivalently, render the group at the staging position from the start (JSX `position={[cx + stageOffsetX, cy + stageOffsetY, cz]}` whenever `flyIn` is true) so even before useFrame runs there is no flash at the slot.
 
-### 5. Slight luminance bump on hover (existing behaviour preserved)
+### Fix 3 — Auto-include geometric supporters in `visiblePlacedIdxs`
 
-Edge color flips to `tiltColor` on hover so the highlighted box reads as "selected" from far away.
+In `container-load-view.tsx`, after computing `visiblePlacedIdxs` from the step indices, **expand the set** to include every box that geometrically supports any visible stacked box, regardless of which row the row-builder filed it under.
+
+A box `s` supports `b` when:
+- `|s.z + s.h − b.z| < 2 mm` (top face of `s` is at the bottom face of `b`), and
+- footprint of `s` overlaps footprint of `b` in both x and y.
+
+The expansion runs once per `(pack, palletIdx)` change, walks visible boxes, finds supporters in `pack.placed`, and unions them into the set. Cost is O(visible × placed) bounded by ~few thousand boxes — negligible. Result: a stacked box never appears without its physical supporter visible underneath, even if the row clustering put them in different ranks.
+
+This is purely a viewer concern; the packer, gap rules, and validators are untouched.
 
 ## Files touched
 
-- `src/lib/freight/packing.ts` — replace `ITEM_COLORS` with the 20-color palette; add `pickEdgeColor()`, `lighten()`, `darken()` helpers.
-- `src/lib/freight/display-colors.ts` (**new**) — `assignDisplayColors(placed)` that returns `Map<boxId, hex>` using the touching-neighbour rule.
-- `src/components/freight/container-3d-view.tsx` — call `assignDisplayColors` once per pack, plumb the resulting map down to `BoxMesh`, swap fixed edge colors for adaptive ones in `CartonShape` / `CrateShape` / `PalletShape`, add `<Edges>` to `DrumShape` / `BaleShape` / `BagShape`.
+- `src/components/freight/container-3d-view.tsx`
+  - Rewrite the `useFrame` body in `CargoBox` to follow the L-shaped (over-then-down) path.
+  - Set the JSX group position to the staging point while `flyIn === true` so there is no single-frame flash at the slot.
+- `src/components/freight/container-load-view.tsx`
+  - Add a small `expandWithSupporters(visibleSet, pack.placed)` step on top of the existing `visiblePlacedIdxs` memo.
 
-No changes to packing logic, gap rules, validators, or tests. `box.color` (the SKU base) is unchanged so legends, reports, PDF, and stats panels keep working.
+No changes to the packer, validators, gap rules, accuracy tests, palette, adjacency-aware coloring, or borders. The 3D viewer's resting position for every box is still the validated packer slot, so once the walkthrough completes the view is identical to before this change.
 
-## Out of scope (ask if you want any)
+## Verification
 
-- A **legend chip strip** above the 3D view mapping base color → SKU id.
-- A **toggle** to switch borders on/off (`showEdges` already exists internally; default stays on).
-- Any change to environment colors (walls, floor, pallet wood, forklift, worker).
+- Run `bunx tsc --noEmit` (must stay clean).
+- Run `bunx vitest run src/lib/freight/packing-advanced.accuracy.test.ts` (must stay green).
+- Manual: load a dense 40HC mixed pack, click Play, scrub Next/Prev. Each fly-in should travel up-and-over, then down into the slot, with no box visibly tunneling through any other and no stacked box ever appearing without its supporter underneath.

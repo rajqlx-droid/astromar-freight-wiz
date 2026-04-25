@@ -360,8 +360,34 @@ function SinglePlanBody({
       const step = palletSequence[i];
       if (step) s.add(step.placedIdx);
     }
+    // Auto-include any geometric supporter of a visible stacked box, even
+    // if the row clustering filed it under a later rank. Without this, a
+    // stacked box whose supporter belongs to a later walkthrough step
+    // would appear to float in mid-air during play.
+    const placed = pack.placed;
+    const SUPPORT_EPS = 2; // mm — top-of-supporter must meet bottom-of-stacker
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const idx of Array.from(s)) {
+        const b = placed[idx];
+        if (!b || b.z < SUPPORT_EPS) continue; // floor box — no supporter needed
+        for (let j = 0; j < placed.length; j++) {
+          if (s.has(j)) continue;
+          const c = placed[j];
+          if (Math.abs(c.z + c.h - b.z) > SUPPORT_EPS) continue;
+          // Footprint overlap in x and y > 0 → c supports b.
+          const xo = Math.min(c.x + c.l, b.x + b.l) - Math.max(c.x, b.x);
+          const yo = Math.min(c.y + c.w, b.y + b.w) - Math.max(c.y, b.y);
+          if (xo > 1 && yo > 1) {
+            s.add(j);
+            changed = true;
+          }
+        }
+      }
+    }
     return s;
-  }, [palletSequence, palletIdx]);
+  }, [palletSequence, palletIdx, pack.placed]);
   const flyInIdxs = useMemo<ReadonlySet<number> | null>(() => {
     if (!currentStep) return null;
     return new Set([currentStep.placedIdx]);
