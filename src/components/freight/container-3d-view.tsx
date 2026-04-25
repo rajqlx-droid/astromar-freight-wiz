@@ -384,8 +384,8 @@ function SceneContents({
       <hemisphereLight intensity={0.35} groundColor={"#ddd"} />
 
       <InvalidateOnChange
-        deps={[preset, hideDoors ? 1 : 0]}
-        animate={false}
+        deps={[preset, hideDoors ? 1 : 0, flyInKey, visiblePlacedIdxs?.size ?? -1]}
+        animate={(flyInIdxs?.size ?? 0) > 0}
       />
 
       <OrbitControls
