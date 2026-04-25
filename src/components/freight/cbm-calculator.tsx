@@ -865,23 +865,35 @@ function ToggleRow({
   icon,
   checked,
   onChange,
+  disabled = false,
+  disabledReason,
 }: {
   title: string;
   desc: string;
   icon?: React.ReactNode;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2">
+    <div
+      className={cn(
+        "flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2",
+        disabled && "opacity-70",
+      )}
+      title={disabled && disabledReason ? disabledReason : undefined}
+    >
       <div className="flex items-start gap-1.5">
         {icon}
         <div>
           <Label className="text-xs font-semibold text-brand-navy">{title}</Label>
-          <p className="text-[10px] text-muted-foreground">{desc}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {disabled && disabledReason ? disabledReason : desc}
+          </p>
         </div>
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
+      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
     </div>
   );
 }
