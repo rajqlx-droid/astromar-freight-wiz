@@ -21,10 +21,13 @@ import { DOOR_RESERVE_MM, CEILING_RESERVE_MM } from "./gap-rules";
 
 /** Universal hard limits — match gap-rules.ts. */
 export const HARD = {
-  /** Minimum lateral neighbour gap when boxes overlap vertically. */
-  MIN_NEIGHBOUR_GAP_MM: 50,
-  /** Minimum side-wall clearance. */
-  MIN_WALL_GAP_MM: 50,
+  /**
+   * Lateral neighbour gap is 0 — flush packing is legal. The pairwise overlap
+   * check is the single source of truth for "boxes must not intersect".
+   */
+  MIN_NEIGHBOUR_GAP_MM: 0,
+  /** Side-wall clearance is 0 — cartons may sit flush against the steel walls. */
+  MIN_WALL_GAP_MM: 0,
   /** Minimum ceiling clearance (top of box to roof). */
   MIN_CEILING_GAP_MM: CEILING_RESERVE_MM,
   /** Minimum door reserve (front-most box face to door wall). */
@@ -32,13 +35,9 @@ export const HARD = {
   /** Minimum support ratio for a stacked box. */
   MIN_SUPPORT_RATIO: 0.85,
   /**
-   * Tolerance for floating-point coordinate equality (mm).
-   *
-   * Bumped from 1 → 2 mm to absorb Float32 height-map drift introduced by
-   * the packer's accumulated z + h additions for non-grid-aligned cartons
-   * (e.g. 1066.8 mm cubes). Still tight enough to catch real floating gaps —
-   * the smallest legal carton dimension is 50 mm, and visible "floating"
-   * artifacts in the renderer start around ~5 mm.
+   * Tolerance for floating-point coordinate equality (mm). Used for the
+   * support-plane test (bottom of B ≈ top of A) and door/ceiling reserve
+   * tolerance. NOT used for lateral overlap — that test is strict (0 mm).
    */
   EPS_MM: 2,
 } as const;
@@ -75,12 +74,17 @@ interface ValidatorItemFlags {
   fragile: boolean;
 }
 
-/** Cheap intersection test for two boxes in mm coords. Returns the 3D overlap volume in mm³ (0 = touching/separate). */
+/**
+ * Cheap intersection test for two boxes in mm coords. Returns the 3D overlap
+ * volume in mm³ (0 = touching/separate). STRICT: any positive intersection
+ * on every axis counts as overlap — touching faces (overlap = 0 on at least
+ * one axis) is legal.
+ */
 function overlapVolume(a: PlacedBox, b: PlacedBox): number {
   const dx = Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x);
   const dy = Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y);
   const dz = Math.min(a.z + a.h, b.z + b.h) - Math.max(a.z, b.z);
-  if (dx <= HARD.EPS_MM || dy <= HARD.EPS_MM || dz <= HARD.EPS_MM) return 0;
+  if (dx <= 0 || dy <= 0 || dz <= 0) return 0;
   return dx * dy * dz;
 }
 
@@ -111,33 +115,18 @@ export function validatePackGeometry(
   const flags = (idx: number): ValidatorItemFlags =>
     getFlags?.(idx) ?? { stackable: true, fragile: false };
 
-  // ── 1. Wall / door / ceiling clearance ─────────────────────────────────
-  const wallOff: number[] = [];
+  // ── 1. Door / ceiling clearance (lateral wall gap is 0 — flush is legal) ──
   const doorOff: number[] = [];
   const ceilOff: number[] = [];
   placed.forEach((b, i) => {
-    // Wall (side y axis): boxes hugging y=0 or y=W are checked against MIN_WALL_GAP.
-    // A box with y > 0 must keep MIN_WALL_GAP from the -Y wall; same for +Y.
-    if (b.y > HARD.EPS_MM && b.y < HARD.MIN_WALL_GAP_MM - HARD.EPS_MM) wallOff.push(i);
-    const yFar = C.w - (b.y + b.w);
-    if (yFar > HARD.EPS_MM && yFar < HARD.MIN_WALL_GAP_MM - HARD.EPS_MM) wallOff.push(i);
-
     // Door reserve: nothing within MIN_DOOR_GAP of the +X end.
     const xFar = C.l - (b.x + b.l);
     if (xFar < HARD.MIN_DOOR_GAP_MM - HARD.EPS_MM) doorOff.push(i);
-
     // Ceiling reserve.
     const zFar = C.h - (b.z + b.h);
     if (zFar < HARD.MIN_CEILING_GAP_MM - HARD.EPS_MM) ceilOff.push(i);
   });
 
-  if (wallOff.length > 0) {
-    violations.push({
-      code: "WALL_GAP",
-      message: `${wallOff.length} box${wallOff.length > 1 ? "es" : ""} closer than ${HARD.MIN_WALL_GAP_MM} mm to a side wall`,
-      placedIdxs: Array.from(new Set(wallOff)),
-    });
-  }
   if (doorOff.length > 0) {
     violations.push({
       code: "DOOR_GAP",
@@ -153,45 +142,19 @@ export function validatePackGeometry(
     });
   }
 
-  // ── 2. Pairwise overlap + neighbour-gap (with vertical overlap) ────────
+  // ── 2. Strict pairwise overlap (no neighbour-gap rule — flush is legal) ───
   const overlapPairs: number[] = [];
-  const gapPairs: number[] = [];
   // O(n²) — fine up to a few hundred boxes (RENDER_CAP = 500).
   for (let i = 0; i < placed.length; i++) {
     const a = placed[i];
     for (let j = i + 1; j < placed.length; j++) {
       const b = placed[j];
-      // Cheap AABB reject: if separated by more than the larger of either box +
-      // the gap on every axis, skip immediately.
-      const margin = HARD.MIN_NEIGHBOUR_GAP_MM + HARD.EPS_MM;
-      if (a.x + a.l + margin <= b.x || b.x + b.l + margin <= a.x) continue;
-      if (a.y + a.w + margin <= b.y || b.y + b.w + margin <= a.y) continue;
-      if (a.z + a.h <= b.z || b.z + b.h <= a.z) continue; // disjoint in Z, no neighbour-gap rule applies
-
+      // Cheap AABB reject.
+      if (a.x + a.l <= b.x || b.x + b.l <= a.x) continue;
+      if (a.y + a.w <= b.y || b.y + b.w <= a.y) continue;
+      if (a.z + a.h <= b.z || b.z + b.h <= a.z) continue;
       const ov = overlapVolume(a, b);
-      if (ov > 0) {
-        overlapPairs.push(i, j);
-        continue;
-      }
-      // Neighbour gap only applies when the two boxes share vertical overlap
-      // > EPS (true side-by-side neighbours, not stacked or vertically disjoint).
-      const zOv = Math.min(a.z + a.h, b.z + b.h) - Math.max(a.z, b.z);
-      if (zOv <= HARD.EPS_MM) continue;
-      // Compute the lateral distance on each axis. If they overlap on one
-      // axis (gap negative) and have a small positive gap on the other,
-      // they are neighbours and the small-gap axis must respect MIN gap.
-      const xGap = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.l, b.x + b.l));
-      const yGap = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.w, b.y + b.w));
-      const xOv = Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x) > HARD.EPS_MM;
-      const yOv = Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y) > HARD.EPS_MM;
-      // Side-by-side along X axis (yOv true, xGap > 0) → xGap must be ≥ MIN.
-      if (yOv && !xOv && xGap > 0 && xGap < HARD.MIN_NEIGHBOUR_GAP_MM - HARD.EPS_MM) {
-        gapPairs.push(i, j);
-      }
-      // Side-by-side along Y axis.
-      if (xOv && !yOv && yGap > 0 && yGap < HARD.MIN_NEIGHBOUR_GAP_MM - HARD.EPS_MM) {
-        gapPairs.push(i, j);
-      }
+      if (ov > 0) overlapPairs.push(i, j);
     }
   }
 
@@ -200,13 +163,6 @@ export function validatePackGeometry(
       code: "OVERLAP",
       message: `${overlapPairs.length / 2} pair${overlapPairs.length / 2 > 1 ? "s" : ""} of boxes physically overlap`,
       placedIdxs: Array.from(new Set(overlapPairs)),
-    });
-  }
-  if (gapPairs.length > 0) {
-    violations.push({
-      code: "NEIGHBOUR_GAP",
-      message: `${gapPairs.length / 2} neighbour pair${gapPairs.length / 2 > 1 ? "s" : ""} closer than ${HARD.MIN_NEIGHBOUR_GAP_MM} mm`,
-      placedIdxs: Array.from(new Set(gapPairs)),
     });
   }
 

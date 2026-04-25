@@ -30,9 +30,9 @@ export interface RowGroup {
   gapWarning: boolean;
   /**
    * Maximum wall utilisation physically achievable for this row given its
-   * cargo footprint and the universal 50 mm gap rule. When the row is
-   * already at this ceiling, no slack warning should fire — the geometry
-   * itself caps how tight the pack can be.
+   * cargo footprint with tight (flush) packing. When the row is already at
+   * this ceiling, no slack warning should fire — the geometry itself caps
+   * how tight the pack can be.
    */
   maxAchievableUtilizationPct: number;
 }
@@ -359,8 +359,8 @@ export function buildRows(
       wallAreaMm2 > 0 ? Math.min(100, (bottomFootprintMm2 / wallAreaMm2) * 100) : 0;
 
     // Geometric ceiling: how tight CAN this row physically be packed given
-    // the actual bottom-layer footprints + the 50 mm gap rule? When the
-    // current utilisation is already at this ceiling, the slack is
+    // the actual bottom-layer footprints under tight (flush) packing? When
+    // the current utilisation is already at this ceiling, the slack is
     // irreducible — no re-shuffle can close it.
     //
     // Mixed-row aware: instead of using only the narrowest footprint (which
@@ -369,8 +369,8 @@ export function buildRows(
     // footprint in the row. The achievable maximum is the LOWER of the two —
     // a row dominated by 1300 mm pallets cannot magically fit 1066 mm cubes.
     const containerW = pack.container.inner.w;
-    const minGap = 50; // universal neighbour gap (gap-rules.ts)
-    const wallMin = 50; // universal wall gap
+    const minGap = 0; // tight pack — flush placement allowed (gap-rules.ts)
+    const wallMin = 0; // tight pack — cartons may sit flush against side walls
     const floorBoxes = r.boxes.filter((b) => b.z < 10);
     let maxAchievableUtilizationPct = 100;
     if (floorBoxes.length > 0 && rowDepthMm > 0) {

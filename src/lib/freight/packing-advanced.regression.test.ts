@@ -38,8 +38,7 @@ describe("packing-advanced — 121.92cm cube regression", () => {
 
   it("stacks identical cubes (multiple tiers) in a single 40HC", () => {
     const pack = packContainerAdvanced(make30Cubes(), hc);
-    // With the universal 50mm gap rule, ~8 cartons fit per floor row.
-    // Stacking must still kick in — verifies the support fix.
+    // 30 × 1.22 m³ ≈ 54 m³ ≈ 71 % fill → tight mode → stacking expected.
     expect(pack.placedCartons).toBeGreaterThanOrEqual(8);
     const stacked = pack.placed.filter((p) => p.z > 10);
     expect(stacked.length).toBeGreaterThanOrEqual(1);
@@ -57,8 +56,9 @@ describe("packing-advanced — 121.92cm cube regression", () => {
       remainingQty -= pack.placedCartons;
     }
     expect(remainingQty).toBe(0);
-    // 50mm gaps reduce density vs. the old 20mm rule — allow up to 4 containers.
-    expect(containers).toBeLessThanOrEqual(4);
+    // Spread-mode kicks in once the residual batch drops below 65% fill, so
+    // the worst case may take an extra container vs pure tight packing.
+    expect(containers).toBeLessThanOrEqual(5);
   });
 
   it("records support ratios aligned with placed[]", () => {
@@ -111,21 +111,31 @@ describe("packing-advanced — 1066.8mm cube floating-cargo regression", () => {
     },
   ];
 
-  it("40 cubes pack legally — zero floating boxes", () => {
+  it("40 cubes pack legally — zero floating, zero overlap", () => {
     const pack = packContainerAdvanced(cube1067(40), hc);
     const audit = validateAdvancedPack(pack);
     expect(audit.violations.filter((v) => v.code === "FLOATING")).toEqual([]);
     expect(audit.violations.filter((v) => v.code === "OVERLAP")).toEqual([]);
-    expect(audit.violations.filter((v) => v.code === "NEIGHBOUR_GAP")).toEqual([]);
   });
 
-  it("41 cubes — packer shuts out the surplus, remainder stays legal", () => {
+  it("41 cubes — packer commits a physically legal subset", () => {
     const pack = packContainerAdvanced(cube1067(41), hc);
     const audit = validateAdvancedPack(pack);
-    // Whatever the packer commits MUST be physically legal — no floating, no overlap.
     expect(audit.violations.filter((v) => v.code === "FLOATING")).toEqual([]);
     expect(audit.violations.filter((v) => v.code === "OVERLAP")).toEqual([]);
     expect(pack.placedCartons).toBeLessThanOrEqual(41);
+  });
+
+  it("11 cubes pack legally and all 11 land on the floor", () => {
+    // 11 × 1067 mm cubes ≈ 13 % fill → spread mode. Cartons distribute along
+    // the length for CoG balance; what matters is they all sit on the floor
+    // (no spurious stacking) and the placement is physically legal.
+    const pack = packContainerAdvanced(cube1067(11), hc);
+    const audit = validateAdvancedPack(pack);
+    expect(audit.allLegal).toBe(true);
+    const floor = pack.placed.filter((b) => b.z < 10);
+    expect(floor.length).toBe(pack.placedCartons);
+    expect(pack.placedCartons).toBeGreaterThanOrEqual(5);
   });
 
   it("mixed 800mm + 1100mm cartons — no floating cargo", () => {
@@ -161,5 +171,42 @@ describe("packing-advanced — 1066.8mm cube floating-cargo regression", () => {
     const audit = validateAdvancedPack(pack);
     expect(audit.violations.filter((v) => v.code === "FLOATING")).toEqual([]);
     expect(audit.violations.filter((v) => v.code === "OVERLAP")).toEqual([]);
+  });
+});
+
+/**
+ * Spread-mode regression: when the cargo CBM fills less than ~65 % of the
+ * container, the packer must distribute boxes along the length instead of
+ * jamming everything against the back wall, so the centre of gravity stays
+ * balanced.
+ */
+describe("packing-advanced — CoG-aware spread mode", () => {
+  const hc = CONTAINERS.find((c) => c.id === "40hc")!;
+
+  it("light load (6 × 1 m cubes ≈ 8 % fill) spreads along the length", () => {
+    const items: CbmItem[] = [
+      {
+        id: "cube",
+        length: 100,
+        width: 100,
+        height: 100,
+        qty: 6,
+        weight: 200,
+        packageType: "carton",
+        stackable: true,
+        fragile: false,
+        allowSidewaysRotation: true,
+        allowAxisRotation: false,
+      },
+    ];
+    const pack = packContainerAdvanced(items, hc);
+    const audit = validateAdvancedPack(pack);
+    expect(audit.allLegal).toBe(true);
+    // Furthest-forward box must reach at least 50 % of the container length —
+    // back-to-front packing would cluster all six within the first ~6 m.
+    const maxX = Math.max(...pack.placed.map((b) => b.x + b.l));
+    expect(maxX).toBeGreaterThan(hc.inner.l * 0.5);
+    // Longitudinal CoG within ±25 % of centre.
+    expect(Math.abs(pack.cogOffsetPct)).toBeLessThan(0.25);
   });
 });

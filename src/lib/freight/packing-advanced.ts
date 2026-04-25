@@ -416,8 +416,9 @@ export function packContainerAdvanced(
    * legal in the final audit. Anything failing here is rejected before the
    * commit so the validator can never see a floating / overlapping box.
    *
-   * Checks: pairwise overlap, neighbour gap (with vertical-overlap gate),
-   * support ratio against actual placed-box geometry, wall/door/ceiling.
+   * Lateral neighbour gap and side-wall gap are 0 (per gap-rules.ts). The
+   * STRICT pairwise overlap test is the only thing preventing physical
+   * intersection. _minGap is accepted but unused — kept for call-site compat.
    */
   function wouldBeLegal(
     x: number,
@@ -426,14 +427,14 @@ export function packContainerAdvanced(
     l: number,
     w: number,
     h: number,
-    minGap: number,
+    _minGap: number,
   ): boolean {
     // Bounds.
     if (x < 0 || y < 0 || z < 0) return false;
     if (x + l > C.l + 0.5) return false;
     if (y + w > C.w + 0.5) return false;
     if (z + h > C.h + 0.5) return false;
-    // Door / ceiling.
+    // Door / ceiling reserves are still enforced.
     if (C.l - (x + l) < DOOR_RESERVE_MM - 1) return false;
     if (C.h - (z + h) < CEILING_RESERVE_MM - 1) return false;
 
@@ -451,25 +452,40 @@ export function packContainerAdvanced(
       if (ratio < SUPPORT_MIN_RATIO) return false;
     }
 
-    // Pairwise overlap + neighbour-gap with vertical-overlap gate.
+    // STRICT pairwise overlap — touching faces are legal; only meaningful
+    // intersection is rejected. Threshold matches validator's EPS_MM (2 mm)
+    // so flush snap-pass placements aren't rejected by Float32 drift while
+    // still catching any visible overlap (smallest carton dim is 50 mm).
     for (const p of placedInternal) {
-      // 3D overlap?
       const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
       const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
       const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
-      if (ox > 1 && oy > 1 && oz > 1) return false; // physical overlap
-
-      // Neighbour-gap rule only when the two boxes share vertical overlap.
-      if (oz <= 1) continue;
-      const xGap = Math.max(0, Math.max(x, p.x) - Math.min(x + l, p.x + p.l));
-      const yGap = Math.max(0, Math.max(y, p.y) - Math.min(y + w, p.y + p.w));
-      const xOverlap = ox > 1;
-      const yOverlap = oy > 1;
-      if (yOverlap && !xOverlap && xGap > 0 && xGap < minGap - 1) return false;
-      if (xOverlap && !yOverlap && yGap > 0 && yGap < minGap - 1) return false;
+      if (ox > 2 && oy > 2 && oz > 2) return false;
     }
     return true;
   }
+
+  // ── CoG-aware spread heuristic ─────────────────────────────────────────
+  // When the cargo CBM fills less than 65 % of the container, jamming every
+  // carton against the back wall puts the centre of gravity badly forward of
+  // centre when more cartons are added later. In that regime we score
+  // placements to spread them evenly along the usable container length and
+  // bias the lateral position toward the centre line.
+  const usableLengthMm = Math.max(1, C.l - DOOR_RESERVE_MM);
+  const containerCapCbm = Math.max(0.001, container.capCbm);
+  const volumeFill = cargoCbm / containerCapCbm;
+  const spreadMode = volumeFill < 0.65;
+  // Estimate how many cartons will land on the floor (1 layer). Used to
+  // choose the stride for evenly-spaced target slots in spread mode.
+  const avgFloorFootprintMm2 = expanded.length > 0
+    ? expanded.reduce((s, c) => s + c.origL * c.origW, 0) / expanded.length
+    : 1;
+  const estFloorCount = Math.max(
+    1,
+    Math.min(expanded.length, Math.floor((C.l * C.w) / Math.max(1, avgFloorFootprintMm2))),
+  );
+  const spreadStrideMm = usableLengthMm / Math.max(1, Math.min(expanded.length, estFloorCount));
+  let spreadCursor = 0; // increments per committed floor box in spread mode
 
   for (const c of expanded) {
     const orients = buildOrientations(c).filter(
@@ -546,37 +562,34 @@ export function packContainerAdvanced(
           }
           if (!weightOk) continue;
 
-          const gRule = getGapRule(c.packageType);
-          if (x > 0 && x < gRule.wallMin) continue;
-          if (y > 0 && y < gRule.wallMin) continue;
-          if (y + o.w < C.w && y + o.w > C.w - gRule.wallMin) continue;
-          let gapViolation = false;
-          const checkRange = gRule.minGap * 3;
-          for (const pb of placedInternal) {
-            if (Math.abs(pb.x - x) > o.l + checkRange) continue;
-            if (Math.abs(pb.y - y) > o.w + checkRange) continue;
-            // Vertical relationship: a box directly stacked on another (top of pb
-            // meets bottom of new box, or vice-versa) is supported contact —
-            // NOT a gap violation. Only enforce the lateral gap when boxes
-            // overlap vertically by more than 1mm (true side-by-side neighbours).
-            const zOverlapMm = Math.min(ev.z + o.h, pb.z + pb.h) - Math.max(ev.z, pb.z);
-            if (zOverlapMm <= 1) continue; // stacked or non-overlapping in Z
-            const xOv = x < pb.x + pb.l + gRule.minGap && x + o.l + gRule.minGap > pb.x;
-            const yOv = y < pb.y + pb.w + gRule.minGap && y + o.w + gRule.minGap > pb.y;
-            if (xOv && yOv) { gapViolation = true; break; }
-          }
-          if (gapViolation) continue;
+          // Lateral neighbour gap and side-wall gap are 0 — flush packing
+          // is legal. The pre-commit airlock (wouldBeLegal, below) is the
+          // only gate against actual physical overlap.
 
-          // Score (back-to-front row-wise loading):
-          //   1. x position has the highest weight — fully fill the row at the
-          //      back wall before advancing forward (loaders can't climb on cargo).
-          //   2. z (height) — bottom of the current row first.
-          //   3. y position — left-to-right within the row.
-          //   4. support quality tie-break.
-          // Coefficients chosen so a 100mm advance in x always outweighs the
-          // tallest possible stack progression at the same x.
-          const score =
-            x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
+          // Score:
+          //  - Tight mode (default, container is well-filled): back-to-front
+          //    row-wise loading. X dominates so each row finishes against
+          //    the back wall before the next row advances forward.
+          //  - Spread mode (container under 65 % full): place each new
+          //    floor-level carton near its evenly-spaced target slot along
+          //    the length, and bias the lateral position to the centre line.
+          //    This keeps the centre of gravity balanced when the load is
+          //    light enough that we don't need every centimetre.
+          let score: number;
+          if (spreadMode && ev.z === 0) {
+            const targetX = Math.min(usableLengthMm - o.l, spreadCursor * spreadStrideMm);
+            const yCentreOffset = Math.abs((y + o.w / 2) - C.w / 2);
+            score =
+              Math.abs(x - targetX) * 100 +
+              ev.z * 1_000 +
+              yCentreOffset * 0.5 +
+              (1 - ev.supportRatio) * 50;
+          } else {
+            // Tight mode — original back-to-front scoring. Coefficients chosen
+            // so a 100 mm advance in x always outweighs the tallest possible
+            // stack progression at the same x.
+            score = x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
+          }
           if (score < bestScore) {
             bestScore = score;
             bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters, supportRatio: ev.supportRatio };
@@ -609,8 +622,12 @@ export function packContainerAdvanced(
     }
 
     // Snap-to-neighbour: slide the chosen placement toward -X (back wall) then
-    // -Y (left wall) to close any sub-stride gap left by the 50mm scan.
-    const snapGapRule = getGapRule(c.packageType);
+    // -Y (left wall) to close any sub-stride gap left by the coarse scan.
+    // No lateral or wall-gap rules apply (gap-rules.ts: minGap = wallMin = 0);
+    // the only rejection criterion is strict physical overlap with a placed
+    // box. In spread mode we DISABLE the X-snap so deliberate spacing is
+    // preserved — Y-snap still hugs the left wall (or centre, depending on
+    // the chosen y) which is fine for balance.
     const snapAxis = (axis: "x" | "y") => {
       const tryAt = (nx: number, ny: number) => {
         const ev = evaluatePlacement(nx, ny, bestPick!.orient.l, bestPick!.orient.w, {
@@ -632,25 +649,20 @@ export function packContainerAdvanced(
             return null;
           }
         }
-        // Re-check inter-item minGap — without this the snap pass slides
-        // boxes flush against neighbours, eliminating the clearance the
-        // initial placement enforced (visible as overlapping drums/pallets).
+        // Strict overlap rejection — flush is fine, intersection is not.
         const ol = bestPick!.orient.l;
         const ow = bestPick!.orient.w;
         const oh = bestPick!.orient.h;
-        const checkRange = snapGapRule.minGap * 3;
         for (const pb of placedInternal) {
-          if (Math.abs(pb.x - nx) > ol + checkRange) continue;
-          if (Math.abs(pb.y - ny) > ow + checkRange) continue;
-          const xOv = nx < pb.x + pb.l + snapGapRule.minGap && nx + ol + snapGapRule.minGap > pb.x;
-          const yOv = ny < pb.y + pb.w + snapGapRule.minGap && ny + ow + snapGapRule.minGap > pb.y;
+          if (pb.x + pb.l <= nx || nx + ol <= pb.x) continue;
+          if (pb.y + pb.w <= ny || ny + ow <= pb.y) continue;
           const zOv = ev.z < pb.z + pb.h && ev.z + oh > pb.z;
-          if (xOv && yOv && zOv) return null;
+          if (zOv) {
+            const ox = Math.min(nx + ol, pb.x + pb.l) - Math.max(nx, pb.x);
+            const oy = Math.min(ny + ow, pb.y + pb.w) - Math.max(ny, pb.y);
+            if (ox > 0.5 && oy > 0.5) return null;
+          }
         }
-        // Wall-min clearance must also hold after the snap.
-        if (nx > 0 && nx < snapGapRule.wallMin) return null;
-        if (ny > 0 && ny < snapGapRule.wallMin) return null;
-        if (ny + ow < C.w && ny + ow > C.w - snapGapRule.wallMin) return null;
         return ev;
       };
 
@@ -684,7 +696,8 @@ export function packContainerAdvanced(
         bestPick!.supportRatio = ev.supportRatio;
       }
     };
-    snapAxis("x");
+    // In spread mode, X-snap would undo the deliberate longitudinal spacing.
+    if (!spreadMode) snapAxis("x");
     snapAxis("y");
 
     // Z-snap: re-evaluate the resting plane after the XY snaps. If a shorter
@@ -800,6 +813,8 @@ export function packContainerAdvanced(
     placedCount++;
     perItemPlaced[c.itemIdx]++;
     if (x + orient.l > frontierX) frontierX = x + orient.l;
+    // Spread-mode bookkeeping: advance the target slot only for floor boxes.
+    if (spreadMode && z < 1) spreadCursor++;
   }
 
   // Render-cap truncation (rare with skyline since we score; just in case).

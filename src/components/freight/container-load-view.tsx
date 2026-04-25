@@ -143,9 +143,9 @@ export function ContainerLoadView({
 
   // Multi-strategy sweep: the worker tries every loader strategy at full
   // container geometry and returns the densest LEGAL plan (no overlap, no
-  // hanging cargo, 50 mm gap rule honoured). Effective CBM is only reduced
-  // when carton dimensions + gap rules physically prevent a tighter fit —
-  // never as a default safety margin.
+  // hanging cargo, door + ceiling reserves honoured). Effective CBM is only
+  // reduced when carton dimensions physically prevent a tighter fit — never
+  // as a default safety margin.
   const [singlePack, setSinglePack] = useState<AdvancedPackResult>(() =>
     makeEmptyPack(deferredContainer),
   );
