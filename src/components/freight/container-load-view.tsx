@@ -274,6 +274,7 @@ export function ContainerLoadView({
           isActive
           viewerCollapsed={viewerCollapsed}
           planMeta={planMeta}
+          isCalculating={isCalculating}
         />
       )}
     </Card>
