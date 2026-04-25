@@ -8,7 +8,7 @@
  *
  * Lazy-loaded by container-load-view.tsx (client-only).
  */
-import { Suspense, forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
+import { Suspense, createContext, forwardRef, useContext, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Edges, Grid, Html, RoundedBox } from "@react-three/drei";
 import { Maximize2, Minimize2 } from "lucide-react";
@@ -60,6 +60,15 @@ interface Props {
    * its animation start clock even if React re-uses the same group.
    */
   flyInKey?: number;
+  /**
+   * Optional sessionStorage key that scopes camera persistence. When set,
+   * the user's last orbit position / target / zoom is restored on mount and
+   * saved on every interaction so changing inputs (which re-runs the
+   * packer) doesn't snap the camera back to its default iso framing.
+   * Different keys → independent remembered framings (e.g. one per
+   * container tab).
+   */
+  persistKey?: string;
 }
 
 /**
@@ -67,14 +76,40 @@ interface Props {
  */
 const MM_PER_M = 1000;
 
+const JUTE_PREF_KEY = "cargo3d:jute";
+
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, hideDoors = false, overlay = null, nearCeilingPlacedIdxs = null, visiblePlacedIdxs = null, flyInIdxs = null, flyInKey = 0 },
+  { pack, height = 420, hideDoors = false, overlay = null, nearCeilingPlacedIdxs = null, visiblePlacedIdxs = null, flyInIdxs = null, flyInKey = 0, persistKey },
   ref,
 ) {
-  const [preset, setPreset] = useState<Preset>("iso");
+  const [preset, setPresetState] = useState<Preset>("iso");
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+
+  // Jute / fabric texture toggle for bag surfaces. Persisted across the
+  // session so the user keeps the look they picked while iterating.
+  const [jute, setJute] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.sessionStorage.getItem(JUTE_PREF_KEY) === "1"; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { window.sessionStorage.setItem(JUTE_PREF_KEY, jute ? "1" : "0"); }
+    catch { /* storage blocked — non-fatal */ }
+  }, [jute]);
+  const bagTextureCtx = useMemo(() => ({ jute }), [jute]);
+
+  // Clicking a preset clears the saved camera so the preset always wins;
+  // subsequent orbit will re-save under the same key.
+  const setPreset = (p: Preset) => {
+    if (persistKey && typeof window !== "undefined") {
+      try { window.sessionStorage.removeItem(persistKey); }
+      catch { /* non-fatal */ }
+    }
+    setPresetState(p);
+  };
 
   // Container dims in metres.
   const Cm = useMemo(
@@ -159,16 +194,19 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
         }}
       >
         <Suspense fallback={<Html center>Loading 3D…</Html>}>
-          <SceneContents
-            pack={pack}
-            Cm={Cm}
-            preset={preset}
-            hideDoors={hideDoors}
-            nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
-            visiblePlacedIdxs={visiblePlacedIdxs}
-            flyInIdxs={flyInIdxs}
-            flyInKey={flyInKey}
-          />
+          <BagTextureContext.Provider value={bagTextureCtx}>
+            <SceneContents
+              pack={pack}
+              Cm={Cm}
+              preset={preset}
+              hideDoors={hideDoors}
+              nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
+              visiblePlacedIdxs={visiblePlacedIdxs}
+              flyInIdxs={flyInIdxs}
+              flyInKey={flyInKey}
+              persistKey={persistKey}
+            />
+          </BagTextureContext.Provider>
         </Suspense>
       </Canvas>
 
@@ -207,6 +245,23 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
       <div className="pointer-events-none absolute bottom-2 left-2 rounded-md bg-background/80 px-2 py-1 text-[10px] font-medium text-muted-foreground backdrop-blur">
         Drag to rotate · Scroll to zoom · Double-click to reset
       </div>
+
+      {/* Jute / fabric texture toggle for bag surfaces. Off by default. */}
+      <button
+        type="button"
+        onClick={() => setJute((v) => !v)}
+        aria-pressed={jute}
+        title={jute ? "Switch bags to soft material (default)" : "Apply jute / hessian weave to bags"}
+        className={cn(
+          "absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold backdrop-blur transition-colors",
+          jute
+            ? "border-amber-500/70 bg-amber-100/90 text-amber-900 hover:bg-amber-100"
+            : "border-brand-navy/30 bg-background/85 text-brand-navy hover:bg-background",
+        )}
+      >
+        <span aria-hidden>{jute ? "▦" : "▢"}</span>
+        Jute
+      </button>
 
       {overlay}
     </div>
@@ -296,6 +351,51 @@ function makePlywoodTexture(): THREE.CanvasTexture {
   return _plywoodTex;
 }
 
+/* Procedural jute / hessian weave texture for bags. Cached per bag colour
+ * because every bag of the same colour reuses the same fabric pattern. */
+const _juteCache = new Map<string, THREE.CanvasTexture>();
+function makeJuteTexture(color: string): THREE.CanvasTexture {
+  const cached = _juteCache.get(color);
+  if (cached) return cached;
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  // Base wash from the bag's tone — slightly desaturated so the weave reads.
+  ctx.fillStyle = color || "#c4a574";
+  ctx.fillRect(0, 0, 256, 256);
+  // Warp threads (vertical) and weft threads (horizontal). Both slightly
+  // darker than the base; alternating offsets create the woven feel.
+  const warp = "rgba(60, 42, 22, 0.22)";
+  const weft = "rgba(255, 244, 220, 0.16)";
+  const step = 6;
+  for (let x = 0; x < 256; x += step) {
+    ctx.fillStyle = warp;
+    ctx.fillRect(x, 0, 2, 256);
+  }
+  for (let y = 0; y < 256; y += step) {
+    ctx.fillStyle = weft;
+    ctx.fillRect(0, y, 256, 2);
+  }
+  // Faint slubs / fibre noise — gives the surface organic micro-variation.
+  ctx.globalAlpha = 0.18;
+  for (let i = 0; i < 280; i++) {
+    ctx.fillStyle = i % 3 === 0 ? "#3a2410" : "#fff3d8";
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 1, 1 + Math.random() * 1.5);
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _juteCache.set(color, tex);
+  return tex;
+}
+
+/* When `enabled` is true, BagShape applies a jute weave texture instead of
+ * the flat soft-fabric material. Default false → identical to today. */
+const BagTextureContext = createContext<{ jute: boolean }>({ jute: false });
+
 /* --------------- Demand-mode invalidator ---------------
  * With `frameloop="demand"` the canvas only renders when something invalidates
  * it. OrbitControls already calls invalidate() on every drag/zoom, but we also
@@ -331,6 +431,7 @@ function SceneContents({
   visiblePlacedIdxs = null,
   flyInIdxs = null,
   flyInKey = 0,
+  persistKey,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -340,14 +441,59 @@ function SceneContents({
   visiblePlacedIdxs?: ReadonlySet<number> | null;
   flyInIdxs?: ReadonlySet<number> | null;
   flyInKey?: number;
+  persistKey?: string;
 }) {
-  const { camera } = useThree();
+  const { camera, invalidate } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
   const target = useMemo(() => new THREE.Vector3(0, Cm.h / 2, 0), [Cm.h]);
+  // True after we've restored a saved camera frame so the preset effect
+  // doesn't snap us back to iso on first mount.
+  const restoredRef = useRef(false);
+  // Internal preset version: bumped when the user clicks a preset so we
+  // know to apply it even if persistKey would otherwise suppress the move.
+  const presetAppliedRef = useRef<Preset | null>(null);
 
-  // Apply preset whenever it changes.
+  // Restore saved camera frame on mount (once per persistKey).
+  useEffect(() => {
+    if (!persistKey || typeof window === "undefined") return;
+    let raw: string | null = null;
+    try { raw = window.sessionStorage.getItem(persistKey); }
+    catch { return; }
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as {
+        position?: [number, number, number];
+        target?: [number, number, number];
+        zoom?: number;
+      };
+      const cam = camera as THREE.PerspectiveCamera;
+      if (saved.position) cam.position.set(...saved.position);
+      if (saved.zoom && Number.isFinite(saved.zoom)) {
+        cam.zoom = saved.zoom;
+        cam.updateProjectionMatrix();
+      }
+      if (saved.target) target.set(...saved.target);
+      controlsRef.current?.update?.();
+      restoredRef.current = true;
+      invalidate();
+    } catch {
+      /* corrupt entry — ignore */
+    }
+    // Only run on persistKey change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistKey]);
+
+  // Apply preset whenever it changes — but skip the very first run if we
+  // restored a saved frame (otherwise the user's remembered view is wiped).
   useEffect(() => {
     if (!camera) return;
+    // Skip first run when we have a restored frame and the preset hasn't
+    // changed since mount (still the initial "iso" default).
+    if (restoredRef.current && presetAppliedRef.current === null) {
+      presetAppliedRef.current = preset;
+      return;
+    }
+    presetAppliedRef.current = preset;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
       iso: new THREE.Vector3(Cm.l * 0.9, Cm.h * 1.4, Cm.w * 1.6),
@@ -357,9 +503,34 @@ function SceneContents({
       inside: new THREE.Vector3(-Cm.l / 2 + 0.5, Cm.h * 0.6, 0),
     };
     cam.position.copy(positions[preset]);
+    cam.zoom = 1;
+    cam.updateProjectionMatrix();
     cam.lookAt(preset === "inside" ? new THREE.Vector3(Cm.l / 2, Cm.h / 2, 0) : target);
     controlsRef.current?.update?.();
   }, [preset, Cm.l, Cm.w, Cm.h, camera, target]);
+
+  // Persist camera frame on every OrbitControls change (debounced).
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleControlsChange = () => {
+    if (!persistKey || typeof window === "undefined") return;
+    const cam = camera as THREE.PerspectiveCamera;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        window.sessionStorage.setItem(
+          persistKey,
+          JSON.stringify({
+            position: [cam.position.x, cam.position.y, cam.position.z],
+            target: [target.x, target.y, target.z],
+            zoom: cam.zoom,
+          }),
+        );
+      } catch { /* storage blocked — non-fatal */ }
+    }, 150);
+  };
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  }, []);
 
   // Doors stay open in the static scene ("ready to load").
   const doorOpen = 1;
@@ -395,6 +566,7 @@ function SceneContents({
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
+        onChange={handleControlsChange}
       />
 
       {/* Tarmac ground extending past the container — sells the "real yard" */}
@@ -1377,17 +1549,65 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
   );
 }
 
+/** Build a rounded-cone profile for a tied bag ear. Returns the lathe
+ *  points: a soft taper from base → middle → upper → tip with the tip
+ *  rounded over so the silhouette reads as fabric pinched together with
+ *  a string tie. Memoised by base radius / height in the caller. */
+function buildEarProfile(baseR: number, height: number): THREE.Vector2[] {
+  const tipY = height;
+  return [
+    new THREE.Vector2(0.001, 0),                       // start at axis (closed base)
+    new THREE.Vector2(baseR * 1.0,  height * 0.05),    // flare out at base
+    new THREE.Vector2(baseR * 0.85, height * 0.30),    // mid taper
+    new THREE.Vector2(baseR * 0.55, height * 0.55),    // pinch (tie point)
+    new THREE.Vector2(baseR * 0.65, height * 0.72),    // small bulge above tie
+    new THREE.Vector2(baseR * 0.30, height * 0.92),    // upper taper
+    new THREE.Vector2(0.001, tipY),                    // close at tip
+  ];
+}
+
 function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
   // Sack-style bag: a soft rounded box at the real L × H × W footprint, plus
-  // two small "ear" nubs at the top length-ends to suggest the tied / carry
-  // pinch-points of an industrial bag. Ears scale with the bag so they stay
-  // proportionate from a 25 kg cement sack to a 1-tonne FIBC.
+  // two tapered "ear" cones at the top length-ends suggesting the tied /
+  // pinch-point corners of an industrial bag. Ears scale with the bag so
+  // they stay proportionate from a 25 kg cement sack to a 1-tonne FIBC.
+  const { jute } = useContext(BagTextureContext);
   const minDim = Math.min(lm, hm, wm);
   const corner = Math.max(0.02, Math.min(minDim * 0.18, minDim * 0.45));
-  const earR = Math.max(0.015, Math.min(hm, wm) * 0.12);
-  const earOffsetX = lm / 2 - earR * 0.4; // tucked just inside the top edge
-  const earOffsetY = hm / 2 + earR * 0.55; // poking above the top face
+  const earBaseR = Math.max(0.015, Math.min(hm, wm) * 0.12);
+  const earHeight = Math.max(0.03, Math.min(hm, wm) * 0.22);
+  const earOffsetX = lm / 2 - earBaseR * 0.6; // tucked just inside the top edge
+  const earOffsetY = hm / 2;                  // base sits flush on top face
+  const tieY = earHeight * 0.55;              // tie band at the pinch
   const sackColor = color || "#c4a574";
+  const tieColor = "#5b4226";                 // tonally darker cord
+
+  // Procedural jute texture is built lazily and cached per colour.
+  const juteMap = useMemo(
+    () => (jute ? makeJuteTexture(sackColor) : null),
+    [jute, sackColor],
+  );
+  // Repeat scaling so the weave size stays plausible regardless of bag size.
+  const fabricMap = useMemo(() => {
+    if (!juteMap) return null;
+    const t = juteMap.clone();
+    t.wrapS = THREE.RepeatWrapping;
+    t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(Math.max(2, lm * 4), Math.max(2, hm * 4));
+    t.needsUpdate = true;
+    return t;
+  }, [juteMap, lm, hm]);
+
+  const earProfile = useMemo(
+    () => buildEarProfile(earBaseR, earHeight),
+    [earBaseR, earHeight],
+  );
+
+  // When jute is on we drop the colour tint to white so the texture's tones
+  // come through cleanly; otherwise keep the existing solid-colour material.
+  const bodyColor = jute ? "#ffffff" : sackColor;
+  const earColor = jute ? "#ffffff" : sackColor;
+
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       {/* Main sack body — rounded box at the bag's actual dimensions. */}
@@ -1400,30 +1620,35 @@ function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoin
         receiveShadow
       >
         <meshStandardMaterial
-          color={sackColor}
+          color={bodyColor}
+          map={fabricMap ?? undefined}
           roughness={0.95}
           metalness={0}
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
       </RoundedBox>
-      {/* Two carrying "ears" at the top length-ends. */}
+      {/* Two tapered ear-ties at the top length-ends. */}
       {[-1, 1].map((sign) => (
-        <mesh
-          key={sign}
-          position={[sign * earOffsetX, earOffsetY, 0]}
-          castShadow
-          receiveShadow
-        >
-          <sphereGeometry args={[earR, 12, 10]} />
-          <meshStandardMaterial
-            color={sackColor}
-            roughness={0.95}
-            metalness={0}
-            emissive={hovered ? tiltColor : "#000000"}
-            emissiveIntensity={hovered ? 0.25 : 0}
-          />
-        </mesh>
+        <group key={sign} position={[sign * earOffsetX, earOffsetY, 0]}>
+          {/* Lathed cone — fabric pinched into a tied tip. */}
+          <mesh castShadow receiveShadow>
+            <latheGeometry args={[earProfile, 18]} />
+            <meshStandardMaterial
+              color={earColor}
+              map={fabricMap ?? undefined}
+              roughness={0.95}
+              metalness={0}
+              emissive={hovered ? tiltColor : "#000000"}
+              emissiveIntensity={hovered ? 0.25 : 0}
+            />
+          </mesh>
+          {/* Thin "string" tie at the pinch point. */}
+          <mesh position={[0, tieY, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
+            <torusGeometry args={[earBaseR * 0.6, earBaseR * 0.09, 6, 14]} />
+            <meshStandardMaterial color={tieColor} roughness={0.7} metalness={0} />
+          </mesh>
+        </group>
       ))}
     </group>
   );
