@@ -1105,7 +1105,7 @@ function ConfirmPackingModal({
                       </Label>
                       <Select
                         value={it.packageType ?? "carton"}
-                        onValueChange={(v) => onUpdate(it.id, { packageType: v as PackageType })}
+                        onValueChange={(v) => onUpdate(it.id, withPackageTypeReset({ packageType: v as PackageType }))}
                       >
                         <SelectTrigger className="h-8 border-brand-navy/30 text-xs">
                           <SelectValue />
@@ -1145,20 +1145,36 @@ function ConfirmPackingModal({
                     checked={it.fragile === true}
                     onChange={(v) => onUpdate(it.id, { fragile: v })}
                   />
-                  <ToggleRow
-                    title="Can lay sideways"
-                    desc="Packer may rotate 90° on the floor (swap L↔W)."
-                    checked={it.allowSidewaysRotation !== false}
-                    onChange={(v) => onUpdate(it.id, { allowSidewaysRotation: v })}
-                  />
-                  {!it.fragile && (
-                    <ToggleRow
-                      title="Can stand on side"
-                      desc="Packer may tip it onto its side. Non-fragile only."
-                      checked={it.allowAxisRotation === true}
-                      onChange={(v) => onUpdate(it.id, { allowAxisRotation: v })}
-                    />
-                  )}
+                  {(() => {
+                    const policy = getRotationPolicy(it.packageType);
+                    const sidewaysDisabled = !policy.canSideways;
+                    const axisDisabled = !policy.canAxis || it.fragile === true;
+                    const axisReason = !policy.canAxis
+                      ? policy.axisReason
+                      : it.fragile
+                        ? "Fragile cargo cannot tip onto a side."
+                        : undefined;
+                    return (
+                      <>
+                        <ToggleRow
+                          title="Can lay sideways (90° L↔W)"
+                          desc="Packer may rotate 90° on the floor (swap length and width)."
+                          checked={!sidewaysDisabled && it.allowSidewaysRotation === true}
+                          onChange={(v) => onUpdate(it.id, { allowSidewaysRotation: v })}
+                          disabled={sidewaysDisabled}
+                          disabledReason={policy.sidewaysReason}
+                        />
+                        <ToggleRow
+                          title="Can stand on side (tip H↔L/W)"
+                          desc="Packer may tip it onto its side to fill upper headroom."
+                          checked={!axisDisabled && it.allowAxisRotation === true}
+                          onChange={(v) => onUpdate(it.id, { allowAxisRotation: v })}
+                          disabled={axisDisabled}
+                          disabledReason={axisReason}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             );
