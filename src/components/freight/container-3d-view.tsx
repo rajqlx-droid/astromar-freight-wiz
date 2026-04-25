@@ -5,8 +5,6 @@
  * - Translucent container walls so cargo is always visible.
  * - Soft shadows + ambient lighting.
  * - Exposes a snapshot API (via ref) returning PNG dataURLs for the PDF.
- * - Exposes a frame-recording API (applyFrame / render / getCanvas) used by
- *   the loading-video generator.
  *
  * Lazy-loaded by container-load-view.tsx (client-only).
  */
@@ -21,30 +19,14 @@ import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
 import type { RowGroup } from "@/lib/freight/loading-rows";
-import {
-  buildTimeline,
-  cameraInfoForFrame,
-  stagingForFrame,
-  transformsForFrame,
-  type Timeline,
-  type VideoFrameInfo,
-} from "@/lib/freight/loading-video";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
 export interface Container3DHandle {
   /** Capture a PNG dataURL from each preset angle. Used by PDF export. */
   captureAngles: () => Promise<{ iso: string; front: string; side: string }>;
-  /** Frame-level recording controls used by the loading-video generator. */
-  beginRecording: (fps: number, durationSec: number) => Timeline;
-  endRecording: () => void;
-  applyFrame: (info: VideoFrameInfo) => void;
   render: () => void;
   getCanvas: () => HTMLCanvasElement | null;
-  /** Temporarily resize the WebGL drawing buffer (for HD video capture). */
-  setRenderSize: (width: number, height: number) => void;
-  /** Restore the renderer's drawing buffer to match the on-screen canvas size. */
-  restoreRenderSize: () => void;
 }
 
 interface Props {
@@ -123,8 +105,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
-  const [recordingTimeline, setRecordingTimeline] = useState<Timeline | null>(null);
-  const [currentFrame, setCurrentFrame] = useState(0);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -172,24 +152,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
       gl.render(scene, cam);
       return angles;
     },
-    beginRecording(fps: number, durationSec: number) {
-      const t = buildTimeline(pack, fps, durationSec);
-      setRecordingTimeline(t);
-      setCurrentFrame(0);
-      return t;
-    },
-    endRecording() {
-      setRecordingTimeline(null);
-      setCurrentFrame(0);
-    },
-    applyFrame(info: VideoFrameInfo) {
-      setCurrentFrame(info.frame);
-      const cam = cameraRef.current;
-      if (!cam || !recordingTimeline) return;
-      const camInfo = cameraInfoForFrame(pack, recordingTimeline, info.frame);
-      cam.position.set(...camInfo.position);
-      cam.lookAt(...camInfo.target);
-    },
     render() {
       const gl = glRef.current;
       const scene = sceneRef.current;
@@ -198,26 +160,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     },
     getCanvas() {
       return glRef.current?.domElement ?? null;
-    },
-    setRenderSize(width: number, height: number) {
-      const gl = glRef.current;
-      const cam = cameraRef.current;
-      if (!gl || !cam) return;
-      // false = don't update CSS size; keep on-screen layout stable.
-      gl.setSize(width, height, false);
-      cam.aspect = width / height;
-      cam.updateProjectionMatrix();
-    },
-    restoreRenderSize() {
-      const gl = glRef.current;
-      const cam = cameraRef.current;
-      if (!gl || !cam) return;
-      const el = gl.domElement;
-      const w = el.clientWidth || el.width;
-      const h = el.clientHeight || el.height;
-      gl.setSize(w, h, false);
-      cam.aspect = w / h;
-      cam.updateProjectionMatrix();
     },
   }));
 
@@ -254,8 +196,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             pack={pack}
             Cm={Cm}
             preset={preset}
-            recording={recordingTimeline}
-            frame={currentFrame}
             shufflePreview={shufflePreview}
             visiblePlacedSet={visiblePlacedSet}
             hideDoors={hideDoors}
@@ -427,8 +367,6 @@ function SceneContents({
   pack,
   Cm,
   preset,
-  recording,
-  frame,
   shufflePreview,
   visiblePlacedSet,
   hideDoors,
@@ -444,8 +382,6 @@ function SceneContents({
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
-  recording: Timeline | null;
-  frame: number;
   shufflePreview: Map<number, number> | null;
   visiblePlacedSet: Set<number> | null;
   hideDoors: boolean;
@@ -466,9 +402,9 @@ function SceneContents({
   const activeBox = activePalletIdx != null ? pack.placed[activePalletIdx] ?? null : null;
   const nextBox = nextPalletIdx != null ? pack.placed[nextPalletIdx] ?? null : null;
 
-  // Apply preset only when not recording AND not in follow-cam mode.
+  // Apply preset only when not in follow-cam mode.
   useEffect(() => {
-    if (recording || followCam) return;
+    if (followCam) return;
     if (!camera) return;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
@@ -481,21 +417,10 @@ function SceneContents({
     cam.position.copy(positions[preset]);
     cam.lookAt(preset === "inside" ? new THREE.Vector3(Cm.l / 2, Cm.h / 2, 0) : target);
     controlsRef.current?.update?.();
-  }, [preset, Cm.l, Cm.w, Cm.h, camera, target, recording]);
+  }, [preset, Cm.l, Cm.w, Cm.h, camera, target]);
 
-  // Per-frame transforms (only when recording).
-  const transforms = useMemo(
-    () =>
-      recording ? transformsForFrame(pack, recording, frame) : null,
-    [recording, pack, frame],
-  );
-  const staging = useMemo(
-    () => (recording ? stagingForFrame(pack, recording, frame) : null),
-    [recording, pack, frame],
-  );
-  // When NOT recording, leave doors fully open so the static scene reads as
-  // "ready to load" (matches the new realistic shell).
-  const doorOpen = staging?.doorOpen ?? 1;
+  // Doors stay open in the static scene ("ready to load").
+  const doorOpen = 1;
 
   return (
     <>
@@ -519,7 +444,6 @@ function SceneContents({
       <InvalidateOnChange
         deps={[
           preset,
-          recording ? frame : -1,
           flyInPlacedSet ? flyInPlacedSet.size : 0,
           flyInKey,
           activePalletIdx ?? -1,
@@ -531,7 +455,6 @@ function SceneContents({
           hideDoors ? 1 : 0,
         ]}
         animate={
-          !!recording ||
           followCam ||
           (flyInPlacedSet?.size ?? 0) > 0 ||
           nextPalletIdx != null ||
@@ -543,14 +466,14 @@ function SceneContents({
         ref={controlsRef}
         target={target}
         enablePan
-        enabled={!recording && !followCam}
+        enabled={!followCam}
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
 
       {/* Follow camera — drives camera & target every frame when active */}
-      {followCam && !recording && (
+      {followCam && (
         <FollowCam Cm={Cm} activeBox={activeBox} />
       )}
       {/* Tarmac ground extending past the container — sells the "real yard" */}
@@ -584,34 +507,26 @@ function SceneContents({
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {(() => {
-          // Render edge outlines for jobs up to 200 boxes — the per-box
-          // edge cost is small and the visible seams matter more once
-          // cartons sit flush against each other (no enforced gap rule).
-          const showEdges = pack.placed.length <= 200;
+          // Always show edge outlines so individual cartons stay visually
+          // distinct even when packed flush against each other (no enforced
+          // gap rule). Edge geometry is cheap and the visible seam matters.
+          const showEdges = true;
           return pack.placed.map((b, i) => {
-            const t = transforms?.[i];
-            if (recording && t && !t.visible) return null;
             // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
             if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
-            // Combine per-frame transform offset (recording) with the shuffle
-            // preview offset (applied to scene-z, the container width axis).
+            // Apply the shuffle preview offset (scene-z, container width axis).
             const shuffleZ = shufflePreview?.get(i) ?? 0;
-            const offset: [number, number, number] = [
-              t?.offset[0] ?? 0,
-              t?.offset[1] ?? 0,
-              (t?.offset[2] ?? 0) + shuffleZ,
-            ];
-            const isPreviewed = !recording && shuffleZ !== 0;
-            const flyIn = !recording && !!flyInPlacedSet?.has(i);
-            const isActivePallet = !recording && i === activePalletIdx;
-            const isNearCeiling = !recording && (nearCeilingPlacedIdxs?.includes(i) ?? false);
+            const offset: [number, number, number] = [0, 0, shuffleZ];
+            const isPreviewed = shuffleZ !== 0;
+            const flyIn = !!flyInPlacedSet?.has(i);
+            const isActivePallet = i === activePalletIdx;
+            const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
             return (
               <CargoBox
                 key={i}
                 box={b}
                 stat={pack.perItem[b.itemIdx]}
                 offset={offset}
-                scale={t?.scale}
                 previewHighlight={isPreviewed}
                 flyIn={flyIn}
                 flyInKey={flyInKey}
@@ -625,39 +540,32 @@ function SceneContents({
           });
         })()}
         {/* Pulsing yellow target outline at the NEXT pallet's slot */}
-        {!recording && nextBox && (
+        {nextBox && (
           <NextPalletTarget box={nextBox} />
         )}
         {/* Gap heatmap overlay — translucent red rectangles on the floor and
-            back wall of the active row's slice. Hidden during recording so
-            video frames stay clean. */}
-        {!recording && gapHeatmapRow && (
+            back wall of the active row's slice. */}
+        {gapHeatmapRow && (
           <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
         )}
-        {/* Forklift visuals removed per user request — cargo loads directly
-            into its slot without a forklift token in the 3D view or video. */}
       </group>
 
-      {/* Dimension labels — hidden during recording for clean video frames */}
-      {!recording && (
-        <>
-          <Html position={[0, -0.2, Cm.w / 2 + 0.3]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-              {(Cm.l).toFixed(2)} m
-            </span>
-          </Html>
-          <Html position={[Cm.l / 2 + 0.3, -0.2, 0]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-              {(Cm.w).toFixed(2)} m
-            </span>
-          </Html>
-          <Html position={[-Cm.l / 2 - 0.3, Cm.h / 2, -Cm.w / 2]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-              {(Cm.h).toFixed(2)} m
-            </span>
-          </Html>
-        </>
-      )}
+      {/* Dimension labels */}
+      <Html position={[0, -0.2, Cm.w / 2 + 0.3]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+          {(Cm.l).toFixed(2)} m
+        </span>
+      </Html>
+      <Html position={[Cm.l / 2 + 0.3, -0.2, 0]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+          {(Cm.w).toFixed(2)} m
+        </span>
+      </Html>
+      <Html position={[-Cm.l / 2 - 0.3, Cm.h / 2, -Cm.w / 2]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+          {(Cm.h).toFixed(2)} m
+        </span>
+      </Html>
     </>
   );
 }
@@ -1253,7 +1161,7 @@ function CargoBox({
   });
 
   return (
-    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale * 0.99}>
+    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>

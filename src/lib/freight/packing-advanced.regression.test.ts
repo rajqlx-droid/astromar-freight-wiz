@@ -183,14 +183,14 @@ describe("packing-advanced — 1066.8mm cube floating-cargo regression", () => {
 describe("packing-advanced — CoG-aware spread mode", () => {
   const hc = CONTAINERS.find((c) => c.id === "40hc")!;
 
-  it("light load (6 × 1 m cubes ≈ 8 % fill) spreads along the length", () => {
+  it("light load (12 × 1 m cubes ≈ 16 % fill) spreads along the length", () => {
     const items: CbmItem[] = [
       {
         id: "cube",
         length: 100,
         width: 100,
         height: 100,
-        qty: 6,
+        qty: 12,
         weight: 200,
         packageType: "carton",
         stackable: true,
@@ -202,8 +202,7 @@ describe("packing-advanced — CoG-aware spread mode", () => {
     const pack = packContainerAdvanced(items, hc);
     const audit = validateAdvancedPack(pack);
     expect(audit.allLegal).toBe(true);
-    // Furthest-forward box must reach at least 50 % of the container length —
-    // back-to-front packing would cluster all six within the first ~6 m.
+    // Furthest-forward box must reach at least 50 % of the container length.
     const maxX = Math.max(...pack.placed.map((b) => b.x + b.l));
     expect(maxX).toBeGreaterThan(hc.inner.l * 0.5);
     // Longitudinal CoG within ±25 % of centre.

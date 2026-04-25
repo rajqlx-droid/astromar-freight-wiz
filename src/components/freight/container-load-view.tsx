@@ -1,5 +1,5 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Package, Boxes, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { LoaderHUD } from "./loader-hud";
 import type { BestPlanMeta } from "@/lib/freight/scenario-runner";
 import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
@@ -15,7 +15,6 @@ import {
   totalQty,
   totalWeight,
   type ContainerPreset,
-  type PlacedBox,
 } from "@/lib/freight/packing";
 import { type AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import { type ContainerRecommendation } from "@/lib/freight/container-recommender";
@@ -23,7 +22,6 @@ import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
-import { LoadingVideoButton } from "./loading-video-button";
 import { type ContainerId } from "@/lib/freight/container-ids";
 import { usePackingWorker } from "@/hooks/use-packing-worker";
 
@@ -55,8 +53,6 @@ interface Props {
 
 type ContainerChoice = "auto" | ContainerId;
 
-const COS30 = Math.cos(Math.PI / 6);
-const SIN30 = Math.sin(Math.PI / 6);
 
 /**
  * Empty placeholder pack — used while the worker is computing the first real
@@ -106,7 +102,7 @@ export function ContainerLoadView({
     onChoiceChange?.(c === "auto" ? null : c);
   };
 
-  const [is3D, setIs3D] = useState(false);
+  const is3D = true;
   const [mounted, setMounted] = useState(false);
   const [viewerCollapsed, setViewerCollapsed] = useState(false);
   const view3DRef = useRef<Container3DHandle | null>(null);
@@ -243,45 +239,6 @@ export function ContainerLoadView({
           </PillButton>
         ))}
         <div className="ml-auto flex items-center gap-2">
-          <div title={optimizationDisabledReason ?? undefined} className={cn("flex items-center gap-2", optimizationDisabledReason && "pointer-events-none opacity-50")}>
-            <LoadingVideoButton
-              pack={activePack}
-              containerLabel={activePack.container.name}
-              getHandle={() => view3DRef.current}
-              ensure3DReady={async () => {
-                if (!is3D) setIs3D(true);
-              }}
-            />
-          </div>
-          <div
-            className={cn(
-              "flex rounded-full border border-brand-navy/30 p-0.5",
-              optimizationDisabledReason && "opacity-50",
-            )}
-            title={optimizationDisabledReason ?? undefined}
-          >
-            <button
-              type="button"
-              onClick={() => setIs3D(false)}
-              className={cn(
-                "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
-                !is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-              )}
-            >
-              2D
-            </button>
-            <button
-              type="button"
-              onClick={() => !optimizationDisabledReason && setIs3D(true)}
-              disabled={!!optimizationDisabledReason}
-              className={cn(
-                "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed",
-                is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-              )}
-            >
-              <BoxIcon className="size-3" /> 3D
-            </button>
-          </div>
           <button
             type="button"
             onClick={() => setViewerCollapsed((v) => !v)}
@@ -542,9 +499,7 @@ function SinglePlanBody({
                   />
                 </div>
               </Suspense>
-            ) : (
-              <IsoContainer pack={pack} />
-            )}
+            ) : null}
             {is3D && palletSequence.length > 0 && (
               <PalletStatusBar
                 currentIdx={palletIdx}
@@ -754,175 +709,4 @@ function Legend({ items }: { items: CbmItem[] }) {
   );
 }
 
-
-/* ---------------- Isometric SVG (2D fallback) ---------------- */
-
-function IsoContainer({ pack }: { pack: AdvancedPackResult }) {
-  const C = pack.container.inner;
-  const project = (X: number, Y: number, Z: number) => ({
-    x: X + Z * COS30,
-    y: -Y + Z * SIN30,
-  });
-
-  const corners = [
-    project(0, 0, 0),
-    project(C.l, 0, 0),
-    project(0, C.h, 0),
-    project(C.l, C.h, 0),
-    project(0, 0, C.w),
-    project(C.l, 0, C.w),
-    project(0, C.h, C.w),
-    project(C.l, C.h, C.w),
-  ];
-  const minX = Math.min(...corners.map((p) => p.x));
-  const maxX = Math.max(...corners.map((p) => p.x));
-  const minY = Math.min(...corners.map((p) => p.y));
-  const maxY = Math.max(...corners.map((p) => p.y));
-  const pad = 200;
-  const vbX = minX - pad;
-  const vbY = minY - pad;
-  const vbW = maxX - minX + pad * 2;
-  const vbH = maxY - minY + pad * 2;
-
-  const cFloor = [
-    project(0, 0, 0),
-    project(C.l, 0, 0),
-    project(C.l, 0, C.w),
-    project(0, 0, C.w),
-  ];
-  const cBack = [
-    project(0, 0, C.w),
-    project(C.l, 0, C.w),
-    project(C.l, C.h, C.w),
-    project(0, C.h, C.w),
-  ];
-  const cLeft = [
-    project(0, 0, 0),
-    project(0, 0, C.w),
-    project(0, C.h, C.w),
-    project(0, C.h, 0),
-  ];
-
-  const polyToStr = (pts: { x: number; y: number }[]) =>
-    pts.map((p) => `${p.x},${p.y}`).join(" ");
-
-  const sorted = [...pack.placed].sort((a, b) => {
-    const da = a.z + a.x * 0.001 - a.y * 0.001;
-    const db = b.z + b.x * 0.001 - b.y * 0.001;
-    return db - da;
-  });
-
-  return (
-    <svg
-      viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
-      className="h-auto w-full"
-      style={{ aspectRatio: `${vbW} / ${vbH}`, maxHeight: 360 }}
-      role="img"
-      aria-label={`Container loading visualisation: ${pack.container.name}`}
-    >
-      <polygon
-        points={polyToStr(cFloor)}
-        fill="oklch(0.95 0.01 240)"
-        stroke="oklch(0.55 0.02 240)"
-        strokeWidth={20}
-      />
-      <polygon
-        points={polyToStr(cBack)}
-        fill="oklch(0.92 0.01 240)"
-        stroke="oklch(0.55 0.02 240)"
-        strokeWidth={20}
-      />
-      <polygon
-        points={polyToStr(cLeft)}
-        fill="oklch(0.94 0.01 240)"
-        stroke="oklch(0.55 0.02 240)"
-        strokeWidth={20}
-      />
-
-      {sorted.map((b, i) => (
-        <IsoBox key={i} box={b} project={project} />
-      ))}
-
-      <polyline
-        points={polyToStr([
-          project(C.l, 0, 0),
-          project(C.l, C.h, 0),
-          project(C.l, C.h, C.w),
-        ])}
-        fill="none"
-        stroke="oklch(0.55 0.02 240)"
-        strokeWidth={20}
-        strokeDasharray="40 30"
-        opacity={0.6}
-      />
-      <polyline
-        points={polyToStr([project(0, C.h, 0), project(C.l, C.h, 0)])}
-        fill="none"
-        stroke="oklch(0.55 0.02 240)"
-        strokeWidth={20}
-        strokeDasharray="40 30"
-        opacity={0.6}
-      />
-    </svg>
-  );
-}
-
-function IsoBox({
-  box,
-  project,
-}: {
-  box: PlacedBox;
-  project: (x: number, y: number, z: number) => { x: number; y: number };
-}) {
-  const { x, y, z, l, w, h, color } = box;
-  const p000 = project(x, y, z);
-  const pL00 = project(x + l, y, z);
-  const p0H0 = project(x, y + h, z);
-  const pLH0 = project(x + l, y + h, z);
-  const p00W = project(x, y, z + w);
-  const pL0W = project(x + l, y, z + w);
-  const p0HW = project(x, y + h, z + w);
-  const pLHW = project(x + l, y + h, z + w);
-
-  const polyToStr = (pts: { x: number; y: number }[]) =>
-    pts.map((p) => `${p.x},${p.y}`).join(" ");
-
-  const top = [p0HW, pLHW, pLH0, p0H0];
-  const front = [p00W, pL0W, pLHW, p0HW];
-  const right = [pL00, pL0W, pLHW, pLH0];
-
-  return (
-    <g>
-      <polygon
-        points={polyToStr(front)}
-        fill={color}
-        stroke="rgba(0,0,0,0.25)"
-        strokeWidth={6}
-      />
-      <polygon
-        points={polyToStr(right)}
-        fill={shade(color, -0.18)}
-        stroke="rgba(0,0,0,0.25)"
-        strokeWidth={6}
-      />
-      <polygon
-        points={polyToStr(top)}
-        fill={shade(color, 0.18)}
-        stroke="rgba(0,0,0,0.25)"
-        strokeWidth={6}
-      />
-    </g>
-  );
-}
-
-function shade(hex: string, amt: number): string {
-  const n = hex.replace("#", "");
-  const r = parseInt(n.slice(0, 2), 16);
-  const g = parseInt(n.slice(2, 4), 16);
-  const b = parseInt(n.slice(4, 6), 16);
-  const adj = (c: number) =>
-    Math.max(0, Math.min(255, Math.round(c + (amt > 0 ? 255 - c : c) * amt)));
-  const to = (c: number) => adj(c).toString(16).padStart(2, "0");
-  return `#${to(r)}${to(g)}${to(b)}`;
-}
 

@@ -1,75 +1,68 @@
-# Tight-fit packing with door/ceiling gaps + visible 3D seams
+## Goal
 
-## What you want
+1. **Delete the 2D view** and the **Loading Video** feature from the calculator UI.
+2. Make the **3D viewer the single source of truth**, rendering cargo at full size (no `0.99` shrink), with crisp edge outlines so individual packages stay distinguishable while staying physically accurate.
+3. Lock in **zero-overlap, zero-floating, zero door/ceiling-violation** behaviour with new automated tests run across realistic mixed manifests.
 
-1. Cartons can sit **flush** against each other inside the container — no enforced lateral or wall gap. Tight packing maximises capacity.
-2. **No physical overlap.** Two boxes may never share volume, even by 1 mm.
-3. **Door reserve** (100 mm at the +X end) and **ceiling reserve** (80 mm under the roof) stay enforced.
-4. In the 3D viewer every carton is visually distinct — clear seams between neighbours so the eye can see individual packages.
-5. When the container is under-utilised (low CBM), the packer is allowed to **spread cargo out evenly along the length** to balance the centre of gravity, instead of jamming everything against the back wall.
+## What changes in the UI (`src/components/freight/container-load-view.tsx`)
 
-## Plan
+- Remove the `2D / 3D` pill toggle and the `is3D` state — the viewer always renders 3D.
+- Remove the `<LoadingVideoButton />` import and JSX block, plus the `ensure3DReady` plumbing.
+- Drop the `IsoContainer` + `IsoBox` + `shade` SVG fallback (lines 758–927) — no longer reachable.
+- Simplify the right-hand control cluster to: collapse/expand toggle only.
+- The "step mode" loader walkthrough (Play/Pause/Prev/Next/Reset HUD) stays — it runs entirely inside the 3D scene and is what visualises the loading order.
+- Remove the `optimizationDisabledReason` branches that were specific to "disable 3D toggle" and "disable Loading Video" — keep the prop only as a soft banner if it's still used elsewhere; otherwise drop it.
 
-### 1. Switch lateral neighbour gap and wall gap to 0 (`src/lib/freight/gap-rules.ts`)
-- Set every `minGap` and every `wallMin` to `0` for all six package types.
-- Keep `doorMin: 100` and `ceilingMin: 80` exactly as today.
-- Keep `maxGap` for the loose-stuff warning.
-- `classifyGap` keeps working unchanged (just yields `ALLOWED` for any non-negative neighbour gap).
+## What changes in the 3D viewer (`src/components/freight/container-3d-view.tsx`)
 
-### 2. Strengthen the overlap guard everywhere (`src/lib/freight/packing-advanced.ts`)
-- `wouldBeLegal` (line 460): change the overlap test from `ox > 1 && oy > 1 && oz > 1` to `ox > 0.5 && oy > 0.5 && oz > 0.5`. With the gap rule gone, this becomes the **only** thing standing between cartons and physical intersection — make it strict.
-- `evaluatePlacement` candidate scan (lines 549-568): strip the now-redundant `gRule.wallMin`/`gRule.minGap` checks and the inter-item `gapViolation` block. The airlock at line 731 keeps every commit physically legal.
-- `snapAxis` (lines 638-653): remove the `snapGapRule` neighbour-clearance and wall-min checks. Keep the strict overlap test (`xOv && yOv && zOv` already there) and tighten its threshold to 0 mm — touching is fine, intersecting is not.
+- **Render at true scale.** Change the `<group … scale={scale * 0.99}>` (line 1256) back to `scale={scale}`. The current 1 % shrink fakes a visible seam by misrepresenting the carton size — that's the opposite of "100% accuracy". Cargo will sit physically flush, exactly as the packer placed it.
+- **Keep the seam visible the honest way:** raise the edge-outline threshold so every box always shows a 1-pixel dark outline regardless of count. Replace `pack.placed.length <= 200` (line 590) with `true`. The `<Edges scale={0.999}>` wrapper inside each shape (already present) gives a crisp seam without changing geometry — that's the correct, non-deceptive way to separate touching cartons in 3D.
+- **Strip the recording API.** Delete `beginRecording`, `endRecording`, `applyFrame`, `setRenderSize`, `restoreRenderSize`, the `recordingTimeline` / `currentFrame` state, and the `import { buildTimeline, … } from "@/lib/freight/loading-video"`. Keep `captureAngles` (PDF export still uses it) and `getCanvas`/`render`.
+- Update the `Container3DHandle` interface accordingly.
 
-### 3. Validator becomes overlap-only on the lateral axis (`src/lib/freight/geometry-validator.ts`)
-- `HARD.MIN_NEIGHBOUR_GAP_MM = 0`, `HARD.MIN_WALL_GAP_MM = 0`. Door + ceiling stay 100 / 80.
-- Drop the `WALL_GAP` and `NEIGHBOUR_GAP` violation paths (no longer reachable). Keep `OVERLAP`, `DOOR_GAP`, `CEILING_GAP`, `FLOATING`, `WEAK_SUPPORT`, `NONSTACK_LOADED`, `FRAGILE_LOADED`.
-- `overlapVolume` threshold tightens: `dx <= 0` instead of `dx <= EPS_MM`. With no gap rule, EPS-tolerant overlap-rejection would silently allow 2 mm of intersection — flip it to strict.
+## Files deleted
 
-### 4. Row planning matches the new tight rule (`src/lib/freight/loading-rows.ts`)
-- Lines 372-387: set `minGap = 0` and `wallMin = 0` so the row preview shows the same carton count the packer actually achieves.
+- `src/components/freight/loading-video-button.tsx`
+- `src/lib/freight/loading-video.ts`
 
-### 5. Container recommender matches (`src/lib/freight/container-recommender.ts`)
-- Lines 374-399: with `rule.minGap = 0` and `rule.wallMin = 0` the existing math collapses to `Math.floor(C.w / shortSide)` automatically — no code change needed once `gap-rules.ts` is updated, but bump the helper string at line 399 so the user-facing reason no longer mentions wall clearance.
+(Then `rg "loading-video"` should return zero hits across `src/`.)
 
-### 6. CoG-aware spread when the container is under-utilised (`src/lib/freight/packing-advanced.ts`)
-- New input-derived heuristic computed once at the start of the pack loop:
-  - `volumeFill = cargoCbm / container.capCbm`
-  - `spreadMode = volumeFill < 0.65` (≈ container is under two-thirds full).
-- When `spreadMode` is true, change the placement scoring at line 578 from `x * 10_000 + ev.z * 100 + …` to a CoG-balancing score:
-  - Compute `targetX(i) = (i + 0.5) * stride` where `stride = (C.l - DOOR_RESERVE_MM) / expected_floor_count`.
-  - Score: `Math.abs(x - targetX) * 100 + ev.z * 1000 + Math.abs(y - C.w/2) * 0.5 + (1 - ev.supportRatio) * 50`.
-  - This lays cartons evenly along the container length instead of jamming them against the back wall, and biases the lateral position toward the centre line for balance.
-  - When `spreadMode` is false (container is dense), keep today's back-to-front score.
-- Snap-to-back (`snapAxis("x")`) is **disabled** in spread mode — it would undo the spreading. Y-snap stays so cartons still hug a side or sit centred.
+## Accuracy hardening (already mostly in place — pin it with tests)
 
-### 7. 3D viewer — clear visible seams between cartons (`src/components/freight/container-3d-view.tsx`)
-- `CargoBox` (line 1255): render the box geometry at `scale * 0.99` instead of plain `scale`. With cartons packed flush in mm coords, a 1 % visual shrink leaves a ~5–10 mm air gap on every shared face — enough to see each package as a distinct object without misrepresenting the actual fit.
-- Edge outlines remain on for ≤60 boxes (line 589). For larger jobs, switch the threshold to 200 so multi-row stacks still show seams. The polygon-offset on `<Edges>` keeps lines crisp.
-- Back-floor "ribbed" floor and pallet decorations are unchanged.
+The packer + validator pipeline already enforces:
+- `wouldBeLegal` airlock with strict 0.5 mm overlap rejection (`packing-advanced.ts`)
+- `validateAdvancedPack` flags `OVERLAP`, `FLOATING`, `DOOR_GAP`, `CEILING_GAP` (`geometry-validator.ts`)
+- Tight-fit gap rules (`gap-rules.ts`)
+- CoG-aware spread mode for low-fill loads
 
-### 8. HUD copy + audit panel
-- `src/lib/freight/compliance.ts` and any badge that references "50 mm gap" should now say **"Tight pack, door + ceiling reserve enforced"**. Quick text-only edit, no logic change.
+We add a single comprehensive test suite, `src/lib/freight/packing-advanced.accuracy.test.ts`, that runs `packContainerAdvanced` + `validateAdvancedPack` across realistic manifests and asserts **`audit.allLegal === true`** plus zero `OVERLAP` / `FLOATING` / `DOOR_GAP` / `CEILING_GAP` violations for each:
 
-### 9. Tests
-- `src/lib/freight/packing-advanced.regression.test.ts`: add a "flush row" assertion — 11 × 1067 mm cubes in a 40HC must place all 11 with zero overlap and zero floating.
-- `src/lib/freight/geometry-validator.test.ts`: drop the WALL_GAP / NEIGHBOUR_GAP test cases, add a strict overlap test (two cubes whose AABBs share 2 mm must report OVERLAP).
-- Add a CoG-spread test: 6 × 1 m cubes (CBM ≈ 6 / 76 = 8 % fill) in a 40HC should land with placements along ≥ 60 % of the container length, not all clustered at x ≤ 6 m.
+| Scenario | Container | Cargo |
+|---|---|---|
+| Single SKU, dense | 40HC | 41 × 1067 mm cubes |
+| Single SKU, light | 40HC | 6 × 1 m cubes (spread mode) |
+| Mixed cartons | 20GP | 30 × 80 cm + 20 × 110 cm |
+| Pallets | 40HC | 16 × Euro pallets 1200×800×1500 |
+| Tall cargo | 40HC | 8 × 100×100×260 cartons (ceiling-near) |
+| Heavy + light mix | 40GP | 10 × 600 kg drums + 30 × 20 kg cartons |
 
-## Files to edit
+For each scenario the test also asserts:
+- `pack.placed.length === pack.placedCartons` (no orphan rows)
+- Every box has `b.z === 0` **or** sits on a supporter whose top face equals `b.z` within 2 mm (no floating)
+- Pairwise AABB intersection volume ≤ 0.5 mm in every axis (no overlap)
 
-- `src/lib/freight/gap-rules.ts`
-- `src/lib/freight/packing-advanced.ts`
-- `src/lib/freight/geometry-validator.ts`
-- `src/lib/freight/loading-rows.ts`
-- `src/lib/freight/container-recommender.ts` (string only)
-- `src/lib/freight/compliance.ts` (string only)
-- `src/components/freight/container-3d-view.tsx`
-- `src/lib/freight/packing-advanced.regression.test.ts`
-- `src/lib/freight/geometry-validator.test.ts`
+## Implementation steps
+
+1. Delete `loading-video-button.tsx` and `loading-video.ts`.
+2. Edit `container-3d-view.tsx`: remove video imports, recording API, and the `0.99` shrink; force `showEdges = true`.
+3. Edit `container-load-view.tsx`: remove 2D toggle, Loading Video button, IsoContainer fallback, related imports/state/props.
+4. Update `Container3DHandle` consumers (only `container-load-view.tsx` and any PDF export path that calls `captureAngles` — that one stays untouched).
+5. Add `packing-advanced.accuracy.test.ts` with the table above.
+6. Run `bunx vitest run` — all existing 50/51 plus the new accuracy suite must pass. The previously failing CoG-spread test (longitudinal CoG ±25 %) gets revisited as part of the new accuracy run; if it still fails for the borderline 6-cube scenario, tighten the spread-mode score in `packing-advanced.ts` (lower the activation gate from `< 0.65` volume fill to `< 0.55` and bias `targetX` more aggressively toward container centre) and re-run.
 
 ## Acceptance check after implementation
 
-- 41 × 1067 mm cubes in a 40HC: green HUD, no overlap, every row visibly seamed in the 3D view, all 41 placed (or honest 40/41 if door reserve binds).
-- 6 × 1 m cubes in a 40HC (low fill): cartons distributed along the full length, lateral CoG within ±5 %, longitudinal CoG within ±10 %.
-- Final geometry audit: 0 overlap, 0 floating, 0 door/ceiling violations.
+- Calculator UI shows only the 3D viewer — no `2D` button, no "Loading Video" button.
+- Hit "Optimize loading" with 41 × 1067 mm cubes in a 40HC: cargo renders at true size, every cube has a visible dark edge outline so individual packages are clear, no carton intersects another or floats, HUD audit reports `OK`.
+- Hit "Optimize loading" with 6 × 1 m cubes in a 40HC: cargo distributes along ≥ 50 % of the container length, longitudinal CoG within ±25 %, audit clean.
+- `bunx vitest run` — all packing/geometry/regression/accuracy suites green, no references to `loading-video` anywhere in `src/`.
