@@ -1518,6 +1518,7 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, o
   const crateColor = color || "#a07a4e";
   const slatColor = "#5a3d20";
   const slatThk = Math.min(lm, wm) * 0.06;
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(crateColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <mesh castShadow receiveShadow>
@@ -1530,8 +1531,13 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, o
           emissiveIntensity={hovered ? 0.25 : 0}
         />
         {showEdges && (
-          <Edges scale={0.999} color="#3a2818">
-            <lineBasicMaterial color="#3a2818" />
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
           </Edges>
         )}
       </mesh>
