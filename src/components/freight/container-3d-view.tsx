@@ -5,8 +5,6 @@
  * - Translucent container walls so cargo is always visible.
  * - Soft shadows + ambient lighting.
  * - Exposes a snapshot API (via ref) returning PNG dataURLs for the PDF.
- * - Exposes a frame-recording API (applyFrame / render / getCanvas) used by
- *   the loading-video generator.
  *
  * Lazy-loaded by container-load-view.tsx (client-only).
  */
@@ -21,30 +19,14 @@ import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
 import type { RowGroup } from "@/lib/freight/loading-rows";
-import {
-  buildTimeline,
-  cameraInfoForFrame,
-  stagingForFrame,
-  transformsForFrame,
-  type Timeline,
-  type VideoFrameInfo,
-} from "@/lib/freight/loading-video";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
 export interface Container3DHandle {
   /** Capture a PNG dataURL from each preset angle. Used by PDF export. */
   captureAngles: () => Promise<{ iso: string; front: string; side: string }>;
-  /** Frame-level recording controls used by the loading-video generator. */
-  beginRecording: (fps: number, durationSec: number) => Timeline;
-  endRecording: () => void;
-  applyFrame: (info: VideoFrameInfo) => void;
   render: () => void;
   getCanvas: () => HTMLCanvasElement | null;
-  /** Temporarily resize the WebGL drawing buffer (for HD video capture). */
-  setRenderSize: (width: number, height: number) => void;
-  /** Restore the renderer's drawing buffer to match the on-screen canvas size. */
-  restoreRenderSize: () => void;
 }
 
 interface Props {
