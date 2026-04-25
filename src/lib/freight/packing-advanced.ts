@@ -267,7 +267,20 @@ export function packContainerAdvanced(
 
   const cellIdx = (cx: number, cy: number) => cy * cellsX + cx;
 
-  /** Inspect cells under footprint at (x,y) with size (l,w). Returns null if invalid. */
+  /**
+   * Inspect cells under footprint at (x,y) with size (l,w). Returns null if invalid.
+   *
+   * IMPORTANT — exact-footprint sampling: the height-map is sampled on a
+   * coarse 100mm grid, but we only count a cell if its CENTER lies inside
+   * the candidate footprint. This stops the previous Math.ceil expansion
+   * from sampling cells up to 99mm beyond the box's real edges, which was
+   * pulling neighbouring tall stacks into topZ and producing real floating
+   * cargo (1066.8mm cubes were the canonical victim).
+   *
+   * For sub-grid footprints (smaller than 1.5 × CELL_MM on either axis) the
+   * grid can entirely miss the box, so we fall back to a geometric supporter
+   * scan over placedInternal — guaranteed accurate regardless of cell size.
+   */
   function evaluatePlacement(
     x: number,
     y: number,
@@ -284,33 +297,64 @@ export function packContainerAdvanced(
 
     const cx0 = Math.floor(x / CELL_MM);
     const cy0 = Math.floor(y / CELL_MM);
-    const cx1 = Math.ceil((x + l) / CELL_MM);
-    const cy1 = Math.ceil((y + w) / CELL_MM);
+    const cx1 = Math.min(cellsX, Math.ceil((x + l) / CELL_MM));
+    const cy1 = Math.min(cellsY, Math.ceil((y + w) / CELL_MM));
+
+    const useGeometricScan = l < CELL_MM * 1.5 || w < CELL_MM * 1.5;
 
     let topZ = 0;
-    // First pass: find resting Z (max top under footprint).
-    for (let cy = cy0; cy < cy1; cy++) {
-      for (let cx = cx0; cx < cx1; cx++) {
-        const h = heightMap[cellIdx(cx, cy)];
-        if (h > topZ) topZ = h;
-      }
-    }
-
-    if (topZ + c.origH > C.h) {
-      // Use orientation height (caller passed via l/w but h via c.origH? — we recompute)
-    }
-
-    // Support: collect candidate supporter cells and identify supporter boxes.
     let anySealed = false;
     const supporters = new Set<number>();
-    for (let cy = cy0; cy < cy1; cy++) {
-      for (let cx = cx0; cx < cx1; cx++) {
-        const idx = cellIdx(cx, cy);
-        if (sealed[idx]) anySealed = true;
-        const h = heightMap[idx];
-        if (Math.abs(h - topZ) < 1) {
-          const bIdx = topBoxIdx[idx];
-          if (bIdx >= 0) supporters.add(bIdx);
+
+    if (useGeometricScan) {
+      // Sub-grid: ignore height-map, scan placed boxes geometrically.
+      for (let pi = 0; pi < placedInternal.length; pi++) {
+        const p = placedInternal[pi];
+        // XY footprint overlap?
+        const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
+        const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
+        if (ox <= 0.5 || oy <= 0.5) continue;
+        const top = p.z + p.h;
+        if (top > topZ) topZ = top;
+      }
+      // Resolve sealing + supporters at topZ.
+      for (let pi = 0; pi < placedInternal.length; pi++) {
+        const p = placedInternal[pi];
+        const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
+        const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
+        if (ox <= 0.5 || oy <= 0.5) continue;
+        if (Math.abs(p.z + p.h - topZ) < 1) {
+          supporters.add(pi);
+          if (p.sealed) anySealed = true;
+        }
+      }
+    } else {
+      // Grid path: only count cells whose CENTRE lies inside the footprint.
+      for (let cy = cy0; cy < cy1; cy++) {
+        const cellMidY = cy * CELL_MM + CELL_MM / 2;
+        if (cellMidY < y || cellMidY > y + w) continue;
+        for (let cx = cx0; cx < cx1; cx++) {
+          const cellMidX = cx * CELL_MM + CELL_MM / 2;
+          if (cellMidX < x || cellMidX > x + l) continue;
+          const idx = cellIdx(cx, cy);
+          const h = heightMap[idx];
+          if (h > topZ) topZ = h;
+        }
+      }
+      // Second pass: collect supporters + sealed flag for cells at topZ.
+      for (let cy = cy0; cy < cy1; cy++) {
+        const cellMidY = cy * CELL_MM + CELL_MM / 2;
+        if (cellMidY < y || cellMidY > y + w) continue;
+        for (let cx = cx0; cx < cx1; cx++) {
+          const cellMidX = cx * CELL_MM + CELL_MM / 2;
+          if (cellMidX < x || cellMidX > x + l) continue;
+          const idx = cellIdx(cx, cy);
+          if (sealed[idx]) anySealed = true;
+          const h = heightMap[idx];
+          if (Math.abs(h - topZ) < 1) {
+            const bIdx = topBoxIdx[idx];
+            if (bIdx >= 0) supporters.add(bIdx);
+          }
         }
       }
     }
@@ -321,14 +365,9 @@ export function packContainerAdvanced(
       // Resting on the floor — fully supported by definition.
       supportRatio = 1;
     } else {
-      // Geometric overlap: real area of footprint covered by supporter top faces
-      // (at z == topZ within 1 mm), divided by the new box's footprint area.
-      // This removes the cell-grid quantization penalty that previously blocked
-      // stacking when dimensions weren't multiples of CELL_MM.
       const footprintArea = l * w;
 
-      // Fast path: identical supporter directly below (same footprint, same XY corner
-      // within 1 cm). A box flush on an identical box is by definition fully supported.
+      // Fast path: identical supporter directly below.
       if (supporters.size === 1) {
         const onlyIdx = supporters.values().next().value as number;
         const s = placedInternal[onlyIdx];
@@ -344,13 +383,13 @@ export function packContainerAdvanced(
         }
       }
 
-      // General case: sum geometric overlap area across all supporters whose
-      // top face equals topZ.
+      // General case: real geometric overlap area across all supporters
+      // whose top face equals topZ.
       let overlapArea = 0;
       for (const sIdx of supporters) {
         const s = placedInternal[sIdx];
         if (!s) continue;
-        if (Math.abs(s.z + s.h - topZ) > 1) continue; // top face must match
+        if (Math.abs(s.z + s.h - topZ) > 1) continue;
         const ox0 = Math.max(x, s.x);
         const oy0 = Math.max(y, s.y);
         const ox1 = Math.min(x + l, s.x + s.l);
@@ -368,6 +407,68 @@ export function packContainerAdvanced(
       supporters,
       anySealed,
     };
+  }
+
+  /**
+   * Pre-commit airlock — runs the same hard-physical-rule subset the final
+   * geometry validator uses, against the candidate placement plus the boxes
+   * already in placedInternal. Returns true only if the placement would be
+   * legal in the final audit. Anything failing here is rejected before the
+   * commit so the validator can never see a floating / overlapping box.
+   *
+   * Checks: pairwise overlap, neighbour gap (with vertical-overlap gate),
+   * support ratio against actual placed-box geometry, wall/door/ceiling.
+   */
+  function wouldBeLegal(
+    x: number,
+    y: number,
+    z: number,
+    l: number,
+    w: number,
+    h: number,
+    minGap: number,
+  ): boolean {
+    // Bounds.
+    if (x < 0 || y < 0 || z < 0) return false;
+    if (x + l > C.l + 0.5) return false;
+    if (y + w > C.w + 0.5) return false;
+    if (z + h > C.h + 0.5) return false;
+    // Door / ceiling.
+    if (C.l - (x + l) < DOOR_RESERVE_MM - 1) return false;
+    if (C.h - (z + h) < CEILING_RESERVE_MM - 1) return false;
+
+    // Geometric support check (against actual placed boxes, not the grid).
+    if (z > 0.5) {
+      const footArea = l * w;
+      let overlapArea = 0;
+      for (const p of placedInternal) {
+        if (Math.abs(p.z + p.h - z) > 1) continue;
+        const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
+        const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
+        if (ox > 0 && oy > 0) overlapArea += ox * oy;
+      }
+      const ratio = footArea > 0 ? overlapArea / footArea : 0;
+      if (ratio < SUPPORT_MIN_RATIO) return false;
+    }
+
+    // Pairwise overlap + neighbour-gap with vertical-overlap gate.
+    for (const p of placedInternal) {
+      // 3D overlap?
+      const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
+      const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
+      const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
+      if (ox > 1 && oy > 1 && oz > 1) return false; // physical overlap
+
+      // Neighbour-gap rule only when the two boxes share vertical overlap.
+      if (oz <= 1) continue;
+      const xGap = Math.max(0, Math.max(x, p.x) - Math.min(x + l, p.x + p.l));
+      const yGap = Math.max(0, Math.max(y, p.y) - Math.min(y + w, p.y + p.w));
+      const xOverlap = ox > 1;
+      const yOverlap = oy > 1;
+      if (yOverlap && !xOverlap && xGap > 0 && xGap < minGap - 1) return false;
+      if (xOverlap && !yOverlap && yGap > 0 && yGap < minGap - 1) return false;
+    }
+    return true;
   }
 
   for (const c of expanded) {
