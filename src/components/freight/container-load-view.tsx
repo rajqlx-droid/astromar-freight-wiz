@@ -29,6 +29,7 @@ import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
 import { readHeavyThreshold } from "./loading-rows-panel";
 import { DOOR_RESERVE_MM } from "@/lib/freight/gap-rules";
+import { LimitExplanationPanel } from "./limit-explanation-panel";
 
 // Lazy 3D view — keeps initial bundle light and avoids SSR.
 const Container3DView = lazy(() =>
@@ -423,6 +424,7 @@ function SinglePlanBody({
       <div className="space-y-3">
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
         <LengthBudgetChip pack={pack} />
+        <LimitExplanationPanel pack={pack} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
             {isCalculating ? (
