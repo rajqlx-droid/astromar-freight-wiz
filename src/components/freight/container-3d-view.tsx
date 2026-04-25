@@ -537,6 +537,14 @@ function SceneContents({
   // Doors stay open in the static scene ("ready to load").
   const doorOpen = 1;
 
+  // Adjacency-aware display colors: every box that touches a same-coloured
+  // neighbour is shifted to a lighter/darker shade of its base hue so seams
+  // between boxes are always visible — and any actual overlap stands out.
+  const displayColors = useMemo(
+    () => assignDisplayColors(pack.placed),
+    [pack.placed],
+  );
+
   return (
     <>
       <ambientLight intensity={0.55} />
