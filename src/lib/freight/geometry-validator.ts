@@ -81,10 +81,14 @@ interface ValidatorItemFlags {
  * one axis) is legal.
  */
 function overlapVolume(a: PlacedBox, b: PlacedBox): number {
+  // Float-drift tolerance: snap-pass slides cartons in 1mm increments and
+  // float arithmetic can leave ≤0.5mm of phantom overlap on flush faces.
+  // Anything beyond that is a real intersection.
+  const EPS = 0.5;
   const dx = Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x);
   const dy = Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y);
   const dz = Math.min(a.z + a.h, b.z + b.h) - Math.max(a.z, b.z);
-  if (dx <= 0 || dy <= 0 || dz <= 0) return 0;
+  if (dx <= EPS || dy <= EPS || dz <= EPS) return 0;
   return dx * dy * dz;
 }
 
