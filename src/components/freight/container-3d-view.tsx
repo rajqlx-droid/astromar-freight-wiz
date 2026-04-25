@@ -1316,14 +1316,55 @@ function CargoBox({
     ? [cx + stageOffsetX, cy + palletLift + stageOffsetY, cz]
     : [cx, cy + palletLift, cz];
 
+  // 1 mm clearance envelope (in scene metres). Visualises the mandatory
+  // air-gap that the packer enforces around every cargo unit. Rendered only
+  // when this box is the user's current selection.
+  const envelopePadM = NEIGHBOUR_MIN_GAP_MM / MM_PER_M; // 0.001 m per face
+  const envL = lm + envelopePadM * 2;
+  const envH = hm + envelopePadM * 2;
+  const envW = wm + envelopePadM * 2;
+
   return (
-    <group ref={groupRef} position={initialPosition} scale={scale}>
+    <group
+      ref={groupRef}
+      position={initialPosition}
+      scale={scale}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.();
+      }}
+    >
       {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[Math.max(lm, wm) * 0.55, Math.max(lm, wm) * 0.7, 32]} />
           <meshBasicMaterial color="#10b981" transparent opacity={0.85} />
         </mesh>
+      )}
+      {selected && (
+        <group>
+          {/* Translucent shell — the +1 mm air envelope around the unit. */}
+          <mesh raycast={() => null}>
+            <boxGeometry args={[envL, envH, envW]} />
+            <meshBasicMaterial
+              color="#22d3ee"
+              transparent
+              opacity={0.18}
+              depthWrite={false}
+            />
+          </mesh>
+          {/* Crisp wireframe outline so the envelope reads at any angle. */}
+          <lineSegments raycast={() => null}>
+            <edgesGeometry args={[new THREE.BoxGeometry(envL, envH, envW)]} />
+            <lineBasicMaterial color="#0891b2" linewidth={1} />
+          </lineSegments>
+          {/* Floating label confirming the rule + dimensions. */}
+          <Html position={[0, hm / 2 + 0.12, 0]} center zIndexRange={[100, 0]}>
+            <div className="whitespace-nowrap rounded-md bg-cyan-600 px-2 py-1 text-[10px] font-semibold text-white shadow-lg">
+              1 mm clearance · {Math.round(box.l)}×{Math.round(box.w)}×{Math.round(box.h)} mm
+            </div>
+          </Html>
+        </group>
       )}
       <PackageShape
         lm={lm}
