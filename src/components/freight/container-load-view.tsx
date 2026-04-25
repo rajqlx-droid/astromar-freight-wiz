@@ -457,16 +457,7 @@ function SinglePlanBody({
                   <Container3DView
                     ref={isActive ? view3DRef : undefined}
                     pack={pack}
-                    shufflePreview={shufflePreview}
-                    visiblePlacedSet={visiblePlacedSet}
-                    hideDoors={stepMode || pack.placedCartons === 0}
-                    gapHeatmapRow={gapHeatmapRow}
-                    flyInPlacedSet={flyInPlacedSet}
-                    flyInKey={flyInKey}
-                    activePalletIdx={activePalletIdx}
-                    nextPalletIdx={nextPalletIdx}
-                    followCam={isPlaying}
-                    showForkliftToken={showForkliftToken && currentStep != null}
+                    hideDoors={pack.placedCartons === 0}
                     nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
                     overlay={
                       stepMode ? (
