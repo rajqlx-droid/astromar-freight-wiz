@@ -466,14 +466,14 @@ function SceneContents({
         ref={controlsRef}
         target={target}
         enablePan
-        enabled={!recording && !followCam}
+        enabled={!followCam}
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
 
       {/* Follow camera — drives camera & target every frame when active */}
-      {followCam && !recording && (
+      {followCam && (
         <FollowCam Cm={Cm} activeBox={activeBox} />
       )}
       {/* Tarmac ground extending past the container — sells the "real yard" */}
@@ -507,34 +507,26 @@ function SceneContents({
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {(() => {
-          // Render edge outlines for jobs up to 200 boxes — the per-box
-          // edge cost is small and the visible seams matter more once
-          // cartons sit flush against each other (no enforced gap rule).
-          const showEdges = pack.placed.length <= 200;
+          // Always show edge outlines so individual cartons stay visually
+          // distinct even when packed flush against each other (no enforced
+          // gap rule). Edge geometry is cheap and the visible seam matters.
+          const showEdges = true;
           return pack.placed.map((b, i) => {
-            const t = transforms?.[i];
-            if (recording && t && !t.visible) return null;
             // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
             if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
-            // Combine per-frame transform offset (recording) with the shuffle
-            // preview offset (applied to scene-z, the container width axis).
+            // Apply the shuffle preview offset (scene-z, container width axis).
             const shuffleZ = shufflePreview?.get(i) ?? 0;
-            const offset: [number, number, number] = [
-              t?.offset[0] ?? 0,
-              t?.offset[1] ?? 0,
-              (t?.offset[2] ?? 0) + shuffleZ,
-            ];
-            const isPreviewed = !recording && shuffleZ !== 0;
-            const flyIn = !recording && !!flyInPlacedSet?.has(i);
-            const isActivePallet = !recording && i === activePalletIdx;
-            const isNearCeiling = !recording && (nearCeilingPlacedIdxs?.includes(i) ?? false);
+            const offset: [number, number, number] = [0, 0, shuffleZ];
+            const isPreviewed = shuffleZ !== 0;
+            const flyIn = !!flyInPlacedSet?.has(i);
+            const isActivePallet = i === activePalletIdx;
+            const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
             return (
               <CargoBox
                 key={i}
                 box={b}
                 stat={pack.perItem[b.itemIdx]}
                 offset={offset}
-                scale={t?.scale}
                 previewHighlight={isPreviewed}
                 flyIn={flyIn}
                 flyInKey={flyInKey}
@@ -548,39 +540,32 @@ function SceneContents({
           });
         })()}
         {/* Pulsing yellow target outline at the NEXT pallet's slot */}
-        {!recording && nextBox && (
+        {nextBox && (
           <NextPalletTarget box={nextBox} />
         )}
         {/* Gap heatmap overlay — translucent red rectangles on the floor and
-            back wall of the active row's slice. Hidden during recording so
-            video frames stay clean. */}
-        {!recording && gapHeatmapRow && (
+            back wall of the active row's slice. */}
+        {gapHeatmapRow && (
           <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
         )}
-        {/* Forklift visuals removed per user request — cargo loads directly
-            into its slot without a forklift token in the 3D view or video. */}
       </group>
 
-      {/* Dimension labels — hidden during recording for clean video frames */}
-      {!recording && (
-        <>
-          <Html position={[0, -0.2, Cm.w / 2 + 0.3]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-              {(Cm.l).toFixed(2)} m
-            </span>
-          </Html>
-          <Html position={[Cm.l / 2 + 0.3, -0.2, 0]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-              {(Cm.w).toFixed(2)} m
-            </span>
-          </Html>
-          <Html position={[-Cm.l / 2 - 0.3, Cm.h / 2, -Cm.w / 2]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
-            <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
-              {(Cm.h).toFixed(2)} m
-            </span>
-          </Html>
-        </>
-      )}
+      {/* Dimension labels */}
+      <Html position={[0, -0.2, Cm.w / 2 + 0.3]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+          {(Cm.l).toFixed(2)} m
+        </span>
+      </Html>
+      <Html position={[Cm.l / 2 + 0.3, -0.2, 0]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+          {(Cm.w).toFixed(2)} m
+        </span>
+      </Html>
+      <Html position={[-Cm.l / 2 - 0.3, Cm.h / 2, -Cm.w / 2]} center distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}>
+        <span className="rounded bg-brand-navy px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+          {(Cm.h).toFixed(2)} m
+        </span>
+      </Html>
     </>
   );
 }
