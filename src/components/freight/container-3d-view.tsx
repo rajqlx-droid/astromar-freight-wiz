@@ -1270,7 +1270,7 @@ function CargoBox({
         lm={lm}
         hm={hm}
         wm={wm}
-        color={box.color}
+        color={displayColor ?? box.color}
         packageType={stat?.packageType}
         fragile={!!fragile}
         hovered={hovered}
