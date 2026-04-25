@@ -170,7 +170,11 @@ export function ContainerSuggestion({
         <div className="mt-3 rounded-md border-2 border-rose-300/60 bg-white/90 p-2.5 dark:border-rose-700/60 dark:bg-black/30">
           <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-rose-900 dark:text-rose-200">
             <PackageX className="size-3.5" />
-            <span>Cargo shut out — won't fit in a single 40ft HC</span>
+            <span>
+              {unit.container.id === "20gp"
+                ? "Cargo shut out — won't all fit in a 20ft GP"
+                : "Cargo shut out — won't fit in a single 40ft HC"}
+            </span>
             <Button
               size="sm"
               variant="outline"
@@ -189,9 +193,35 @@ export function ContainerSuggestion({
               value={`${shutOut.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
             />
           </div>
-          <p className="mt-1.5 text-[10px] italic text-rose-900/80 dark:text-rose-200/80">
-            Reduce quantities, change packaging, or split the shipment to load the excess separately.
-          </p>
+          {unit.container.id === "20gp" ? (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] italic text-rose-900/80 dark:text-rose-200/80">
+                Switch manually to a larger container if you need to ship every package.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button
+                  size="sm"
+                  variant="default"
+                  className="h-7 bg-brand-navy px-2.5 text-[11px] text-white hover:bg-brand-navy/90"
+                  onClick={() => onApply("40gp")}
+                >
+                  Switch to 40ft GP
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 border-brand-navy/40 px-2.5 text-[11px] text-brand-navy hover:bg-brand-navy/5"
+                  onClick={() => onApply("40hc")}
+                >
+                  40ft HC
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[10px] italic text-rose-900/80 dark:text-rose-200/80">
+              Reduce quantities, change packaging, or split the shipment to load the excess separately.
+            </p>
+          )}
         </div>
       )}
     </div>
