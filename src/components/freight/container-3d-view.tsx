@@ -60,6 +60,15 @@ interface Props {
    * its animation start clock even if React re-uses the same group.
    */
   flyInKey?: number;
+  /**
+   * Optional sessionStorage key that scopes camera persistence. When set,
+   * the user's last orbit position / target / zoom is restored on mount and
+   * saved on every interaction so changing inputs (which re-runs the
+   * packer) doesn't snap the camera back to its default iso framing.
+   * Different keys → independent remembered framings (e.g. one per
+   * container tab).
+   */
+  persistKey?: string;
 }
 
 /**
@@ -67,8 +76,10 @@ interface Props {
  */
 const MM_PER_M = 1000;
 
+const JUTE_PREF_KEY = "cargo3d:jute";
+
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, hideDoors = false, overlay = null, nearCeilingPlacedIdxs = null, visiblePlacedIdxs = null, flyInIdxs = null, flyInKey = 0 },
+  { pack, height = 420, hideDoors = false, overlay = null, nearCeilingPlacedIdxs = null, visiblePlacedIdxs = null, flyInIdxs = null, flyInKey = 0, persistKey },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
