@@ -1209,7 +1209,7 @@ function CargoBox({
   // float / overlap in the 3D view even when the pack math was correct.
   // The decorative pallet now embeds *into* the floor below the box bottom
   // so visual contact planes match the physical model exactly.
-  const onFloor = box.z < 10; // mm
+  const onFloor = box.z < 50; // mm — covers post-snap floor cartons resting on dunnage runners
   const palletLift = 0;
 
   // Hover state — drives the rich tilt popover.
@@ -1252,7 +1252,7 @@ function CargoBox({
   });
 
   return (
-    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale * 1.001}>
+    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -1297,19 +1297,19 @@ function CargoBox({
           always-on text. Hover the box to see the full instructions popover. */}
       {tilted && (
         <>
-          <mesh position={[0, hm / 2 - hm * 0.12, wm / 2 + 0.002]}>
+          <mesh position={[0, hm / 2 - hm * 0.12, wm / 2 + 0.0005]}>
             <planeGeometry args={[lm * 0.96, hm * 0.14]} />
             <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
           </mesh>
-          <mesh position={[0, hm / 2 - hm * 0.12, -wm / 2 - 0.002]} rotation={[0, Math.PI, 0]}>
+          <mesh position={[0, hm / 2 - hm * 0.12, -wm / 2 - 0.0005]} rotation={[0, Math.PI, 0]}>
             <planeGeometry args={[lm * 0.96, hm * 0.14]} />
             <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
           </mesh>
-          <mesh position={[lm / 2 + 0.002, hm / 2 - hm * 0.12, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <mesh position={[lm / 2 + 0.0005, hm / 2 - hm * 0.12, 0]} rotation={[0, Math.PI / 2, 0]}>
             <planeGeometry args={[wm * 0.96, hm * 0.14]} />
             <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
           </mesh>
-          <mesh position={[-lm / 2 - 0.002, hm / 2 - hm * 0.12, 0]} rotation={[0, -Math.PI / 2, 0]}>
+          <mesh position={[-lm / 2 - 0.0005, hm / 2 - hm * 0.12, 0]} rotation={[0, -Math.PI / 2, 0]}>
             <planeGeometry args={[wm * 0.96, hm * 0.14]} />
             <meshStandardMaterial color={tiltColor} emissive={tiltColor} emissiveIntensity={0.35} />
           </mesh>
@@ -1338,8 +1338,8 @@ function CargoBox({
         </Html>
       )}
       {nearCeiling && (
-        <mesh position={[0, hm / 2 + 0.012, 0]}>
-          <boxGeometry args={[lm * 1.04, 0.018, wm * 1.04]} />
+        <mesh position={[0, hm / 2 + 0.004, 0]}>
+          <boxGeometry args={[lm * 0.98, 0.018, wm * 0.98]} />
           <meshBasicMaterial color="#f59e0b" transparent opacity={0.75} />
         </mesh>
       )}
