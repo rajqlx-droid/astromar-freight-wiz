@@ -465,6 +465,27 @@ function SceneContents({
           {(Cm.h).toFixed(2)} m
         </span>
       </Html>
+      {/* Door-end length budget: shows the 100 mm door reserve plus any extra
+          slack between the deepest packed carton and the reserve line. The
+          reserve is mandatory — boxes never enter it. */}
+      {(() => {
+        const innerLmm = pack.container.inner.l;
+        const doorReserveMm = 100;
+        const usableMm = innerLmm - doorReserveMm;
+        const deepestMm = pack.placed.reduce((m, b) => Math.max(m, b.x + b.l), 0);
+        const slackMm = Math.max(0, usableMm - deepestMm);
+        return (
+          <Html
+            position={[Cm.l / 2 + 0.05, Cm.h * 0.55, 0]}
+            center
+            distanceFactor={Math.max(Cm.l, Cm.w) * 1.2}
+          >
+            <span className="whitespace-nowrap rounded bg-amber-600 px-1.5 py-0.5 text-[10px] font-medium text-white shadow">
+              Door reserve {doorReserveMm} mm · slack {slackMm.toLocaleString()} mm
+            </span>
+          </Html>
+        );
+      })()}
     </>
   );
 }

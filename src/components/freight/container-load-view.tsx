@@ -28,6 +28,7 @@ import { usePackingWorker } from "@/hooks/use-packing-worker";
 import type { Container3DHandle } from "./container-3d-view";
 import { buildRows } from "@/lib/freight/loading-rows";
 import { readHeavyThreshold } from "./loading-rows-panel";
+import { DOOR_RESERVE_MM } from "@/lib/freight/gap-rules";
 
 // Lazy 3D view — keeps initial bundle light and avoids SSR.
 const Container3DView = lazy(() =>
@@ -421,6 +422,7 @@ function SinglePlanBody({
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
+        <LengthBudgetChip pack={pack} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
             {isCalculating ? (
@@ -563,6 +565,47 @@ function PillButton({
     >
       {children}
     </Button>
+  );
+}
+
+function LengthBudgetChip({ pack }: { pack: AdvancedPackResult }) {
+  // Compute the deepest row depth in placed boxes (max box length along X).
+  // This tells the user how much of the usable length is consumed and how
+  // much door-end slack remains given the strict 100 mm door reserve.
+  const innerL = pack.container.inner.l;
+  const usable = innerL - DOOR_RESERVE_MM;
+  if (pack.placed.length === 0) return null;
+  // Group placements by x to identify "rows" (back-to-front).
+  const xs = Array.from(new Set(pack.placed.map((b) => Math.round(b.x)))).sort((a, b) => a - b);
+  const rowCount = xs.length;
+  // Maximum extent any box reaches along X.
+  const maxReach = pack.placed.reduce((m, b) => Math.max(m, b.x + b.l), 0);
+  const usedLen = Math.round(maxReach);
+  const slack = Math.max(0, usable - usedLen);
+  // Smallest carton length along X — represents the depth a "next row" needs.
+  const minLen = Math.min(...pack.placed.map((b) => b.l));
+  const oneMoreRowFits = slack >= minLen - 0.5;
+  return (
+    <div className="rounded-md border border-brand-navy/15 bg-brand-navy/5 px-3 py-2 text-[11px] leading-relaxed text-brand-navy">
+      <span className="font-semibold uppercase tracking-wide">Length budget</span>
+      <span className="ml-2">
+        {rowCount} row{rowCount === 1 ? "" : "s"} · {usedLen.toLocaleString()} mm of{" "}
+        {usable.toLocaleString()} mm usable ({innerL.toLocaleString()} mm inner −{" "}
+        {DOOR_RESERVE_MM} mm door reserve).
+      </span>
+      {slack > 0 && !oneMoreRowFits && (
+        <span className="ml-1 text-muted-foreground">
+          {slack.toLocaleString()} mm slack at door end · a 12th-style row needs{" "}
+          {Math.round(minLen).toLocaleString()} mm.
+        </span>
+      )}
+      {oneMoreRowFits && (
+        <span className="ml-1 text-amber-700">
+          {slack.toLocaleString()} mm slack — another row of {Math.round(minLen)} mm fits;
+          packer left it empty.
+        </span>
+      )}
+    </div>
   );
 }
 
