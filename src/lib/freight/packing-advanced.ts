@@ -620,8 +620,12 @@ export function packContainerAdvanced(
     }
 
     // Snap-to-neighbour: slide the chosen placement toward -X (back wall) then
-    // -Y (left wall) to close any sub-stride gap left by the 50mm scan.
-    const snapGapRule = getGapRule(c.packageType);
+    // -Y (left wall) to close any sub-stride gap left by the coarse scan.
+    // No lateral or wall-gap rules apply (gap-rules.ts: minGap = wallMin = 0);
+    // the only rejection criterion is strict physical overlap with a placed
+    // box. In spread mode we DISABLE the X-snap so deliberate spacing is
+    // preserved — Y-snap still hugs the left wall (or centre, depending on
+    // the chosen y) which is fine for balance.
     const snapAxis = (axis: "x" | "y") => {
       const tryAt = (nx: number, ny: number) => {
         const ev = evaluatePlacement(nx, ny, bestPick!.orient.l, bestPick!.orient.w, {
@@ -643,25 +647,20 @@ export function packContainerAdvanced(
             return null;
           }
         }
-        // Re-check inter-item minGap — without this the snap pass slides
-        // boxes flush against neighbours, eliminating the clearance the
-        // initial placement enforced (visible as overlapping drums/pallets).
+        // Strict overlap rejection — flush is fine, intersection is not.
         const ol = bestPick!.orient.l;
         const ow = bestPick!.orient.w;
         const oh = bestPick!.orient.h;
-        const checkRange = snapGapRule.minGap * 3;
         for (const pb of placedInternal) {
-          if (Math.abs(pb.x - nx) > ol + checkRange) continue;
-          if (Math.abs(pb.y - ny) > ow + checkRange) continue;
-          const xOv = nx < pb.x + pb.l + snapGapRule.minGap && nx + ol + snapGapRule.minGap > pb.x;
-          const yOv = ny < pb.y + pb.w + snapGapRule.minGap && ny + ow + snapGapRule.minGap > pb.y;
+          if (pb.x + pb.l <= nx || nx + ol <= pb.x) continue;
+          if (pb.y + pb.w <= ny || ny + ow <= pb.y) continue;
           const zOv = ev.z < pb.z + pb.h && ev.z + oh > pb.z;
-          if (xOv && yOv && zOv) return null;
+          if (zOv) {
+            const ox = Math.min(nx + ol, pb.x + pb.l) - Math.max(nx, pb.x);
+            const oy = Math.min(ny + ow, pb.y + pb.w) - Math.max(ny, pb.y);
+            if (ox > 0.5 && oy > 0.5) return null;
+          }
         }
-        // Wall-min clearance must also hold after the snap.
-        if (nx > 0 && nx < snapGapRule.wallMin) return null;
-        if (ny > 0 && ny < snapGapRule.wallMin) return null;
-        if (ny + ow < C.w && ny + ow > C.w - snapGapRule.wallMin) return null;
         return ev;
       };
 
@@ -695,7 +694,8 @@ export function packContainerAdvanced(
         bestPick!.supportRatio = ev.supportRatio;
       }
     };
-    snapAxis("x");
+    // In spread mode, X-snap would undo the deliberate longitudinal spacing.
+    if (!spreadMode) snapAxis("x");
     snapAxis("y");
 
     // Z-snap: re-evaluate the resting plane after the XY snaps. If a shorter
