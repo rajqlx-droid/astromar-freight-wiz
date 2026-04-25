@@ -546,6 +546,20 @@ function SceneContents({
     [pack.placed],
   );
 
+  // Click-to-select: highlights the chosen cargo and renders its 1 mm
+  // clearance envelope so users can visually confirm the gap rule. Click
+  // empty space (the floor) to clear. ESC also clears.
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedIdx(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // Reset selection when the underlying pack changes (different scenario).
+  useEffect(() => { setSelectedIdx(null); }, [pack]);
+
   return (
     <>
       <ambientLight intensity={0.55} />
