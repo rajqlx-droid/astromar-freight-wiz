@@ -166,8 +166,8 @@ export interface BestPlan {
  *
  * Hard rules enforced via the shared geometry validator:
  *   - no overlap, no hanging cargo (SUPPORT_MIN_RATIO 0.85)
- *   - 50 mm minimum gap (gap-rules.ts)
- *   - door / ceiling / wall reserves
+ *   - tight (flush) lateral packing — no enforced neighbour or wall gap
+ *   - door + ceiling reserves (100 mm / 80 mm)
  *   - non-stackable / fragile cannot carry load
  */
 export function pickBestPlan(
