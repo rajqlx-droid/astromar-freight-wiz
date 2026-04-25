@@ -82,10 +82,34 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
   { pack, height = 420, hideDoors = false, overlay = null, nearCeilingPlacedIdxs = null, visiblePlacedIdxs = null, flyInIdxs = null, flyInKey = 0, persistKey },
   ref,
 ) {
-  const [preset, setPreset] = useState<Preset>("iso");
+  const [preset, setPresetState] = useState<Preset>("iso");
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+
+  // Jute / fabric texture toggle for bag surfaces. Persisted across the
+  // session so the user keeps the look they picked while iterating.
+  const [jute, setJute] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try { return window.sessionStorage.getItem(JUTE_PREF_KEY) === "1"; }
+    catch { return false; }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try { window.sessionStorage.setItem(JUTE_PREF_KEY, jute ? "1" : "0"); }
+    catch { /* storage blocked — non-fatal */ }
+  }, [jute]);
+  const bagTextureCtx = useMemo(() => ({ jute }), [jute]);
+
+  // Clicking a preset clears the saved camera so the preset always wins;
+  // subsequent orbit will re-save under the same key.
+  const setPreset = (p: Preset) => {
+    if (persistKey && typeof window !== "undefined") {
+      try { window.sessionStorage.removeItem(persistKey); }
+      catch { /* non-fatal */ }
+    }
+    setPresetState(p);
+  };
 
   // Container dims in metres.
   const Cm = useMemo(
