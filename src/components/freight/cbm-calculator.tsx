@@ -48,7 +48,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
+import { calcCbm, defaultsForPackageType, emptyCbmItem, getRotationPolicy, type CbmItem, type PackageType } from "@/lib/freight/calculators";
 import { CONTAINERS, ITEM_COLORS } from "@/lib/freight/packing";
 import {
   analyseGeometricCeiling,
@@ -87,8 +87,18 @@ const PACKAGE_TYPES: { value: PackageType; label: string }[] = [
   { value: "bale", label: "Bale" },
 ];
 
-/** Crates and pallets ship in fixed orientation — pallets allow only L↔W swap (4-way entry forklifts), crates fully fixed. */
-const isRigidUnit = (t?: PackageType) => t === "crate" || t === "pallet";
+/**
+ * Helper: when packageType changes, snap rotation flags to the new type's
+ * defaults (and drop any that the new type forbids).
+ */
+const withPackageTypeReset = (
+  patch: Partial<CbmItem>,
+): Partial<CbmItem> => {
+  if (patch.packageType) {
+    return { ...patch, ...defaultsForPackageType(patch.packageType) };
+  }
+  return patch;
+};
 
 export function CbmCalculator({ items, setItems }: Props) {
   const [lenUnit, setLenUnit] = usePersistentLengthUnit();
@@ -855,23 +865,35 @@ function ToggleRow({
   icon,
   checked,
   onChange,
+  disabled = false,
+  disabledReason,
 }: {
   title: string;
   desc: string;
   icon?: React.ReactNode;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2">
+    <div
+      className={cn(
+        "flex items-center justify-between gap-2 rounded-md border border-brand-navy/20 bg-background px-3 py-2",
+        disabled && "opacity-70",
+      )}
+      title={disabled && disabledReason ? disabledReason : undefined}
+    >
       <div className="flex items-start gap-1.5">
         {icon}
         <div>
           <Label className="text-xs font-semibold text-brand-navy">{title}</Label>
-          <p className="text-[10px] text-muted-foreground">{desc}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {disabled && disabledReason ? disabledReason : desc}
+          </p>
         </div>
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
+      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
     </div>
   );
 }
@@ -949,31 +971,36 @@ function renderPackingPopoverContent({
           checked={it.fragile === true}
           onChange={(v) => updatePacking(it.id, { fragile: v })}
         />
-        {isRigidUnit(it.packageType) ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-            <strong className="font-semibold">{it.packageType === "pallet" ? "Pallets" : "Crates"} ship in fixed orientation.</strong>{" "}
-            {it.packageType === "pallet"
-              ? "4-way entry pallets may rotate L↔W on the floor, but never tip."
-              : "Crates may rotate L↔W on the floor, but never tip onto a side."}
-          </div>
-        ) : (
-          <>
-            <ToggleRow
-              title="Can lay sideways"
-              desc="Packer may rotate 90° on the floor (swap L↔W)."
-              checked={it.allowSidewaysRotation !== false}
-              onChange={(v) => updatePacking(it.id, { allowSidewaysRotation: v })}
-            />
-            {!it.fragile && (
+        {(() => {
+          const policy = getRotationPolicy(it.packageType);
+          const sidewaysDisabled = !policy.canSideways;
+          const axisDisabled = !policy.canAxis || it.fragile === true;
+          const axisReason = !policy.canAxis
+            ? policy.axisReason
+            : it.fragile
+              ? "Fragile cargo cannot tip onto a side."
+              : undefined;
+          return (
+            <>
               <ToggleRow
-                title="Can stand on side"
-                desc="Packer may tip it onto its side. Non-fragile only."
-                checked={it.allowAxisRotation === true}
-                onChange={(v) => updatePacking(it.id, { allowAxisRotation: v })}
+                title="Can lay sideways (90° L↔W)"
+                desc="Packer may rotate 90° on the floor (swap length and width)."
+                checked={!sidewaysDisabled && it.allowSidewaysRotation === true}
+                onChange={(v) => updatePacking(it.id, { allowSidewaysRotation: v })}
+                disabled={sidewaysDisabled}
+                disabledReason={policy.sidewaysReason}
               />
-            )}
-          </>
-        )}
+              <ToggleRow
+                title="Can stand on side (tip H↔L/W)"
+                desc="Packer may tip it onto its side to fill upper headroom."
+                checked={!axisDisabled && it.allowAxisRotation === true}
+                onChange={(v) => updatePacking(it.id, { allowAxisRotation: v })}
+                disabled={axisDisabled}
+                disabledReason={axisReason}
+              />
+            </>
+          );
+        })()}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
@@ -1078,7 +1105,7 @@ function ConfirmPackingModal({
                       </Label>
                       <Select
                         value={it.packageType ?? "carton"}
-                        onValueChange={(v) => onUpdate(it.id, { packageType: v as PackageType })}
+                        onValueChange={(v) => onUpdate(it.id, withPackageTypeReset({ packageType: v as PackageType }))}
                       >
                         <SelectTrigger className="h-8 border-brand-navy/30 text-xs">
                           <SelectValue />
@@ -1118,20 +1145,36 @@ function ConfirmPackingModal({
                     checked={it.fragile === true}
                     onChange={(v) => onUpdate(it.id, { fragile: v })}
                   />
-                  <ToggleRow
-                    title="Can lay sideways"
-                    desc="Packer may rotate 90° on the floor (swap L↔W)."
-                    checked={it.allowSidewaysRotation !== false}
-                    onChange={(v) => onUpdate(it.id, { allowSidewaysRotation: v })}
-                  />
-                  {!it.fragile && (
-                    <ToggleRow
-                      title="Can stand on side"
-                      desc="Packer may tip it onto its side. Non-fragile only."
-                      checked={it.allowAxisRotation === true}
-                      onChange={(v) => onUpdate(it.id, { allowAxisRotation: v })}
-                    />
-                  )}
+                  {(() => {
+                    const policy = getRotationPolicy(it.packageType);
+                    const sidewaysDisabled = !policy.canSideways;
+                    const axisDisabled = !policy.canAxis || it.fragile === true;
+                    const axisReason = !policy.canAxis
+                      ? policy.axisReason
+                      : it.fragile
+                        ? "Fragile cargo cannot tip onto a side."
+                        : undefined;
+                    return (
+                      <>
+                        <ToggleRow
+                          title="Can lay sideways (90° L↔W)"
+                          desc="Packer may rotate 90° on the floor (swap length and width)."
+                          checked={!sidewaysDisabled && it.allowSidewaysRotation === true}
+                          onChange={(v) => onUpdate(it.id, { allowSidewaysRotation: v })}
+                          disabled={sidewaysDisabled}
+                          disabledReason={policy.sidewaysReason}
+                        />
+                        <ToggleRow
+                          title="Can stand on side (tip H↔L/W)"
+                          desc="Packer may tip it onto its side to fill upper headroom."
+                          checked={!axisDisabled && it.allowAxisRotation === true}
+                          onChange={(v) => onUpdate(it.id, { allowAxisRotation: v })}
+                          disabled={axisDisabled}
+                          disabledReason={axisReason}
+                        />
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             );
@@ -1238,7 +1281,7 @@ const CbmRow = memo(function CbmRow({
             <WeightUnitSelector id={`cbm-wt-unit-${it.id}`} value={rowWt} onChange={onSetWtUnit} compact />
             <Select
               value={it.packageType ?? "carton"}
-              onValueChange={(v) => onUpdatePacking(it.id, { packageType: v as PackageType })}
+              onValueChange={(v) => onUpdatePacking(it.id, withPackageTypeReset({ packageType: v as PackageType }))}
             >
               <SelectTrigger
                 className="h-7 w-auto gap-1 rounded-full border-brand-navy/25 bg-muted/40 px-2.5 py-0 text-[11px] font-medium text-brand-navy shadow-none focus:ring-1"
@@ -1261,13 +1304,14 @@ const CbmRow = memo(function CbmRow({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1">
           {(() => {
-            const isRigidUnit = it.packageType === "crate" || it.packageType === "pallet";
-            const sidewaysOn = isRigidUnit ? true : it.allowSidewaysRotation !== false;
-            const tip = isRigidUnit
-              ? "Pallets and crates are always rotatable (4-way entry)."
+            const policy = getRotationPolicy(it.packageType);
+            const sidewaysAllowed = policy.canSideways;
+            const sidewaysOn = sidewaysAllowed && it.allowSidewaysRotation === true;
+            const tip = !sidewaysAllowed
+              ? (policy.sidewaysReason ?? "Sideways rotation not allowed for this package type.")
               : sidewaysOn
-                ? "Sideways rotation allowed. Click to lock orientation."
-                : "Orientation locked. Click to allow 90° sideways rotation.";
+                ? "Sideways rotation allowed (90° L↔W). Click to lock orientation."
+                : "Orientation locked. Click to allow 90° sideways rotation (L↔W).";
             return (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
@@ -1276,15 +1320,15 @@ const CbmRow = memo(function CbmRow({
                       type="button"
                       aria-pressed={sidewaysOn}
                       aria-label={
-                        isRigidUnit
-                          ? "Sideways rotation locked on for pallets/crates"
+                        !sidewaysAllowed
+                          ? "Sideways rotation not allowed for this package type"
                           : sidewaysOn
                             ? "Disable sideways rotation"
                             : "Enable sideways rotation"
                       }
-                      disabled={isRigidUnit}
+                      disabled={!sidewaysAllowed}
                       onClick={() => {
-                        if (isRigidUnit) return;
+                        if (!sidewaysAllowed) return;
                         onUpdatePacking(it.id, { allowSidewaysRotation: !sidewaysOn });
                       }}
                       className={cn(
@@ -1292,7 +1336,7 @@ const CbmRow = memo(function CbmRow({
                         sidewaysOn
                           ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
                           : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
-                        isRigidUnit && "cursor-not-allowed opacity-80",
+                        !sidewaysAllowed && "cursor-not-allowed opacity-60",
                       )}
                     >
                       <span aria-hidden>{sidewaysOn ? "↻" : "⛔"}</span>
@@ -1301,7 +1345,7 @@ const CbmRow = memo(function CbmRow({
                       </span>
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[220px] text-xs">
+                  <TooltipContent side="top" className="max-w-[240px] text-xs">
                     {tip}
                   </TooltipContent>
                 </Tooltip>

@@ -1,86 +1,74 @@
+# Rotation rules per package type
 
-# Why 27 CBM lands in a 40ft and why upper rows aren't tilted
+## The new matrix
 
-## What you are seeing
+| Package type | 90° floor swap (L↔W "sideways") | Tip onto side (H↔L/W "axis tilt") |
+|---|---|---|
+| Carton | Allowed (toggle, default ON) | Allowed (toggle, default OFF) |
+| Bale | Allowed (toggle, default ON) | Allowed (toggle, default OFF) |
+| Bag | Allowed (toggle, default ON) | Allowed (toggle, default OFF) |
+| Drum | Allowed (toggle, default ON) | **Forbidden** (toggle disabled, tooltip: "Drums must stay upright") |
+| Pallet | Allowed but **never auto-assumed** — toggle visible, default OFF, user must opt in | **Forbidden** (toggle disabled, tooltip: "Pallets ship in fixed upright orientation") |
+| Crate | Allowed but **never auto-assumed** — toggle visible, default OFF, user must opt in | **Forbidden** (toggle disabled, tooltip: "Crates ship in fixed upright orientation") |
 
-- **27 CBM but autofit says 40ft.** A 20GP has only 33.23 m³ raw capacity. 27 m³ is 81 % of that. With the 100 mm door reserve, the 80 mm ceiling reserve, and the 50 mm placement stride, the packer can rarely cram 81 % volume into a 20GP without leaving a few cartons unplaced — and the recommender escalates the moment even one carton is unplaced (`fitSingle` requires `placedCartons === totalQty`). The 40ft preview then *looks* half-empty because it is — the cargo only needed ~27/76 = 35 % of an HC.
-- **Pallets pack tight, cartons don't.** Pallets are flagged `isRigidUnit` so the packer disables tilt (`allowAxisRotation = false`) and only tries L↔W. Fewer orientations + identical heights → clean rows.
-- **Upper rows never tilt, even when the carton has tilt enabled.** The packer DOES build tilted orientations, but the scoring formula `score = x * 10_000 + z * 100 + …` makes back-wall floor placements always win. A carton that *could* tilt onto the top of the previous column gets a higher x (frontier moved forward) and loses to a fresh floor placement further forward in the original orientation. By the time the floor is full, the cartons left over are scored against the next-best floor slot rather than the residual headroom on top of column 1, so column tops stay empty.
+Key change vs today: pallets and crates currently force `allowSideways = true` and hide the toggle entirely. Per spec they must instead show the toggle (default OFF) so the user has to consciously confirm a 90° swap is acceptable.
 
-## Plan
+## UI behavior (cbm-calculator.tsx)
 
-Four changes — recommender policy, packer scoring, a clarifying UI hint, and a manual-switch CTA.
+Both rotation toggles ("Can lay sideways" and "Can stand on side") always render for every package type — no more "rigid unit" hidden block. Each toggle independently consults a small policy table:
 
-### 1. New recommender policy: "20GP first when CBM allows"
+- If forbidden → render the toggle in a disabled state, value forced to `false`, with a one-line tooltip / helper text explaining why ("Drums must stay upright", "Pallets ship in fixed upright orientation", etc.).
+- If allowed → render normally.
 
-`src/lib/freight/container-recommender.ts`
+When the user changes package type on an existing row, immediately clear any flags the new type forbids (set to `false`) and reset to the new type's default (sideways default is ON for carton/bale/bag/drum, OFF for pallet/crate; tilt default is OFF for everyone).
 
-Today: a 20GP is rejected if even 1 of N cartons is unplaced → escalates to 40GP/40HC.
-New rule the user asked for:
+The amber "rigid unit" info box (lines 952–958) is removed — replaced by inline disabled toggles with tooltips.
 
-- **If `totalCbm ≤ USABLE_CBM["20gp"]` AND `totalWeightKg ≤ 20gp.maxPayloadKg`:**
-  - **Always recommend 20GP**, even when geometry leaves some cartons unplaced.
-  - Pack into the 20GP and report the unplaced cartons via the existing `shutOut` field (`reason: "exceeds-geometry"`).
-  - Add a new `reasonDetail` string the UI can render verbatim, e.g.:
-    *"27.0 m³ fits a 20ft GP by volume. Geometry could only place 58 of 60 cartons — 2 cartons (0.9 m³) shut out. Switch manually to 40ft GP if you want to ship the full load."*
-- **If CBM or weight exceeds the 20GP cap:** existing escalation logic stays — pick the smallest container that fits.
-- **If even a 40HC can't take the full load:** existing shut-out report stays.
+## Packer behavior (packing-advanced.ts)
 
-This replaces the current `fitSingle()` "all-or-nothing" gate for the 20GP tier. The user explicitly wants 20GP shown even when a few cartons are shut out, with a clear reason and a manual-switch suggestion.
-
-### 2. Manual-switch CTA in the recommendation banner
-
-`src/components/freight/container-suggestion.tsx` (and wherever the recommendation summary is rendered).
-
-When `recommendation.shutOut` is non-null AND the recommended container is the 20GP, render a secondary action:
-
-> **"Switch to 40ft GP"** — clicking it overrides the autofit and re-runs the pack against a 40GP so the full load fits.
-
-The button is a manual override; the recommender itself does not auto-escalate.
-
-### 3. Try tilted orientations on top of existing stacks
-
-`src/lib/freight/packing-advanced.ts`
-
-Two scoring fixes inside the per-carton loop (lines ~544–633):
-
-**(a) Reward filling residual headroom.** When a candidate sits on top of an existing column (`ev.z > 0`) AND its tilted orientation makes it fit under the ceiling where the original wouldn't, lower its score so it can beat a fresh-floor placement of the same carton:
+Replace the current ad-hoc check at lines 183–185 with a single helper `getRotationPolicy(packageType)` returning `{ canSideways, canAxis }`. Then:
 
 ```
-const fillsResidualHead =
-  ev.z > 0 && (ev.z + o.h) <= (C.h - CEILING_RESERVE_MM)
-            && (ev.z + c.origH) >  (C.h - CEILING_RESERVE_MM);
-if (fillsResidualHead) score -= 50_000;   // wins over a forward floor slot
+const policy = getRotationPolicy(it.packageType);
+const allowSideways = policy.canSideways && (it.allowSidewaysRotation === true);
+const allowAxis     = policy.canAxis     && (it.allowAxisRotation === true);
 ```
 
-**(b) Stack-completion bonus.** If the candidate's footprint fully covers an existing column's top face (supportRatio ≥ 0.98), shave 5 000 from the score so completing a column beats starting a new one a row forward. This is what loaders do in practice — fill the column before opening a new one.
+Note the explicit `=== true`: pallets/crates no longer get a free pass to rotate sideways; the user's stored flag is the source of truth, gated by policy.
 
-Both bonuses only apply to cartons whose `allowAxisRotation === true`, so pallets and crates are unaffected.
+The new policy table:
 
-### 4. Surface rotation usage in the limit panel
+```
+carton: { canSideways: true,  canAxis: true  }
+bale:   { canSideways: true,  canAxis: true  }
+bag:    { canSideways: true,  canAxis: true  }
+drum:   { canSideways: true,  canAxis: false }
+pallet: { canSideways: true,  canAxis: false }
+crate:  { canSideways: true,  canAxis: false }
+```
 
-`src/components/freight/limit-explanation-panel.tsx`
+The same helper is exported and reused by the UI so the rules live in one place.
 
-Add one line: **"Tilt enabled: Yes/No — N of M cartons placed sideways/tilted"** using `placed[i].rotated`. Lets the user see whether the packer actually used the rotation flag they ticked.
+## Defaults & migration (calculators.ts / emptyCbmItem)
+
+`emptyCbmItem` already defaults `allowSidewaysRotation = true` and `allowAxisRotation = false` for cartons. No change needed for new items. For existing saved items where `packageType` is pallet/crate and `allowSidewaysRotation` is still `undefined`, the packer's `=== true` check will treat them as OFF — which matches the new "always ask" rule. Users will see the toggle off and can opt in.
 
 ## Files to edit
 
-- `src/lib/freight/container-recommender.ts` — new "20GP first when CBM allows" policy + shut-out detail string.
-- `src/components/freight/container-suggestion.tsx` — "Switch to 40ft GP" manual CTA.
-- `src/lib/freight/packing-advanced.ts` — residual-head + stack-completion score adjustments.
-- `src/components/freight/limit-explanation-panel.tsx` — rotation summary line.
+- `src/lib/freight/packing-advanced.ts` — add `getRotationPolicy`, replace lines 183–185, export the helper.
+- `src/components/freight/cbm-calculator.tsx` — replace the rigid-unit branch (lines 952–976) with always-visible toggles that consult the policy; add disabled/tooltip styling; handle flag reset inside the `packageType` change handler at lines 1081 and 1241.
+- `src/lib/freight/calculators.ts` — small helper if needed for the type-change reset (e.g. `defaultsForPackageType`).
 
 ## Verification
 
-- Existing accuracy suite (`packing-advanced.accuracy.test.ts`) stays green — no overlap / floating / door-gap / ceiling-gap regressions.
-- New regression: 30 × 90 cm cartons (~22 m³) → recommender returns **20GP** (not 40GP), with `shutOut = null` if all fit, or with a populated `shutOut` + reasonDetail if any don't.
-- New regression: a manifest at 32 m³ (under 33.23 cap) where geometry can only place 90 % → recommender still returns 20GP, `shutOut.cartons > 0`, `reasonDetail` mentions "Switch manually to 40ft".
-- New regression: 12 × tilt-enabled cartons that only fit 8-on-floor + 4-tilted-on-top → ≥ 11 placed in a 20GP (was 8).
-- Manual override path: clicking "Switch to 40ft GP" re-runs against 40GP and the placed count matches a direct 40GP pack.
+- Pick "drum" → tilt toggle is disabled with tooltip; sideways toggle works.
+- Pick "pallet" → both toggles visible, sideways default OFF, tilt disabled. Packer leaves pallets unrotated unless user opts in.
+- Pick "bag" → both toggles enabled, tilt allowed.
+- Switch a row from carton (tilt ON) to drum → tilt flag cleared; switch back to carton → tilt stays cleared (user re-enables).
+- Existing accuracy suite stays green; add one regression: a pallet with `allowSidewaysRotation` unset packs in original orientation only.
 
 ## Out of scope
 
-- Auto-escalation when 20GP shuts cargo out (user explicitly asked for manual switch).
-- Door-gap reclaim (still rejected).
-- Multi-container loads (still single-container only).
-- Pallet tilt (pallets remain rigid by design).
+- Changing the recommender or 20GP-first policy.
+- Changing the tilt scoring bonuses.
+- Per-orientation max-stack rules.

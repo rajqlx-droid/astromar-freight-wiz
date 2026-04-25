@@ -13,7 +13,7 @@
  * Pure JS, deterministic, SSR-safe. No dependencies.
  */
 
-import type { CbmItem, PackageType } from "./calculators";
+import { getRotationPolicy, type CbmItem, type PackageType } from "./calculators";
 import { CONTAINERS, ITEM_COLORS, type ContainerPreset, type PlacedBox } from "./packing";
 import { getGapRule, DOOR_RESERVE_MM, CEILING_RESERVE_MM } from "./gap-rules";
 
@@ -178,11 +178,12 @@ export function packContainerAdvanced(
 
     const stackable = it.stackable !== false;
     const fragile = it.fragile === true;
-    // Crates and pallets ship in fixed orientation — never tip onto a side.
-    // Pallets keep L↔W (4-way entry forklift), crates also keep L↔W.
-    const isRigidUnit = it.packageType === "crate" || it.packageType === "pallet";
-    const allowSideways = isRigidUnit ? true : (it.allowSidewaysRotation !== false);
-    const allowAxis = isRigidUnit ? false : (it.allowAxisRotation === true);
+    // Rotation is gated by package-type policy AND the user's explicit flag.
+    // Pallets/crates no longer get a free pass to swap L↔W — the user must
+    // opt in. Drums/pallets/crates can never tip onto a side.
+    const policy = getRotationPolicy(it.packageType);
+    const allowSideways = policy.canSideways && (it.allowSidewaysRotation === true);
+    const allowAxis     = policy.canAxis     && (it.allowAxisRotation === true);
 
     for (let i = 0; i < it.qty; i++) {
       expanded.push({
