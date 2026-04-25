@@ -8,7 +8,7 @@
  *
  * Lazy-loaded by container-load-view.tsx (client-only).
  */
-import { Suspense, forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
+import { Suspense, createContext, forwardRef, useContext, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, Edges, Grid, Html, RoundedBox } from "@react-three/drei";
 import { Maximize2, Minimize2 } from "lucide-react";
