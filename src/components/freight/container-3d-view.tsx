@@ -152,24 +152,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
       gl.render(scene, cam);
       return angles;
     },
-    beginRecording(fps: number, durationSec: number) {
-      const t = buildTimeline(pack, fps, durationSec);
-      setRecordingTimeline(t);
-      setCurrentFrame(0);
-      return t;
-    },
-    endRecording() {
-      setRecordingTimeline(null);
-      setCurrentFrame(0);
-    },
-    applyFrame(info: VideoFrameInfo) {
-      setCurrentFrame(info.frame);
-      const cam = cameraRef.current;
-      if (!cam || !recordingTimeline) return;
-      const camInfo = cameraInfoForFrame(pack, recordingTimeline, info.frame);
-      cam.position.set(...camInfo.position);
-      cam.lookAt(...camInfo.target);
-    },
     render() {
       const gl = glRef.current;
       const scene = sceneRef.current;
@@ -179,23 +161,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     getCanvas() {
       return glRef.current?.domElement ?? null;
     },
-    setRenderSize(width: number, height: number) {
-      const gl = glRef.current;
-      const cam = cameraRef.current;
-      if (!gl || !cam) return;
-      // false = don't update CSS size; keep on-screen layout stable.
-      gl.setSize(width, height, false);
-      cam.aspect = width / height;
-      cam.updateProjectionMatrix();
-    },
-    restoreRenderSize() {
-      const gl = glRef.current;
-      const cam = cameraRef.current;
-      if (!gl || !cam) return;
-      const el = gl.domElement;
-      const w = el.clientWidth || el.width;
-      const h = el.clientHeight || el.height;
-      gl.setSize(w, h, false);
       cam.aspect = w / h;
       cam.updateProjectionMatrix();
     },
