@@ -1391,6 +1391,7 @@ function PackageShape(props: PackageShapeProps) {
 }
 
 function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(color);
   return (
     <mesh castShadow receiveShadow onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <boxGeometry args={[lm, hm, wm]} />
@@ -1404,9 +1405,9 @@ function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges
         emissiveIntensity={hovered ? 0.25 : 0}
       />
       {showEdges && (
-        <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
+        <Edges scale={0.999} color={edgeColor}>
           <lineBasicMaterial
-            color={hovered ? tiltColor : "#1f2937"}
+            color={edgeColor}
             polygonOffset
             polygonOffsetFactor={-1}
             polygonOffsetUnits={-1}
