@@ -26,17 +26,80 @@ export const CONTAINERS: ContainerPreset[] = [
   { id: "40hc", name: "40ft HC", inner: { l: 12032, w: 2350, h: 2700 }, capCbm: 76.34, maxPayloadKg: 26500 },
 ];
 
-/** Searates-style palette — distinct, accessible. */
+/**
+ * 20-color high-contrast palette. Sequence interleaves warm/cool so the first
+ * 10 SKUs (the practical maximum for almost every shipment) all sit on
+ * opposite hue arcs. Wraparound only kicks in past 20 SKUs.
+ */
 export const ITEM_COLORS = [
-  "#10b9a6", // teal
-  "#f97316", // orange
-  "#8b5cf6", // purple
-  "#3b82f6", // blue
-  "#ec4899", // pink
-  "#eab308", // yellow
+  "#ef4444", // red
   "#06b6d4", // cyan
+  "#f97316", // orange
+  "#3b82f6", // blue
+  "#eab308", // amber
+  "#8b5cf6", // violet
   "#84cc16", // lime
+  "#ec4899", // pink
+  "#10b981", // emerald
+  "#f43f5e", // rose
+  "#14b8a6", // teal
+  "#a855f7", // purple
+  "#22c55e", // green
+  "#0ea5e9", // sky
+  "#facc15", // yellow
+  "#d946ef", // fuchsia
+  "#fb7185", // coral
+  "#2dd4bf", // aqua
+  "#fbbf24", // gold
+  "#c084fc", // lavender
 ];
+
+/* ───────────────── color helpers (used by 3D renderer) ───────────────── */
+
+function clamp01(n: number): number { return Math.max(0, Math.min(1, n)); }
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace("#", "");
+  const v = h.length === 3
+    ? h.split("").map((c) => c + c).join("")
+    : h.padEnd(6, "0").slice(0, 6);
+  return {
+    r: parseInt(v.slice(0, 2), 16) / 255,
+    g: parseInt(v.slice(2, 4), 16) / 255,
+    b: parseInt(v.slice(4, 6), 16) / 255,
+  };
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const to = (n: number) =>
+    Math.round(clamp01(n) * 255).toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+/** Perceived luminance (Rec. 709). 0 = black, 1 = white. */
+export function luminance(hex: string): number {
+  const { r, g, b } = hexToRgb(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Mix `hex` toward white by `amount` (0..1). */
+export function lighten(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  const a = clamp01(amount);
+  return rgbToHex(r + (1 - r) * a, g + (1 - g) * a, b + (1 - b) * a);
+}
+
+/** Mix `hex` toward black by `amount` (0..1). */
+export function darken(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgb(hex);
+  const a = clamp01(amount);
+  return rgbToHex(r * (1 - a), g * (1 - a), b * (1 - a));
+}
+
+/** Pick a near-black or near-white border that contrasts with `fill`. */
+export function pickEdgeColor(fill: string): string {
+  return luminance(fill) >= 0.5 ? "#0b1220" : "#f8fafc";
+}
 
 export interface PlacedBox {
   /** mm coordinates inside the container (origin = back-left-floor). */
