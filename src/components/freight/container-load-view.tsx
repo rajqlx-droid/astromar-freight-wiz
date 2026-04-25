@@ -307,17 +307,11 @@ function SinglePlanBody({
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
   planMeta?: BestPlanMeta | null;
 }) {
-  // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
-  // along scene-z (container width axis). Cleared when row toggles off.
-  const [shufflePreview, setShufflePreview] = useState<Map<number, number> | null>(
-    null,
-  );
-
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
+  // The stepper drives the text HUD walkthrough only — it never moves, hides,
+  // or animates cargo in the 3D scene. The 3D viewer always renders the
+  // physically-packed cargo at exact coordinates.
   const [palletIdx, setPalletIdx] = useState(-1);
-  // Forklift visuals are disabled — kept as a no-op state so the HUD prop
-  // contracts stay intact without rendering anything in the 3D scene.
-  const [showForkliftToken, setShowForkliftToken] = useState(false);
   const [speed, setSpeed] = useState<0.5 | 1 | 2>(1);
 
   // Row groups (back wall → door). Re-derived only when the pack changes.
@@ -336,58 +330,16 @@ function SinglePlanBody({
 
   const stepMode = is3D && palletSequence.length > 0;
 
-  // Visible-placed set: every pallet from index 0..palletIdx.
-  const visiblePlacedSet = useMemo<Set<number> | null>(() => {
-    if (!stepMode) return null;
-    const s = new Set<number>();
-    for (let k = 0; k <= palletIdx; k++) {
-      const step = palletSequence[k];
-      if (step) s.add(step.placedIdx);
-    }
-    return s;
-  }, [stepMode, palletIdx, palletSequence]);
-
-  // Current + next pallet.
+  // Current step (drives the HUD text only).
   const currentStep = palletIdx >= 0 ? palletSequence[palletIdx] ?? null : null;
-  const nextStep =
-    palletIdx + 1 < palletSequence.length ? palletSequence[palletIdx + 1] ?? null : null;
-  const activePalletIdx = currentStep?.placedIdx ?? null;
-  const nextPalletIdx = !stepMode ? null : nextStep?.placedIdx ?? null;
-
-  // Fly-in animation for the most-recently-placed pallet only.
-  const [flyInPlacedSet, setFlyInPlacedSet] = useState<Set<number> | null>(null);
-  const [flyInKey, setFlyInKey] = useState(0);
-  const prevPalletIdxRef = useRef(-1);
-  useEffect(() => {
-    const prev = prevPalletIdxRef.current;
-    prevPalletIdxRef.current = palletIdx;
-    if (!stepMode || palletIdx < 0) {
-      setFlyInPlacedSet(null);
-      return;
-    }
-    if (palletIdx > prev) {
-      const step = palletSequence[palletIdx];
-      if (!step) return;
-      setFlyInPlacedSet(new Set([step.placedIdx]));
-      setFlyInKey((k) => k + 1);
-      const t = setTimeout(() => setFlyInPlacedSet(null), 700);
-      return () => clearTimeout(t);
-    }
-    setFlyInPlacedSet(null);
-  }, [palletIdx, stepMode, palletSequence]);
 
   // Reset stepper when toggling 3D.
   useEffect(() => {
     setPalletIdx(-1);
   }, [is3D]);
 
-  // Active row (right-panel highlight + gap heatmap) = current pallet's row.
+  // Active row (right-panel highlight only).
   const activeRowIdx = currentStep?.rowIdx ?? null;
-  const activeRow = activeRowIdx != null ? rows[activeRowIdx] ?? null : null;
-
-  const [showGapHeatmap, setShowGapHeatmap] = useState(true);
-  const gapHeatmapRow =
-    stepMode && showGapHeatmap && activeRow && activeRow.gapWarning ? activeRow : null;
 
   // Auto-play: 1× = 600ms per pallet, 0.5× = 1200ms, 2× = 300ms.
   const stepDurationMs = Math.round(600 / speed);
@@ -457,16 +409,7 @@ function SinglePlanBody({
                   <Container3DView
                     ref={isActive ? view3DRef : undefined}
                     pack={pack}
-                    shufflePreview={shufflePreview}
-                    visiblePlacedSet={visiblePlacedSet}
-                    hideDoors={stepMode || pack.placedCartons === 0}
-                    gapHeatmapRow={gapHeatmapRow}
-                    flyInPlacedSet={flyInPlacedSet}
-                    flyInKey={flyInKey}
-                    activePalletIdx={activePalletIdx}
-                    nextPalletIdx={nextPalletIdx}
-                    followCam={isPlaying}
-                    showForkliftToken={showForkliftToken && currentStep != null}
+                    hideDoors={pack.placedCartons === 0}
                     nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
                     overlay={
                       stepMode ? (
@@ -481,8 +424,8 @@ function SinglePlanBody({
                           onNext={goNext}
                           onReset={goReset}
                           onSpeedChange={setSpeed}
-                          showForklift={showForkliftToken}
-                          onToggleForklift={() => setShowForkliftToken((v) => !v)}
+                          showForklift={false}
+                          onToggleForklift={() => {}}
                           pack={pack}
                           rows={rows}
                           planMeta={planMeta}
@@ -506,9 +449,6 @@ function SinglePlanBody({
                 total={palletSequence.length}
                 rowIdx={currentStep?.rowIdx ?? null}
                 totalRows={rows.length}
-                showGapHeatmap={showGapHeatmap}
-                onToggleGapHeatmap={() => setShowGapHeatmap((v) => !v)}
-                activeRowHasGap={!!activeRow?.gapWarning}
               />
             )}
           </div>
@@ -517,9 +457,6 @@ function SinglePlanBody({
         <LoadingSequence pack={pack} />
         <LoadingRowsPanel
           pack={pack}
-          onApplyShuffle={(map) => setShufflePreview(map)}
-          shufflePreviewActive={shufflePreview !== null}
-          previewRequires3D={!is3D}
           activeRowIdx={activeRowIdx}
           onRowSelect={(idx) => {
             // Clicking a row card jumps to the FIRST pallet of that row.
@@ -545,45 +482,19 @@ function PalletStatusBar({
   total,
   rowIdx,
   totalRows,
-  showGapHeatmap,
-  onToggleGapHeatmap,
-  activeRowHasGap,
 }: {
   currentIdx: number;
   total: number;
   rowIdx: number | null;
   totalRows: number;
-  showGapHeatmap: boolean;
-  onToggleGapHeatmap: () => void;
-  activeRowHasGap: boolean;
 }) {
   const empty = currentIdx < 0;
   const status = empty
-    ? "Empty container — press ▶ in the HUD to start the loader walkthrough"
+    ? "Empty container — press ▶ in the HUD to walk through loading order"
     : `Pallet ${currentIdx + 1} of ${total}${rowIdx != null ? ` · row ${rowIdx + 1} / ${totalRows}` : ""}`;
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-1.5">
       <span className="text-[11px] font-medium text-muted-foreground">{status}</span>
-      <Button
-        type="button"
-        size="sm"
-        variant={showGapHeatmap ? "default" : "outline"}
-        onClick={onToggleGapHeatmap}
-        className={cn(
-          "ml-auto h-7 px-2 text-[11px]",
-          showGapHeatmap && activeRowHasGap
-            ? "bg-rose-600 text-white hover:bg-rose-700"
-            : "",
-        )}
-        aria-pressed={showGapHeatmap}
-        title={
-          activeRowHasGap
-            ? "Toggle red overlay highlighting floor & wall voids"
-            : "Heatmap appears on rows flagged with gap warnings"
-        }
-      >
-        ⚠ Gaps
-      </Button>
     </div>
   );
 }
