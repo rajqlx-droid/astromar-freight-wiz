@@ -474,7 +474,16 @@ export function packContainerAdvanced(
   const usableLengthMm = Math.max(1, C.l - DOOR_RESERVE_MM);
   const containerCapCbm = Math.max(0.001, container.capCbm);
   const volumeFill = cargoCbm / containerCapCbm;
-  const spreadMode = volumeFill < 0.65;
+  // Estimate how many cartons fit ACROSS the container in one row using the
+  // average footprint width. Spread mode only makes sense when there are
+  // enough cartons to fill at least 2 rows back-to-back — otherwise spacing
+  // them out leaves single-carton rows that trip the FLOOR_GAP warning even
+  // though the placement is geometrically optimal.
+  const avgWidthMm = expanded.length > 0
+    ? expanded.reduce((s, c) => s + Math.min(c.origL, c.origW), 0) / expanded.length
+    : 1;
+  const cartonsPerRowEst = Math.max(1, Math.floor(C.w / Math.max(1, avgWidthMm)));
+  const spreadMode = volumeFill < 0.65 && expanded.length >= cartonsPerRowEst * 2;
   // Estimate how many cartons will land on the floor (1 layer). Used to
   // choose the stride for evenly-spaced target slots in spread mode.
   const avgFloorFootprintMm2 = expanded.length > 0
