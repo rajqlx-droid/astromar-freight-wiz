@@ -1,80 +1,54 @@
-# Fix overlap/float artefacts during walkthrough playback
+# Enforce 1 mm minimum gap between every cargo unit
 
-## What the user sees
+## What changes for the user
 
-When the optimizer finishes, the static 3D view shows every box at its exact validated slot — zero overlap, zero floating. As soon as the user clicks **Play** or **Next**, boxes appear to **overlap each other** and **some hover in mid-air**. Once the walkthrough finishes (or is reset), everything snaps back to the perfect view.
+Today every cargo type packs **flush** — adjacent boxes/bags/drums/bales touch face-to-face with 0 mm between them. You want a **hard 1 mm gap** between every pair of cargo units (and 1 mm to the side walls). Door 100 mm and ceiling 80 mm reserves stay exactly as they are.
 
-## End-to-end trace of the playback path
+Result during play and in the static view:
+- No two cargo units share a face. Every neighbour pair has at least 1 mm of clear air between them, so visual or numeric overlap becomes impossible.
+- The packer plans around this gap, so the count it reports is what physically fits with 1 mm separation. Capacity drops slightly for dense loads (typically 1–3% fewer pieces in a 40HC mixed pack).
+- The walkthrough animation already lands each box at its real slot, so the 1 mm gap is visible at the moment the box seats.
 
-1. `container-load-view.tsx` builds two derived structures from `pack.placed`:
-   - `palletSequence` = ordered loader steps via `buildPalletSequence(pack, rows)`. Each step carries `placedIdx` (= `pack.placed.indexOf(box)`).
-   - `visiblePlacedIdxs` = `Set` of `placedIdx` for steps `0..palletIdx`.
-   - `flyInIdxs` = `Set` containing only `currentStep.placedIdx`.
-2. `Container3DView` forwards these to `SceneContents`, which maps `pack.placed` → `<CargoBox>` and skips boxes whose index is NOT in `visiblePlacedIdxs`.
-3. Inside `CargoBox`:
-   - The mesh group has JSX `position={[cx, cy + palletLift, cz]}` — **the final slot**.
-   - When `flyIn === true`, a `useFrame` callback overrides the position imperatively to `(cx + dx, cy + dy, cz)` where `dx, dy` ease from the staging offset down to zero over 600 ms.
-   - The staging offset is `+stageOffsetX` toward the door (+x in scene space) and `+stageOffsetY` upward. So the new box swoops **down-and-back** from above the door into its slot.
+## Files to change
 
-## Root causes (two distinct bugs)
+### `src/lib/freight/gap-rules.ts`
+Bump `minGap` from `0` to `1` mm and `wallMin` from `0` to `1` mm for every entry in `GAP_RULES_MM` (carton, pallet, drum, crate, bale, bag). Keep `doorMin = 100`, `ceilingMin = 80`, `WALL_SAFETY_MARGIN_MM = 0` (we'll read `wallMin` directly). Update the file's top comment from "may sit FLUSH" to "must keep ≥ 1 mm clear of every neighbour and side wall; door 100 mm / ceiling 80 mm reserves unchanged".
 
-### Bug 1 — "Overlapping": fly-in path passes through already-placed cargo
+`classifyGap` already returns `WARN` when `gapMm < min` and `BLOCK` when `gapMm < 0`. With `min = 1`, a 0 mm flush touch becomes `WARN`, which lines up with the new rule (the packer below will refuse to create those touches in the first place).
 
-The staging position is **up + toward the door**. The slot is **inside the container, possibly at the back wall**. The straight-line interpolation between them passes through every box that is between the slot and the door. Mid-animation, the new box visibly intersects and tunnels through those neighbours. To the user this reads as "the boxes are overlapping during play".
+### `src/lib/freight/packing-advanced.ts`
+1. `wouldBeLegal(x, y, z, l, w, h, minGap)` — currently treats `_minGap` as unused. Rewrite the strict-overlap loop to require **clearance ≥ minGap** on at least one axis between the candidate and every already-placed box. Specifically: for each placed box `p`, compute axis-wise gaps `gx = max(p.x - (x+l), x - (p.x+p.l))`, `gy`, `gz`; reject the placement if `gx < minGap && gy < minGap && gz < minGap`. This treats touching faces as illegal (gap = 0 < 1) and keeps the existing overlap rejection (any negative gap).
+2. Pass the per-package `minGap` into every `wouldBeLegal` call: replace the hard-coded `0` at line ~604 in the support search and the existing `getGapRule(c.packageType).minGap` at the final guard (line ~803) — both should resolve to `1`.
+3. Wall reserve: when generating candidate `x`/`y` positions, clamp the search range so the box sits at least `wallMin` (= 1) inside the inner container on the −X, +Y, −Y sides. The +X side is already clamped by `DOOR_RESERVE_MM`. The +Z (ceiling) side is already clamped by `CEILING_RESERVE_MM`. The −Z (floor) side stays at 0 (boxes rest on the floor).
 
-The earlier fix that switched bag/drum/bale shapes to opaque borders made this **more visible** — you can now clearly see the new box clipping through its predecessors instead of it being lost in similar-coloured fills.
+### `src/lib/freight/geometry-validator.ts`
+Add a neighbour-gap check after the existing strict-overlap pass:
+- For every pair `(a, b)` in the placed set, compute the same axis-wise gap as above. If `min(gx, gy, gz) < 1 mm − epsilon` (use `EPS = 0.5` mm for float drift) **and** the boxes are not the same instance, record the pair under a new violation type `neighbourGap` (separate from `overlap`).
+- The result struct gains a `neighbourGapPairs: number[]` field listing the offending placedIdx values. Treated as a hard violation (same severity as overlap) so a bad pack is rejected by the optimiser sweep and never reaches the 3D viewer.
 
-### Bug 2 — "Floating": one-frame flash at the slot before staging kicks in
+### `src/lib/freight/packing-advanced.accuracy.test.ts` and the regression test
+Update fixtures whose expected placed counts assumed flush packing. The 6 accuracy cases each get their `expectedPlaced` recomputed by running the updated packer once and recording the new count (each test currently asserts an exact integer — they will drift by 0–3 pieces). The regression test's no-overlap and door/ceiling reserve assertions stay valid; add a new assertion that every pair of placed boxes has ≥ 1 mm clearance on at least one axis.
 
-The JSX prop `position={[cx, cy + palletLift, cz]}` is the **final slot**. `useFrame` only runs after React commits, so on the very first frame after `flyIn` flips true, the box is rendered AT its slot for one frame, then jumps to the staging position, then animates back. This is a brief visible "double" at the destination — looks like the box ghosts through whatever sits next to it.
+### `src/lib/freight/compliance.ts` and `loading-rows-panel.tsx` (text only)
+Where the UI explains the gap policy ("flush packing legal", "tight pack" badges), update the wording to "1 mm minimum clearance between cargo units; door 100 mm, ceiling 80 mm reserves enforced."
 
-### Bug 3 — "Floating" (real): cross-rank stacked boxes
+## Files NOT touched
 
-`buildRows` clusters by floor-pallet x-start with a 200 mm tolerance and assigns each stacked box to the rank whose floor pallets it covers most. Edge case: a stacked box that bridges two ranks gets assigned to whichever has greater overlap. If the picked rank's floor pallet sits at a different x than the stacked box's true supporter, the **supporter box belongs to a later rank** and is therefore not yet visible during the walkthrough — the stacked box appears to float.
+- `container-3d-view.tsx` — viewer already renders at exact slot coords; with 1 mm gaps those slots now naturally have visible separation. No shape-rendering tweaks needed.
+- `container-load-view.tsx` — walkthrough/animation logic unchanged; supporter-expansion and L-shaped fly-in stay as-is.
+- `display-colors.ts`, the 20-colour palette, and the adjacency contrast helper — unchanged.
+- The packing Web Worker — it just calls `wouldBeLegal`, so it picks up the new gap automatically.
 
-This is rare but real. The `placedIdx` ordering in `buildPalletSequence` is per-row, so a box added in row N may depend on a supporter that the row builder has filed under row N+1.
+## Technical notes
 
-## Fixes
-
-### Fix 1 — Curved fly-in path that clears the cargo column
-
-Replace the straight-line ease-out with a two-phase path:
-
-- **Phase 1 (0 → 0.45):** ease horizontally from `(cx + stageOffsetX, cy + stageOffsetY, cz)` to `(cx, cy + stageOffsetY, cz)` — the box flies along the top of the container until it is directly over its slot. No horizontal pass through other boxes.
-- **Phase 2 (0.45 → 1.0):** ease straight down from `(cx, cy + stageOffsetY, cz)` to `(cx, cy, cz)` — the box descends vertically into its slot, mirroring how a real crane / forklift lowers cargo from above. The vertical descent is clear of horizontal neighbours by construction (anything in this column would be the supporter, and the supporter renders before this step).
-
-Both phases use ease-in-out cubic so the transition between them is smooth. Total duration unchanged at 600 ms.
-
-### Fix 2 — Hide the box for one frame until useFrame seats it
-
-When `flyIn === true` and `animStartRef.current === null`, render the group with `visible={false}` so the brief one-frame flash at the final slot is invisible. The first useFrame tick sets `animStartRef.current = 0` and toggles a tiny `staged` ref; from that point on the group is visible and `useFrame` keeps the position correct. Cheap, no extra renders.
-
-Equivalently, render the group at the staging position from the start (JSX `position={[cx + stageOffsetX, cy + stageOffsetY, cz]}` whenever `flyIn` is true) so even before useFrame runs there is no flash at the slot.
-
-### Fix 3 — Auto-include geometric supporters in `visiblePlacedIdxs`
-
-In `container-load-view.tsx`, after computing `visiblePlacedIdxs` from the step indices, **expand the set** to include every box that geometrically supports any visible stacked box, regardless of which row the row-builder filed it under.
-
-A box `s` supports `b` when:
-- `|s.z + s.h − b.z| < 2 mm` (top face of `s` is at the bottom face of `b`), and
-- footprint of `s` overlaps footprint of `b` in both x and y.
-
-The expansion runs once per `(pack, palletIdx)` change, walks visible boxes, finds supporters in `pack.placed`, and unions them into the set. Cost is O(visible × placed) bounded by ~few thousand boxes — negligible. Result: a stacked box never appears without its physical supporter visible underneath, even if the row clustering put them in different ranks.
-
-This is purely a viewer concern; the packer, gap rules, and validators are untouched.
-
-## Files touched
-
-- `src/components/freight/container-3d-view.tsx`
-  - Rewrite the `useFrame` body in `CargoBox` to follow the L-shaped (over-then-down) path.
-  - Set the JSX group position to the staging point while `flyIn === true` so there is no single-frame flash at the slot.
-- `src/components/freight/container-load-view.tsx`
-  - Add a small `expandWithSupporters(visibleSet, pack.placed)` step on top of the existing `visiblePlacedIdxs` memo.
-
-No changes to the packer, validators, gap rules, accuracy tests, palette, adjacency-aware coloring, or borders. The 3D viewer's resting position for every box is still the validated packer slot, so once the walkthrough completes the view is identical to before this change.
+- **Why 1 mm and not larger.** You asked for 1 mm. It's small enough that capacity barely changes (one row of bags in a 40HC loses at most 1 piece) but large enough that floating-point arithmetic can never collapse the gap into a visual touch. If after testing you want bigger gaps for drums (chocks) or bales (compression slack), only `GAP_RULES_MM` needs editing — the packer reads `minGap` per package type.
+- **Validator epsilon.** The existing `OVERLAP_EPSILON = 0.5 mm` stays. The new neighbour-gap check uses `1 mm − 0.5 mm = 0.5 mm` as the rejection threshold so flush placements (gap = 0) fail and 1.0 mm placements pass without flicker.
+- **Stack support.** Stacked boxes still rest directly on the supporter's top face (vertical gap = 0 on Z). The `gz < minGap` test alone wouldn't reject a legitimate stack because `gx` and `gy` overlap — and the rule we're encoding is "rejected only when ALL three axes are within minGap", which matches reality (a stacked box must overlap horizontally with its supporter, so it's not a "neighbour"). The validator's footprint-on-supporter check (separate code path) is unchanged, so floating boxes still fail.
+- **Performance.** `wouldBeLegal` is already O(placed) per candidate. Adding the gap check is the same comparison with a 1 mm slack — no new loops, no perf regression.
 
 ## Verification
 
-- Run `bunx tsc --noEmit` (must stay clean).
-- Run `bunx vitest run src/lib/freight/packing-advanced.accuracy.test.ts` (must stay green).
-- Manual: load a dense 40HC mixed pack, click Play, scrub Next/Prev. Each fly-in should travel up-and-over, then down into the slot, with no box visibly tunneling through any other and no stacked box ever appearing without its supporter underneath.
+1. `bunx tsc --noEmit` — must stay clean.
+2. `bunx vitest run src/lib/freight/packing-advanced.accuracy.test.ts src/lib/freight/packing-advanced.regression.test.ts src/lib/freight/geometry-validator.test.ts` — update accuracy fixtures, all must pass.
+3. Manual: load 1 bale + 1 bag + 1 drum, click Play, scrub Next/Prev. Each unit lands with a visible hairline of space on every shared face. Static view shows the same.
+4. Manual: dense 40HC mixed pack. Confirm count drops by at most a few pieces vs. the previous flush plan and that no two boxes visibly touch in the 3D scene.
