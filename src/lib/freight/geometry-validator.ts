@@ -21,10 +21,13 @@ import { DOOR_RESERVE_MM, CEILING_RESERVE_MM } from "./gap-rules";
 
 /** Universal hard limits — match gap-rules.ts. */
 export const HARD = {
-  /** Minimum lateral neighbour gap when boxes overlap vertically. */
-  MIN_NEIGHBOUR_GAP_MM: 50,
-  /** Minimum side-wall clearance. */
-  MIN_WALL_GAP_MM: 50,
+  /**
+   * Lateral neighbour gap is 0 — flush packing is legal. The pairwise overlap
+   * check is the single source of truth for "boxes must not intersect".
+   */
+  MIN_NEIGHBOUR_GAP_MM: 0,
+  /** Side-wall clearance is 0 — cartons may sit flush against the steel walls. */
+  MIN_WALL_GAP_MM: 0,
   /** Minimum ceiling clearance (top of box to roof). */
   MIN_CEILING_GAP_MM: CEILING_RESERVE_MM,
   /** Minimum door reserve (front-most box face to door wall). */
@@ -32,13 +35,9 @@ export const HARD = {
   /** Minimum support ratio for a stacked box. */
   MIN_SUPPORT_RATIO: 0.85,
   /**
-   * Tolerance for floating-point coordinate equality (mm).
-   *
-   * Bumped from 1 → 2 mm to absorb Float32 height-map drift introduced by
-   * the packer's accumulated z + h additions for non-grid-aligned cartons
-   * (e.g. 1066.8 mm cubes). Still tight enough to catch real floating gaps —
-   * the smallest legal carton dimension is 50 mm, and visible "floating"
-   * artifacts in the renderer start around ~5 mm.
+   * Tolerance for floating-point coordinate equality (mm). Used for the
+   * support-plane test (bottom of B ≈ top of A) and door/ceiling reserve
+   * tolerance. NOT used for lateral overlap — that test is strict (0 mm).
    */
   EPS_MM: 2,
 } as const;
@@ -75,12 +74,17 @@ interface ValidatorItemFlags {
   fragile: boolean;
 }
 
-/** Cheap intersection test for two boxes in mm coords. Returns the 3D overlap volume in mm³ (0 = touching/separate). */
+/**
+ * Cheap intersection test for two boxes in mm coords. Returns the 3D overlap
+ * volume in mm³ (0 = touching/separate). STRICT: any positive intersection
+ * on every axis counts as overlap — touching faces (overlap = 0 on at least
+ * one axis) is legal.
+ */
 function overlapVolume(a: PlacedBox, b: PlacedBox): number {
   const dx = Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x);
   const dy = Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y);
   const dz = Math.min(a.z + a.h, b.z + b.h) - Math.max(a.z, b.z);
-  if (dx <= HARD.EPS_MM || dy <= HARD.EPS_MM || dz <= HARD.EPS_MM) return 0;
+  if (dx <= 0 || dy <= 0 || dz <= 0) return 0;
   return dx * dy * dz;
 }
 
