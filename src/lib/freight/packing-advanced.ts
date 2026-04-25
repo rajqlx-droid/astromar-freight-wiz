@@ -472,6 +472,20 @@ export function packContainerAdvanced(
   // placements to spread them evenly along the usable container length and
   // bias the lateral position toward the centre line.
   const usableLengthMm = Math.max(1, C.l - DOOR_RESERVE_MM);
+  // Dev-only length-budget log so the audit panel + console agree on why a
+  // given row count is the maximum. Smallest carton length sets the row depth
+  // we'd need for one more row at the door end.
+  if (import.meta.env?.DEV) {
+    const minLen = expanded.length > 0
+      ? Math.min(...expanded.map((c) => Math.min(c.origL, c.origW)))
+      : 0;
+    const rows = minLen > 0 ? Math.floor(usableLengthMm / minLen) : 0;
+    const slack = minLen > 0 ? usableLengthMm - rows * minLen : usableLengthMm;
+    // eslint-disable-next-line no-console
+    console.log(
+      `[pack] inner=${C.l} door=${DOOR_RESERVE_MM} usable=${usableLengthMm} rowDepth=${minLen} rows=${rows} slack=${slack}`,
+    );
+  }
   const containerCapCbm = Math.max(0.001, container.capCbm);
   const volumeFill = cargoCbm / containerCapCbm;
   // Estimate how many cartons fit ACROSS the container in one row using the
