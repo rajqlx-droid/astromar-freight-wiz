@@ -241,45 +241,6 @@ export function ContainerLoadView({
           </PillButton>
         ))}
         <div className="ml-auto flex items-center gap-2">
-          <div title={optimizationDisabledReason ?? undefined} className={cn("flex items-center gap-2", optimizationDisabledReason && "pointer-events-none opacity-50")}>
-            <LoadingVideoButton
-              pack={activePack}
-              containerLabel={activePack.container.name}
-              getHandle={() => view3DRef.current}
-              ensure3DReady={async () => {
-                if (!is3D) setIs3D(true);
-              }}
-            />
-          </div>
-          <div
-            className={cn(
-              "flex rounded-full border border-brand-navy/30 p-0.5",
-              optimizationDisabledReason && "opacity-50",
-            )}
-            title={optimizationDisabledReason ?? undefined}
-          >
-            <button
-              type="button"
-              onClick={() => setIs3D(false)}
-              className={cn(
-                "rounded-full px-3 py-1 text-[11px] font-semibold transition-colors",
-                !is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-              )}
-            >
-              2D
-            </button>
-            <button
-              type="button"
-              onClick={() => !optimizationDisabledReason && setIs3D(true)}
-              disabled={!!optimizationDisabledReason}
-              className={cn(
-                "flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed",
-                is3D ? "bg-brand-navy text-white" : "text-brand-navy hover:bg-brand-navy/10",
-              )}
-            >
-              <BoxIcon className="size-3" /> 3D
-            </button>
-          </div>
           <button
             type="button"
             onClick={() => setViewerCollapsed((v) => !v)}
