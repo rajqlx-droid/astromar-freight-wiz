@@ -417,9 +417,11 @@ export function packContainerAdvanced(
    * legal in the final audit. Anything failing here is rejected before the
    * commit so the validator can never see a floating / overlapping box.
    *
-   * Lateral neighbour gap and side-wall gap are 0 (per gap-rules.ts). The
-   * STRICT pairwise overlap test is the only thing preventing physical
-   * intersection. _minGap is accepted but unused — kept for call-site compat.
+   * Lateral neighbour gap = `minGap` mm (per gap-rules.ts → 1 mm). A pair of
+   * boxes is illegal when they intersect on every axis within `minGap` of
+   * each other (so flush touching, gap = 0 < 1, is rejected). Side-wall
+   * clearance is also `minGap` on the −X / ±Y faces (door + ceiling have
+   * their own larger reserves).
    */
   function wouldBeLegal(
     x: number,
@@ -428,12 +430,14 @@ export function packContainerAdvanced(
     l: number,
     w: number,
     h: number,
-    _minGap: number,
+    minGap: number,
   ): boolean {
-    // Bounds.
-    if (x < 0 || y < 0 || z < 0) return false;
+    // Bounds + side-wall clearance (door + ceiling reserves handled below).
+    if (x < minGap - 0.001) return false;
+    if (y < minGap - 0.001) return false;
+    if (z < 0) return false;
     if (x + l > C.l + 0.5) return false;
-    if (y + w > C.w + 0.5) return false;
+    if (y + w > C.w - minGap + 0.001) return false;
     if (z + h > C.h + 0.5) return false;
     // Door / ceiling reserves are still enforced.
     if (C.l - (x + l) < DOOR_RESERVE_MM - 1) return false;
@@ -453,15 +457,37 @@ export function packContainerAdvanced(
       if (ratio < SUPPORT_MIN_RATIO) return false;
     }
 
-    // STRICT pairwise overlap — touching faces are legal; only meaningful
-    // intersection is rejected. 0.5mm tolerance matches the validator's
-    // overlap epsilon so flush snap-pass placements aren't rejected by
-    // sub-mm floating-point drift while still catching any real overlap.
+    // Pairwise neighbour-gap check. Two boxes are illegal when the AABB
+    // distance on every axis is < minGap. A box stacked directly on top of
+    // its supporter is fine because the X/Y projections overlap (negative
+    // gap on those axes) but Z gap = 0 — which is allowed (the supporter
+    // case). The illegal pattern is: all three axis gaps below `minGap`,
+    // i.e. the boxes are within `minGap` of intersecting on every axis.
+    const GAP_EPS = 0.001; // mm — float drift tolerance
+    const minClear = minGap - GAP_EPS;
     for (const p of placedInternal) {
-      const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
-      const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
-      const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
-      if (ox > 0.5 && oy > 0.5 && oz > 0.5) return false;
+      // Vertical relationship: stack-on-top is allowed (top of p ≈ bottom of new).
+      const zStackOnTop = Math.abs(p.z + p.h - z) <= 1;
+      const zStackUnder = Math.abs(z + h - p.z) <= 1;
+      if (zStackOnTop || zStackUnder) {
+        // This is a stacking adjacency — only block when there is real
+        // intersection on every axis (the existing strict overlap rule).
+        const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
+        const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
+        const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
+        if (ox > 0.5 && oy > 0.5 && oz > 0.5) return false;
+        continue;
+      }
+      // Lateral / general neighbour: enforce minGap clearance on at least
+      // one axis. Axis "gap" is the separation distance (negative when the
+      // projections overlap on that axis).
+      const gx = Math.max(p.x - (x + l), x - (p.x + p.l));
+      const gy = Math.max(p.y - (y + w), y - (p.y + p.w));
+      const gz = Math.max(p.z - (z + h), z - (p.z + p.h));
+      // Boxes are clear if at least one axis has ≥ minGap separation.
+      if (gx >= minClear || gy >= minClear || gz >= minClear) continue;
+      // Otherwise they crowd each other — illegal.
+      return false;
     }
     return true;
   }
