@@ -312,21 +312,6 @@ export function LoaderHUD({
               {s}×
             </button>
           ))}
-          <div className="mx-0.5 h-5 w-px bg-brand-navy/20" />
-          <button
-            type="button"
-            onClick={onToggleForklift}
-            className={cn(
-              "h-7 rounded px-1.5 text-[10px] font-semibold transition-colors",
-              showForklift
-                ? "bg-amber-500 text-black"
-                : "text-brand-navy hover:bg-brand-navy/10",
-            )}
-            aria-pressed={showForklift}
-            title="Toggle forklift token"
-          >
-            🚜
-          </button>
         </div>
       </div>
     </div>
