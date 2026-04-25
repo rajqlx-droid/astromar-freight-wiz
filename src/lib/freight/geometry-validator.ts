@@ -17,17 +17,20 @@
  */
 import type { PlacedBox, ContainerPreset } from "./packing";
 import type { AdvancedPackResult } from "./packing-advanced";
-import { DOOR_RESERVE_MM, CEILING_RESERVE_MM } from "./gap-rules";
+import { DOOR_RESERVE_MM, CEILING_RESERVE_MM, NEIGHBOUR_MIN_GAP_MM, WALL_SAFETY_MARGIN_MM } from "./gap-rules";
 
 /** Universal hard limits — match gap-rules.ts. */
 export const HARD = {
   /**
-   * Lateral neighbour gap is 0 — flush packing is legal. The pairwise overlap
-   * check is the single source of truth for "boxes must not intersect".
+   * Lateral neighbour gap = 1 mm (per gap-rules.ts). Two boxes whose AABBs
+   * are within 1 mm of intersecting on every axis are flagged as a
+   * NEIGHBOUR_GAP violation. Stacked boxes (top of supporter ≈ bottom of
+   * stacked) are exempt — the stack contact is a vertical adjacency, not a
+   * lateral neighbour crowding.
    */
-  MIN_NEIGHBOUR_GAP_MM: 0,
-  /** Side-wall clearance is 0 — cartons may sit flush against the steel walls. */
-  MIN_WALL_GAP_MM: 0,
+  MIN_NEIGHBOUR_GAP_MM: NEIGHBOUR_MIN_GAP_MM,
+  /** Side-wall clearance — every cargo unit must keep at least this many mm clear of every side wall. */
+  MIN_WALL_GAP_MM: WALL_SAFETY_MARGIN_MM,
   /** Minimum ceiling clearance (top of box to roof). */
   MIN_CEILING_GAP_MM: CEILING_RESERVE_MM,
   /** Minimum door reserve (front-most box face to door wall). */
