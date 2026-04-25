@@ -1161,7 +1161,7 @@ function CargoBox({
   });
 
   return (
-    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale * 0.99}>
+    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
       {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
