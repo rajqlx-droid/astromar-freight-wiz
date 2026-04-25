@@ -424,8 +424,8 @@ function SinglePlanBody({
                           onNext={goNext}
                           onReset={goReset}
                           onSpeedChange={setSpeed}
-                          showForklift={showForkliftToken}
-                          onToggleForklift={() => setShowForkliftToken((v) => !v)}
+                          showForklift={false}
+                          onToggleForklift={() => {}}
                           pack={pack}
                           rows={rows}
                           planMeta={planMeta}
@@ -449,9 +449,6 @@ function SinglePlanBody({
                 total={palletSequence.length}
                 rowIdx={currentStep?.rowIdx ?? null}
                 totalRows={rows.length}
-                showGapHeatmap={showGapHeatmap}
-                onToggleGapHeatmap={() => setShowGapHeatmap((v) => !v)}
-                activeRowHasGap={!!activeRow?.gapWarning}
               />
             )}
           </div>
