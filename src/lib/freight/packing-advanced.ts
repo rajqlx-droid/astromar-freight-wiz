@@ -705,11 +705,11 @@ export function packContainerAdvanced(
 
     // Snap-to-neighbour: slide the chosen placement toward -X (back wall) then
     // -Y (left wall) to close any sub-stride gap left by the coarse scan.
-    // No lateral or wall-gap rules apply (gap-rules.ts: minGap = wallMin = 0);
-    // the only rejection criterion is strict physical overlap with a placed
-    // box. In spread mode we DISABLE the X-snap so deliberate spacing is
-    // preserved — Y-snap still hugs the left wall (or centre, depending on
-    // the chosen y) which is fine for balance.
+    // Side-wall + neighbour clearance = `snapMinGap` mm (per gap-rules.ts,
+    // 1 mm by default). The slide stops the moment the box would crowd a
+    // neighbour or the wall. In spread mode we DISABLE the X-snap so
+    // deliberate longitudinal spacing is preserved.
+    const snapMinGap = getGapRule(c.packageType).minGap;
     const snapAxis = (axis: "x" | "y") => {
       const tryAt = (nx: number, ny: number) => {
         const ev = evaluatePlacement(nx, ny, bestPick!.orient.l, bestPick!.orient.w, {
@@ -731,29 +731,19 @@ export function packContainerAdvanced(
             return null;
           }
         }
-        // Strict overlap rejection — flush is fine, intersection is not.
-        const ol = bestPick!.orient.l;
-        const ow = bestPick!.orient.w;
-        const oh = bestPick!.orient.h;
-        for (const pb of placedInternal) {
-          if (pb.x + pb.l <= nx || nx + ol <= pb.x) continue;
-          if (pb.y + pb.w <= ny || ny + ow <= pb.y) continue;
-          const zOv = ev.z < pb.z + pb.h && ev.z + oh > pb.z;
-          if (zOv) {
-            const ox = Math.min(nx + ol, pb.x + pb.l) - Math.max(nx, pb.x);
-            const oy = Math.min(ny + ow, pb.y + pb.w) - Math.max(ny, pb.y);
-            if (ox > 0.5 && oy > 0.5) return null;
-          }
+        // Full per-package legality (overlap + neighbour gap + wall gap).
+        if (!wouldBeLegal(nx, ny, ev.z, bestPick!.orient.l, bestPick!.orient.w, bestPick!.orient.h, snapMinGap)) {
+          return null;
         }
         return ev;
       };
 
-      // Coarse 10mm slide.
+      // Coarse 10mm slide. Floor stays at `snapMinGap` (wall clearance).
       const COARSE = 10;
       while (true) {
         const cur = axis === "x" ? bestPick!.x : bestPick!.y;
-        if (cur <= 0) break;
-        const next = Math.max(0, cur - COARSE);
+        if (cur <= snapMinGap) break;
+        const next = Math.max(snapMinGap, cur - COARSE);
         const nx = axis === "x" ? next : bestPick!.x;
         const ny = axis === "y" ? next : bestPick!.y;
         const ev = tryAt(nx, ny);
@@ -766,7 +756,7 @@ export function packContainerAdvanced(
       // Fine 1mm slide for the last sub-coarse gap.
       for (let i = 0; i < COARSE; i++) {
         const cur = axis === "x" ? bestPick!.x : bestPick!.y;
-        if (cur <= 0) break;
+        if (cur <= snapMinGap) break;
         const next = cur - 1;
         const nx = axis === "x" ? next : bestPick!.x;
         const ny = axis === "y" ? next : bestPick!.y;
