@@ -1178,6 +1178,7 @@ function CargoBox({
   showCheckmark = false,
   showEdges = true,
   nearCeiling = false,
+  displayColor,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1191,6 +1192,8 @@ function CargoBox({
   showCheckmark?: boolean;
   showEdges?: boolean;
   nearCeiling?: boolean;
+  /** Adjacency-aware shade override; falls back to box.color. */
+  displayColor?: string;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
