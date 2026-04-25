@@ -463,6 +463,28 @@ export function packContainerAdvanced(
     return true;
   }
 
+  // ── CoG-aware spread heuristic ─────────────────────────────────────────
+  // When the cargo CBM fills less than 65 % of the container, jamming every
+  // carton against the back wall puts the centre of gravity badly forward of
+  // centre when more cartons are added later. In that regime we score
+  // placements to spread them evenly along the usable container length and
+  // bias the lateral position toward the centre line.
+  const usableLengthMm = Math.max(1, C.l - DOOR_RESERVE_MM);
+  const containerCapCbm = Math.max(0.001, container.capCbm);
+  const volumeFill = cargoCbm / containerCapCbm;
+  const spreadMode = volumeFill < 0.65;
+  // Estimate how many cartons will land on the floor (1 layer). Used to
+  // choose the stride for evenly-spaced target slots in spread mode.
+  const avgFloorFootprintMm2 = expanded.length > 0
+    ? expanded.reduce((s, c) => s + c.origL * c.origW, 0) / expanded.length
+    : 1;
+  const estFloorCount = Math.max(
+    1,
+    Math.min(expanded.length, Math.floor((C.l * C.w) / Math.max(1, avgFloorFootprintMm2))),
+  );
+  const spreadStrideMm = usableLengthMm / Math.max(1, Math.min(expanded.length, estFloorCount));
+  let spreadCursor = 0; // increments per committed floor box in spread mode
+
   for (const c of expanded) {
     const orients = buildOrientations(c).filter(
       (o) => o.l <= C.l && o.w <= C.w && o.h <= C.h,
