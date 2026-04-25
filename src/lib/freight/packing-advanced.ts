@@ -563,8 +563,13 @@ export function packContainerAdvanced(
           if (!weightOk) continue;
 
           // Lateral neighbour gap and side-wall gap are 0 — flush packing
-          // is legal. The pre-commit airlock (wouldBeLegal, below) is the
-          // only gate against actual physical overlap.
+          // is legal, but the candidate must already pass the strict
+          // physical-overlap airlock. Skipping this check here lets a
+          // lower-score (further-back) overlapping candidate beat a
+          // legal-but-further-forward one and then fail at commit, leaving
+          // the carton unplaced. Filter overlap-fails out of contention
+          // before scoring so the legal placement actually wins.
+          if (!wouldBeLegal(x, y, ev.z, o.l, o.w, o.h, 0)) continue;
 
           // Score:
           //  - Tight mode (default, container is well-filled): back-to-front
