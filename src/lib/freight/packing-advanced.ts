@@ -719,6 +719,24 @@ export function packContainerAdvanced(
     }
 
     const { x, y, z, orient, supporters, supportRatio } = bestPick;
+
+    // ── Final airlock: pre-commit geometry guard ────────────────────────
+    // Even after evaluatePlacement, snap, and z-snap, run the canonical
+    // legality check against placedInternal. If the candidate would be
+    // floating, overlapping, or crowding a neighbour the validator will
+    // catch in the final audit, REJECT IT NOW so the produced pack is
+    // guaranteed legal. This is the single airlock that closes the loop
+    // between the packer's grid heuristic and the validator's geometric truth.
+    {
+      const guardGap = getGapRule(c.packageType).minGap;
+      if (!wouldBeLegal(x, y, z, orient.l, orient.w, orient.h, guardGap)) {
+        perItemReason[c.itemIdx] ||= "Geometry guard rejected (would float / overlap / crowd neighbour)";
+        unplacedDueToStacking++;
+        stackingReasonCounts.support++; // attribute to support bucket for HUD copy
+        continue;
+      }
+    }
+
     const internalIdx = placedInternal.length;
 
     // Detect rotation vs original dimensions.
