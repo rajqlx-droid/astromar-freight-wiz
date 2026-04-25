@@ -175,24 +175,26 @@ export function validatePackGeometry(
     const a = placed[i];
     for (let j = i + 1; j < placed.length; j++) {
       const b = placed[j];
-      // Cheap AABB reject — boxes that are clearly far apart skip both checks.
+      // Axis-wise gap: positive = clear separation, negative = projection
+      // overlap on that axis. We use these for both the overlap rule and
+      // the lateral neighbour-gap rule.
       const gx = Math.max(a.x - (b.x + b.l), b.x - (a.x + a.l));
       const gy = Math.max(a.y - (b.y + b.w), b.y - (a.y + a.w));
       const gz = Math.max(a.z - (b.z + b.h), b.z - (a.z + a.h));
-      // Overlap = all three axis "gaps" negative beyond float tolerance.
+      // Real intersection = projection overlap on every axis beyond float drift.
       if (gx < -GAP_EPS && gy < -GAP_EPS && gz < -GAP_EPS) {
         const ov = overlapVolume(a, b);
         if (ov > 0) overlapPairs.push(i, j);
         continue;
       }
-      // Stacking adjacency exempt: bottom of one ≈ top of the other on Z,
-      // and the stacked footprint overlaps in X+Y.
-      const aOnB = Math.abs(b.z + b.h - a.z) <= HARD.EPS_MM;
-      const bOnA = Math.abs(a.z + a.h - b.z) <= HARD.EPS_MM;
-      if ((aOnB || bOnA) && gx < 0 && gy < 0) continue;
-      // Neighbour-gap: boxes are too close on every axis but not actually
-      // intersecting — flag as crowding.
-      if (gx < minNeighbour && gy < minNeighbour && gz < minNeighbour) {
+      // Lateral neighbour-gap: only meaningful when the two boxes share a
+      // vertical band (gz < 0). If one box is fully above the other (gz ≥ 0),
+      // a tiny lateral gap is irrelevant — they cannot collide laterally.
+      // This naturally exempts stacked boxes (top-of-A ≈ bottom-of-B → gz ≈ 0)
+      // and edge-touching at layer boundaries.
+      if (gz >= -GAP_EPS) continue;
+      // Boxes share vertical space — enforce the lateral clearance rule.
+      if (gx < minNeighbour && gy < minNeighbour) {
         gapPairs.push(i, j);
       }
     }
