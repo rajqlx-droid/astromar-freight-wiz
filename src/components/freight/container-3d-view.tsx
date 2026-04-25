@@ -328,12 +328,18 @@ function SceneContents({
   preset,
   hideDoors,
   nearCeilingPlacedIdxs,
+  visiblePlacedIdxs = null,
+  flyInIdxs = null,
+  flyInKey = 0,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
   hideDoors: boolean;
   nearCeilingPlacedIdxs: number[] | null;
+  visiblePlacedIdxs?: ReadonlySet<number> | null;
+  flyInIdxs?: ReadonlySet<number> | null;
+  flyInKey?: number;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
