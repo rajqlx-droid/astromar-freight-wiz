@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
-import type { RowGroup } from "@/lib/freight/loading-rows";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
@@ -33,59 +32,10 @@ interface Props {
   pack: AdvancedPackResult;
   height?: number;
   /**
-   * Per-box width-axis preview offset (placedIdx → metres along scene-z, the
-   * container's width). Applied additively to every matched box so loaders
-   * can visualise a "Suggested re-shuffle" before doing it physically.
-   */
-  shufflePreview?: Map<number, number> | null;
-  /**
-   * When provided, only boxes whose `placedIdx` is in this set are rendered.
-   * Used by the manual row-stepper to reveal rows one at a time, back wall
-   * → door. Pass `null` to show every box (default).
-   */
-  visiblePlacedSet?: Set<number> | null;
-  /**
-   * Hide the swing doors entirely. Useful while stepping rows or recording —
+   * Hide the swing doors entirely. Useful while recording PDF snapshots —
    * an open door at 135° still occludes the camera from many iso angles.
    */
   hideDoors?: boolean;
-  /**
-   * When set, paint translucent red void rectangles on the floor and back
-   * wall of this row's slice so loaders can see exactly where dunnage or a
-   * re-shuffle is needed. Cleared when null.
-   */
-  gapHeatmapRow?: RowGroup | null;
-  /**
-   * placedIdx of boxes that should fly in from the door this reveal. Boxes in
-   * this set animate from a staging position (high + toward the door) to their
-   * slot over ~600ms. Boxes NOT in this set render in place (already loaded).
-   */
-  flyInPlacedSet?: Set<number> | null;
-  /**
-   * Increments each time a new row is revealed — forces CargoBox to restart
-   * its fly-in animation even if the same set reference is passed.
-   */
-  flyInKey?: number;
-  /**
-   * placedIdx of the pallet currently being placed. Drives the green
-   * checkmark stamp and the follow-cam target. null = none active.
-   */
-  activePalletIdx?: number | null;
-  /**
-   * placedIdx of the pallet to be placed next (preview). Renders a pulsing
-   * yellow target outline at its slot before the box flies in.
-   */
-  nextPalletIdx?: number | null;
-  /**
-   * When true, drives the camera to a "shoulder of loader" position behind
-   * the door, tracking the active pallet. False = normal orbit/presets.
-   */
-  followCam?: boolean;
-  /**
-   * Show a low-poly forklift token that slides in from the door to the
-   * active pallet column. Toggleable from the HUD.
-   */
-  showForkliftToken?: boolean;
   /**
    * Optional overlay rendered inside the viewer wrapper (so it persists in
    * fullscreen). Use to mount HUDs / control panels that should sit on top of
