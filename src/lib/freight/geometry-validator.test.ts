@@ -220,4 +220,18 @@ describe("validateAdvancedPack — real packer output", () => {
       expect(supporter).toBeDefined();
     }
   });
+
+  it("resolves supporter equality within EPS for non-grid-aligned stacks (1066.8mm cubes)", () => {
+    // Three perfectly-stacked 1066.8mm cubes — the canonical Float32-drift case.
+    // Tops sit at 1066.8, 2133.6, 3200.4 — all must register full support (ratio = 1).
+    const placed = [
+      box(60, 60, 0,      1067, 1067, 1067),
+      box(60, 60, 1067,   1067, 1067, 1067),
+      box(60, 60, 2134,   1067, 1067, 1067),
+    ];
+    const a = validatePackGeometry(placed, HC);
+    expect(a.violations.filter(v => v.code === "FLOATING")).toEqual([]);
+    expect(a.violations.filter(v => v.code === "WEAK_SUPPORT")).toEqual([]);
+    expect(a.supportRatios.every((r) => r >= 0.99)).toBe(true);
+  });
 });
