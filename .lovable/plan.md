@@ -1,66 +1,52 @@
-# Restore fly-in loading animation + gate the 3D view behind the optimiser
+# Explain why the 12th row cannot fit (1000mm cubes in 40HC)
 
-Three connected fixes for the Container Load Optimiser:
+## Audit findings (no bug in the packer)
 
-1. **Cargo flies in and fits into place** during the row walkthrough (the animation code still exists in `CargoBox` but `flyIn` is hard-wired off, so the scene currently appears fully loaded from frame 1).
-2. **Defer the 3D scene until packing finishes**. Today, clicking *Optimize loading* shows the full container immediately because we render `Container3DView` with an empty pack while the Web Worker is still computing. Replace that with a compact "Computing optimal fit…" loader and mount the 3D view only once the worker returns the first real pack.
-3. **Remove the unused 🚜 forklift toggle and tractor icon** from the HUD (already non-functional — `showForklift={false}` and `onToggleForklift={() => {}}`).
+Container 40HC inner length = **12,032 mm**. Door reserve = **100 mm** (mandatory so the doors close — `src/lib/freight/gap-rules.ts`). Usable length = **11,932 mm**.
 
-## What changes (technical)
+With 1000 mm cubes, `floor(11,932 / 1,000) = 11` rows. A 12th row would need 1000 mm but only **932 mm** remains — that is the empty wedge visible at the door end of your screenshot. The packer is correct; no hidden rule is reducing capacity.
 
-### A. Re-enable per-pallet fly-in
+The 10 unloaded pieces (10.00 m³) shown in the HUD are exactly the cartons that would have formed (part of) row 12.
 
-`src/components/freight/container-load-view.tsx` (`SinglePlanBody`)
+## What I will add so this is obvious in the UI
 
-- Track which placed-box indices belong to the **current** pallet step:
-  ```
-  const flyInIdxs = useMemo(() => new Set(currentStep?.placedIdxs ?? []), [currentStep]);
-  ```
-  (The existing `PalletStep` type already exposes the indices of boxes loaded in that step — confirmed in `loading-rows.ts`.)
-- Bump a numeric `flyInKey` every time `palletIdx` changes so `CargoBox` re-triggers the ease-out cubic.
-- Pass `flyInIdxs` + `flyInKey` to `Container3DView` via two new (optional) props.
+### 1. Length-budget chip in the AUDIT panel
+In `src/components/freight/container-load-view.tsx` (AUDIT popover), add a new line:
 
-`src/components/freight/container-3d-view.tsx`
+```
+Length budget — 11 rows × 1000 mm = 11,000 mm of 11,932 mm usable
+                (12,032 inner − 100 door reserve). 932 mm slack.
+                12th row needs 1,000 mm — 68 mm short.
+```
 
-- Add `flyInIdxs?: ReadonlySet<number>` and `flyInKey?: number` props on `Container3DView` and `SceneContents`.
-- In the `pack.placed.map(...)` block, pass `flyIn={flyInIdxs?.has(i) ?? false}` and `flyInKey={flyInKey}` to each `<CargoBox>` (the prop already exists, lines 946–947).
-- Make sure `InvalidateOnChange` is set to `animate={true}` while any box is mid-flight so the demand-driven canvas keeps ticking. Simplest: pass `animate={!!flyInIdxs && flyInIdxs.size > 0}`.
-- Keep the ground-truth invariant intact: the **resting** position is still the exact packed coordinate, so once the 600 ms ease finishes the box snaps to its validated slot — no overlap, no float.
+Computed live from the active pack:
+- `inner = container.inner.l`
+- `reserve = DOOR_RESERVE_MM`
+- `usable = inner - reserve`
+- `rowDepth = max(placed.l for placed in current pack)` (or the dominant row depth)
+- `rows = floor(usable / rowDepth)`
+- `slack = usable - rows*rowDepth`
+- `shortBy = rowDepth - slack` (only shown when `shortBy > 0`)
 
-Verification: the existing accuracy suite (`packing-advanced.accuracy.test.ts`) keeps protecting the resting geometry. Animation only affects transient transform; resting `position` is unchanged.
+### 2. Dev-only console line
+In `src/lib/freight/packing-advanced.ts`, behind `import.meta.env.DEV`, log once per pack:
 
-### B. Gate the 3D viewer until packing finishes
+```
+[pack] inner=12032 door=100 usable=11932 rowDepth=1000 rows=11 slack=932 shortBy=68
+```
 
-`src/components/freight/container-load-view.tsx`
+So the next time you ask "why N rows?" the answer is one console line away.
 
-- We already compute `isCalculating = worker.pending && activePack.placed.length === 0 && hasCargo`.
-- In `SinglePlanBody` (or just before passing the pack to `Container3DView`), branch on it:
-  - `isCalculating` → render a compact full-width card with a spinner and the message **"Computing optimal fit… preparing 3D view"**, keep the height (`h-[420px]`) so layout doesn't jump.
-  - Otherwise → render `Container3DView` exactly as today.
-- The `LoadReportPanel`, `LoadingSequence`, `LoadingRowsPanel` etc. should also show a slim "Calculating…" skeleton or be hidden until the first pack arrives, to avoid showing stale "0 of N loaded" rows.
-- Plumb `isCalculating` from `ContainerLoadView` down to `SinglePlanBody` as a prop.
+### 3. Tiny tooltip on the door-end slack
+In `src/components/freight/container-3d-view.tsx`, when slack > 0, render a faint label at the door end ("932 mm — door reserve + 832 mm free; one more row needs 1000 mm"). Same colour as existing dimension chips, only when `showDimensions` is on.
 
-This means after clicking *Optimize loading*:
-1. Worker spins up → user sees the spinner placeholder (NOT the empty container).
-2. First valid pack returns → 3D scene mounts, doors open, walkthrough is ready.
-3. User presses ▶ on the HUD → cargo flies in row-by-row.
-
-### C. Remove the forklift toggle
-
-`src/components/freight/loader-hud.tsx`
-
-- Delete the 🚜 `<button>` block (lines ~319–333) and the divider above it.
-- Remove `showForklift` and `onToggleForklift` from the `Props` interface and the function signature.
-
-`src/components/freight/container-load-view.tsx`
-
-- Drop the `showForklift={false}` and `onToggleForklift={() => {}}` props passed to `<LoaderHUD>`.
-
-No other files reference these props (verified via `rg`).
+## Files
+- `src/components/freight/container-load-view.tsx` — AUDIT chip
+- `src/components/freight/container-3d-view.tsx` — slack label at door end
+- `src/lib/freight/packing-advanced.ts` — dev-only log
 
 ## Out of scope
+- Changing `DOOR_RESERVE_MM` (would be unsafe).
+- Changing the packer logic — it is already optimal for 1000 mm cubes in this container.
 
-- The packer logic itself stays untouched — this is a pure rendering/UX change.
-- No changes to the PDF capture path; snapshots still happen against the resting geometry.
-
-After approval I will implement the three changes, run `tsc --noEmit`, and re-run the accuracy test suite to confirm the resting pack is unchanged.
+Approve to implement.
