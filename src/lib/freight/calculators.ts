@@ -28,6 +28,62 @@ export const safeNum = (v: unknown, fallback = 0): number => {
 /* ---------------- CBM ---------------- */
 export type PackageType = "carton" | "pallet" | "crate" | "drum" | "bag" | "bale";
 
+/**
+ * Per-package-type rotation policy.
+ *
+ * `canSideways`  — 90° floor swap (length ↔ width). Allowed for everything
+ *                   physically, but pallets and crates require explicit
+ *                   user opt-in (default OFF) so loaders never assume.
+ * `canAxis`      — tip onto a side (height ↔ length/width). Allowed only
+ *                   for soft / flexible / tall-and-narrow packages: bags,
+ *                   cartons, bales. Drums must stay upright; pallets and
+ *                   crates ship in fixed upright orientation.
+ * `defaultSideways` — UI default for the sideways toggle when this type is
+ *                      selected.
+ * `defaultAxis`     — UI default for the tilt toggle when this type is
+ *                      selected.
+ */
+export interface RotationPolicy {
+  canSideways: boolean;
+  canAxis: boolean;
+  defaultSideways: boolean;
+  defaultAxis: boolean;
+  sidewaysReason?: string;
+  axisReason?: string;
+}
+
+const ROTATION_POLICY: Record<PackageType, RotationPolicy> = {
+  carton: { canSideways: true, canAxis: true,  defaultSideways: true,  defaultAxis: false },
+  bale:   { canSideways: true, canAxis: true,  defaultSideways: true,  defaultAxis: false },
+  bag:    { canSideways: true, canAxis: true,  defaultSideways: true,  defaultAxis: false },
+  drum:   { canSideways: true, canAxis: false, defaultSideways: true,  defaultAxis: false,
+            axisReason: "Drums must stay upright — never tip onto a side." },
+  pallet: { canSideways: true, canAxis: false, defaultSideways: false, defaultAxis: false,
+            axisReason: "Pallets ship in fixed upright orientation." },
+  crate:  { canSideways: true, canAxis: false, defaultSideways: false, defaultAxis: false,
+            axisReason: "Crates ship in fixed upright orientation." },
+};
+
+export function getRotationPolicy(type?: PackageType): RotationPolicy {
+  return ROTATION_POLICY[type ?? "carton"] ?? ROTATION_POLICY.carton;
+}
+
+/**
+ * Reset the rotation flags on an item when its packageType changes so we
+ * never carry forward a flag the new type forbids and we honour the new
+ * type's default.
+ */
+export function defaultsForPackageType(type: PackageType): {
+  allowSidewaysRotation: boolean;
+  allowAxisRotation: boolean;
+} {
+  const p = getRotationPolicy(type);
+  return {
+    allowSidewaysRotation: p.defaultSideways,
+    allowAxisRotation: p.defaultAxis,
+  };
+}
+
 export interface CbmItem {
   id: string;
   /** Always stored in cm internally. */
