@@ -620,14 +620,12 @@ export function packContainerAdvanced(
           }
           if (!weightOk) continue;
 
-          // Lateral neighbour gap and side-wall gap are 0 — flush packing
-          // is legal, but the candidate must already pass the strict
-          // physical-overlap airlock. Skipping this check here lets a
-          // lower-score (further-back) overlapping candidate beat a
-          // legal-but-further-forward one and then fail at commit, leaving
-          // the carton unplaced. Filter overlap-fails out of contention
-          // before scoring so the legal placement actually wins.
-          if (!wouldBeLegal(x, y, ev.z, o.l, o.w, o.h, 0)) continue;
+          // Per-package neighbour-gap airlock (1 mm by default; see
+          // gap-rules.ts). Filter gap-failing candidates out of contention
+          // before scoring so a lower-score (further-back) but legal
+          // placement actually wins instead of a tighter-but-illegal one.
+          const candGap = getGapRule(c.packageType).minGap;
+          if (!wouldBeLegal(x, y, ev.z, o.l, o.w, o.h, candGap)) continue;
 
           // Score:
           //  - Tight mode (default, container is well-filled): back-to-front
