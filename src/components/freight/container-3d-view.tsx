@@ -1418,9 +1418,10 @@ function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges
   );
 }
 
-function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onFloor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function DrumShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onFloor, onPointerOver, onPointerOut }: PackageShapeProps) {
   const radius = Math.min(lm, wm) / 2;
   const drumColor = color || "#2c5282";
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(drumColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <mesh castShadow receiveShadow>
@@ -1432,6 +1433,16 @@ function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onFloor, onPointerOv
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
+        {showEdges && (
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </Edges>
+        )}
       </mesh>
       <mesh position={[0, hm / 2 - 0.005, 0]}>
         <cylinderGeometry args={[radius * 0.99, radius * 0.99, 0.025, 20]} />
