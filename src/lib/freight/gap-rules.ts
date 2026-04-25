@@ -1,24 +1,27 @@
 /**
  * Gap & reserve rules.
  *
- * Per user spec (2026-04-25): cartons inside the cargo hold may sit FLUSH
- * against each other and against the side walls — tight packing maximises
- * capacity and matches industry practice for cartons, bags, drums, crates,
- * pallets and bales loaded into a single container.
+ * Per user spec (2026-04-25, revised): every cargo unit must keep ≥ 1 mm
+ * clear of every neighbour and of every side wall. This prevents flush
+ * face-to-face touching and guarantees no two units ever appear to overlap
+ * in the 3D viewer (or in real life).
  *
- * The two reserves we still enforce are physical / regulatory:
+ * The door and ceiling reserves remain physical / regulatory:
  *   - DOOR_RESERVE_MM: 100 mm clear at the +X (door) end so the doors close.
  *   - CEILING_RESERVE_MM: 80 mm clear under the roof for crossbeam clearance.
  *
- * Lateral neighbour and side-wall gaps are 0. The packer's strict overlap
- * guard (geometry-validator + packing-advanced wouldBeLegal) is the only
- * thing that prevents physical intersection.
+ * The packer's wouldBeLegal airlock + the geometry validator's neighbour-gap
+ * check together enforce the 1 mm minimum.
  */
 export const DOOR_RESERVE_MM = 100;
 
 export const CEILING_RESERVE_MM = 80;
 
-export const WALL_SAFETY_MARGIN_MM = 0;
+/** Minimum clearance between any cargo unit and a side wall (mm). */
+export const WALL_SAFETY_MARGIN_MM = 1;
+
+/** Minimum clearance between any pair of cargo units (mm). */
+export const NEIGHBOUR_MIN_GAP_MM = 1;
 
 export interface GapRule {
   minGap: number;
