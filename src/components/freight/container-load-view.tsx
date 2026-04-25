@@ -424,6 +424,7 @@ function SinglePlanBody({
       <div className="space-y-3">
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
         <LengthBudgetChip pack={pack} />
+        <LimitExplanationPanel pack={pack} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
             {isCalculating ? (
