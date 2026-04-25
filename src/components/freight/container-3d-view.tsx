@@ -1616,7 +1616,7 @@ function buildEarProfile(baseR: number, height: number): THREE.Vector2[] {
   ];
 }
 
-function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function BagShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   // Sack-style bag: a soft rounded box at the real L × H × W footprint, plus
   // two tapered "ear" cones at the top length-ends suggesting the tied /
   // pinch-point corners of an industrial bag. Ears scale with the bag so
