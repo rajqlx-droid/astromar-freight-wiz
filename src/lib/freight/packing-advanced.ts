@@ -453,14 +453,14 @@ export function packContainerAdvanced(
     }
 
     // STRICT pairwise overlap — touching faces are legal; only meaningful
-    // intersection is rejected. Threshold matches validator's EPS_MM (2 mm)
-    // so flush snap-pass placements aren't rejected by Float32 drift while
-    // still catching any visible overlap (smallest carton dim is 50 mm).
+    // intersection is rejected. 0.5mm tolerance matches the validator's
+    // overlap epsilon so flush snap-pass placements aren't rejected by
+    // sub-mm floating-point drift while still catching any real overlap.
     for (const p of placedInternal) {
       const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
       const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
       const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
-      if (ox > 2 && oy > 2 && oz > 2) return false;
+      if (ox > 0.5 && oy > 0.5 && oz > 0.5) return false;
     }
     return true;
   }
