@@ -43,6 +43,23 @@ interface Props {
    */
   overlay?: React.ReactNode;
   nearCeilingPlacedIdxs?: number[] | null;
+  /**
+   * When provided, only boxes whose `pack.placed` index is in this set are
+   * rendered. Drives the row-by-row reveal: boxes not yet loaded by the
+   * walkthrough stay hidden so the container fills up progressively.
+   * `null` / `undefined` → render every placed box (static full view).
+   */
+  visiblePlacedIdxs?: ReadonlySet<number> | null;
+  /**
+   * Indices of boxes that should play the fly-in ease-out animation right
+   * now (the box(es) being loaded by the current pallet step).
+   */
+  flyInIdxs?: ReadonlySet<number> | null;
+  /**
+   * Bumped every time the current step changes. Forces `CargoBox` to reset
+   * its animation start clock even if React re-uses the same group.
+   */
+  flyInKey?: number;
 }
 
 /**
