@@ -13,7 +13,7 @@
  * Pure JS, deterministic, SSR-safe. No dependencies.
  */
 
-import type { CbmItem, PackageType } from "./calculators";
+import { getRotationPolicy, type CbmItem, type PackageType } from "./calculators";
 import { CONTAINERS, ITEM_COLORS, type ContainerPreset, type PlacedBox } from "./packing";
 import { getGapRule, DOOR_RESERVE_MM, CEILING_RESERVE_MM } from "./gap-rules";
 
