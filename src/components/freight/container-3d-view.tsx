@@ -1657,6 +1657,7 @@ function BagShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onP
   // come through cleanly; otherwise keep the existing solid-colour material.
   const bodyColor = jute ? "#ffffff" : sackColor;
   const earColor = jute ? "#ffffff" : sackColor;
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(sackColor);
 
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
@@ -1677,6 +1678,16 @@ function BagShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onP
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
+        {showEdges && (
+          <Edges scale={0.999} color={edgeColor} threshold={20}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </Edges>
+        )}
       </RoundedBox>
       {/* Two tapered ear-ties at the top length-ends. */}
       {[-1, 1].map((sign) => (
