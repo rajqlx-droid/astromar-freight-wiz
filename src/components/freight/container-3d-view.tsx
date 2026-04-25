@@ -296,6 +296,51 @@ function makePlywoodTexture(): THREE.CanvasTexture {
   return _plywoodTex;
 }
 
+/* Procedural jute / hessian weave texture for bags. Cached per bag colour
+ * because every bag of the same colour reuses the same fabric pattern. */
+const _juteCache = new Map<string, THREE.CanvasTexture>();
+function makeJuteTexture(color: string): THREE.CanvasTexture {
+  const cached = _juteCache.get(color);
+  if (cached) return cached;
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  // Base wash from the bag's tone — slightly desaturated so the weave reads.
+  ctx.fillStyle = color || "#c4a574";
+  ctx.fillRect(0, 0, 256, 256);
+  // Warp threads (vertical) and weft threads (horizontal). Both slightly
+  // darker than the base; alternating offsets create the woven feel.
+  const warp = "rgba(60, 42, 22, 0.22)";
+  const weft = "rgba(255, 244, 220, 0.16)";
+  const step = 6;
+  for (let x = 0; x < 256; x += step) {
+    ctx.fillStyle = warp;
+    ctx.fillRect(x, 0, 2, 256);
+  }
+  for (let y = 0; y < 256; y += step) {
+    ctx.fillStyle = weft;
+    ctx.fillRect(0, y, 256, 2);
+  }
+  // Faint slubs / fibre noise — gives the surface organic micro-variation.
+  ctx.globalAlpha = 0.18;
+  for (let i = 0; i < 280; i++) {
+    ctx.fillStyle = i % 3 === 0 ? "#3a2410" : "#fff3d8";
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 1, 1 + Math.random() * 1.5);
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  _juteCache.set(color, tex);
+  return tex;
+}
+
+/* When `enabled` is true, BagShape applies a jute weave texture instead of
+ * the flat soft-fabric material. Default false → identical to today. */
+const BagTextureContext = createContext<{ jute: boolean }>({ jute: false });
+
 /* --------------- Demand-mode invalidator ---------------
  * With `frameloop="demand"` the canvas only renders when something invalidates
  * it. OrbitControls already calls invalidate() on every drag/zoom, but we also
