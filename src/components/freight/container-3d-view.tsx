@@ -584,9 +584,10 @@ function SceneContents({
       {/* Cargo */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {(() => {
-          // Render edge outlines only for small jobs (<=60 boxes). Above that
-          // the edges add a per-box draw call without measurable visual value.
-          const showEdges = pack.placed.length <= 60;
+          // Render edge outlines for jobs up to 200 boxes — the per-box
+          // edge cost is small and the visible seams matter more once
+          // cartons sit flush against each other (no enforced gap rule).
+          const showEdges = pack.placed.length <= 200;
           return pack.placed.map((b, i) => {
             const t = transforms?.[i];
             if (recording && t && !t.visible) return null;
@@ -1252,7 +1253,7 @@ function CargoBox({
   });
 
   return (
-    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale}>
+    <group ref={groupRef} position={[cx, cy + palletLift, cz]} scale={scale * 0.99}>
       {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
