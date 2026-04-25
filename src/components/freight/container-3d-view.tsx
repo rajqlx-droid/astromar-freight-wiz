@@ -105,8 +105,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
-  const [recordingTimeline, setRecordingTimeline] = useState<Timeline | null>(null);
-  const [currentFrame, setCurrentFrame] = useState(0);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
