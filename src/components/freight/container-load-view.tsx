@@ -274,6 +274,7 @@ export function ContainerLoadView({
           isActive
           viewerCollapsed={viewerCollapsed}
           planMeta={planMeta}
+          isCalculating={isCalculating}
         />
       )}
     </Card>
@@ -294,6 +295,7 @@ function SinglePlanBody({
   viewerCollapsed = false,
   rollup,
   planMeta = null,
+  isCalculating = false,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -306,6 +308,7 @@ function SinglePlanBody({
   viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
   planMeta?: BestPlanMeta | null;
+  isCalculating?: boolean;
 }) {
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
   // The stepper drives the text HUD walkthrough only — it never moves, hides,
@@ -340,6 +343,29 @@ function SinglePlanBody({
 
   // Active row (right-panel highlight only).
   const activeRowIdx = currentStep?.rowIdx ?? null;
+
+  // ── Row-by-row reveal ─────────────────────────────────────────────
+  // While the walkthrough is active, only show boxes that have already
+  // been "placed" by the loader (steps 0..palletIdx). The box of the
+  // CURRENT step gets the fly-in animation; earlier ones rest at their
+  // validated coordinates. When palletIdx === -1, we show every box
+  // (the "container is fully loaded" preview).
+  const visiblePlacedIdxs = useMemo<ReadonlySet<number> | null>(() => {
+    if (palletSequence.length === 0) return null;
+    if (palletIdx < 0) return null;
+    const s = new Set<number>();
+    for (let i = 0; i <= palletIdx; i++) {
+      const step = palletSequence[i];
+      if (step) s.add(step.placedIdx);
+    }
+    return s;
+  }, [palletSequence, palletIdx]);
+  const flyInIdxs = useMemo<ReadonlySet<number> | null>(() => {
+    if (!currentStep) return null;
+    return new Set([currentStep.placedIdx]);
+  }, [currentStep]);
+  // Bumps every step change so CargoBox re-arms its animation start clock.
+  const flyInKey = palletIdx;
 
   // Auto-play: 1× = 600ms per pallet, 0.5× = 1200ms, 2× = 300ms.
   const stepDurationMs = Math.round(600 / speed);
@@ -397,7 +423,17 @@ function SinglePlanBody({
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
-            {is3D && mounted ? (
+            {isCalculating ? (
+              <div className="flex h-[420px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                <Loader2 className="size-7 animate-spin text-brand-orange" />
+                <div className="text-center">
+                  <div className="font-semibold text-brand-navy">Computing optimal fit…</div>
+                  <div className="mt-0.5 text-xs">
+                    Preparing 3D loading view — this usually takes a few seconds.
+                  </div>
+                </div>
+              </div>
+            ) : is3D && mounted ? (
               <Suspense
                 fallback={
                   <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
@@ -411,6 +447,9 @@ function SinglePlanBody({
                     pack={pack}
                     hideDoors={pack.placedCartons === 0}
                     nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
+                    visiblePlacedIdxs={visiblePlacedIdxs}
+                    flyInIdxs={flyInIdxs}
+                    flyInKey={flyInKey}
                     overlay={
                       stepMode ? (
                         <LoaderHUD
@@ -424,8 +463,6 @@ function SinglePlanBody({
                           onNext={goNext}
                           onReset={goReset}
                           onSpeedChange={setSpeed}
-                          showForklift={false}
-                          onToggleForklift={() => {}}
                           pack={pack}
                           rows={rows}
                           planMeta={planMeta}
@@ -443,7 +480,7 @@ function SinglePlanBody({
                 </div>
               </Suspense>
             ) : null}
-            {is3D && palletSequence.length > 0 && (
+            {!isCalculating && is3D && palletSequence.length > 0 && (
               <PalletStatusBar
                 currentIdx={palletIdx}
                 total={palletSequence.length}

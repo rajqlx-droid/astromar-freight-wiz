@@ -43,6 +43,23 @@ interface Props {
    */
   overlay?: React.ReactNode;
   nearCeilingPlacedIdxs?: number[] | null;
+  /**
+   * When provided, only boxes whose `pack.placed` index is in this set are
+   * rendered. Drives the row-by-row reveal: boxes not yet loaded by the
+   * walkthrough stay hidden so the container fills up progressively.
+   * `null` / `undefined` → render every placed box (static full view).
+   */
+  visiblePlacedIdxs?: ReadonlySet<number> | null;
+  /**
+   * Indices of boxes that should play the fly-in ease-out animation right
+   * now (the box(es) being loaded by the current pallet step).
+   */
+  flyInIdxs?: ReadonlySet<number> | null;
+  /**
+   * Bumped every time the current step changes. Forces `CargoBox` to reset
+   * its animation start clock even if React re-uses the same group.
+   */
+  flyInKey?: number;
 }
 
 /**
@@ -51,7 +68,7 @@ interface Props {
 const MM_PER_M = 1000;
 
 export const Container3DView = forwardRef<Container3DHandle, Props>(function Container3DView(
-  { pack, height = 420, hideDoors = false, overlay = null, nearCeilingPlacedIdxs = null },
+  { pack, height = 420, hideDoors = false, overlay = null, nearCeilingPlacedIdxs = null, visiblePlacedIdxs = null, flyInIdxs = null, flyInKey = 0 },
   ref,
 ) {
   const [preset, setPreset] = useState<Preset>("iso");
@@ -148,6 +165,9 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             preset={preset}
             hideDoors={hideDoors}
             nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
+            visiblePlacedIdxs={visiblePlacedIdxs}
+            flyInIdxs={flyInIdxs}
+            flyInKey={flyInKey}
           />
         </Suspense>
       </Canvas>
@@ -308,12 +328,18 @@ function SceneContents({
   preset,
   hideDoors,
   nearCeilingPlacedIdxs,
+  visiblePlacedIdxs = null,
+  flyInIdxs = null,
+  flyInKey = 0,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
   hideDoors: boolean;
   nearCeilingPlacedIdxs: number[] | null;
+  visiblePlacedIdxs?: ReadonlySet<number> | null;
+  flyInIdxs?: ReadonlySet<number> | null;
+  flyInKey?: number;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
@@ -358,8 +384,8 @@ function SceneContents({
       <hemisphereLight intensity={0.35} groundColor={"#ddd"} />
 
       <InvalidateOnChange
-        deps={[preset, hideDoors ? 1 : 0]}
-        animate={false}
+        deps={[preset, hideDoors ? 1 : 0, flyInKey, visiblePlacedIdxs?.size ?? -1]}
+        animate={(flyInIdxs?.size ?? 0) > 0}
       />
 
       <OrbitControls
@@ -397,13 +423,16 @@ function SceneContents({
 
       <ContainerShell Cm={Cm} doorOpen={doorOpen} hideDoors={hideDoors} />
 
-      {/* Cargo — rendered at exact packed coordinates, no offsets, no animations,
-          no decorative dunnage. The packer's airlock guarantees no overlap and
-          no floating cargo, so the 3D view is a direct read-out of the
-          validated geometry. */}
+      {/* Cargo — rendered at exact packed coordinates. The walkthrough may
+          hide boxes whose index is not in `visiblePlacedIdxs` and animate the
+          fly-in of boxes whose index is in `flyInIdxs`. The resting position
+          for every visible box is the validated packer slot, so once the
+          ease-out finishes there is zero overlap and zero floating cargo. */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {pack.placed.map((b, i) => {
+          if (visiblePlacedIdxs && !visiblePlacedIdxs.has(i)) return null;
           const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
+          const isFlying = flyInIdxs?.has(i) ?? false;
           return (
             <CargoBox
               key={i}
@@ -411,6 +440,10 @@ function SceneContents({
               stat={pack.perItem[b.itemIdx]}
               showEdges
               nearCeiling={isNearCeiling}
+              flyIn={isFlying}
+              flyInKey={flyInKey}
+              containerL={Cm.l}
+              containerH={Cm.h}
             />
           );
         })}
