@@ -483,7 +483,15 @@ export function packContainerAdvanced(
     ? expanded.reduce((s, c) => s + Math.min(c.origL, c.origW), 0) / expanded.length
     : 1;
   const cartonsPerRowEst = Math.max(1, Math.floor(C.w / Math.max(1, avgWidthMm)));
-  const spreadMode = volumeFill < 0.65 && expanded.length >= cartonsPerRowEst * 2;
+  // Estimated rows (back-to-back) the cargo would occupy in tight mode.
+  const tightRowsEst = Math.ceil(expanded.length / Math.max(1, cartonsPerRowEst));
+  // Spread mode only when (a) volume is genuinely low AND (b) tight-packed
+  // cargo would still occupy at least half the usable container length —
+  // otherwise spreading creates one-carton-per-row layouts that look like
+  // floor-gap warnings on what is geometrically the only legal placement.
+  const tightFillLengthMm = tightRowsEst * Math.max(1, avgWidthMm);
+  const spreadMode =
+    volumeFill < 0.65 && tightFillLengthMm >= usableLengthMm * 0.5;
   // Estimate how many cartons will land on the floor (1 layer). Used to
   // choose the stride for evenly-spaced target slots in spread mode.
   const avgFloorFootprintMm2 = expanded.length > 0
