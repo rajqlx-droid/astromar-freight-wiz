@@ -115,33 +115,18 @@ export function validatePackGeometry(
   const flags = (idx: number): ValidatorItemFlags =>
     getFlags?.(idx) ?? { stackable: true, fragile: false };
 
-  // ── 1. Wall / door / ceiling clearance ─────────────────────────────────
-  const wallOff: number[] = [];
+  // ── 1. Door / ceiling clearance (lateral wall gap is 0 — flush is legal) ──
   const doorOff: number[] = [];
   const ceilOff: number[] = [];
   placed.forEach((b, i) => {
-    // Wall (side y axis): boxes hugging y=0 or y=W are checked against MIN_WALL_GAP.
-    // A box with y > 0 must keep MIN_WALL_GAP from the -Y wall; same for +Y.
-    if (b.y > HARD.EPS_MM && b.y < HARD.MIN_WALL_GAP_MM - HARD.EPS_MM) wallOff.push(i);
-    const yFar = C.w - (b.y + b.w);
-    if (yFar > HARD.EPS_MM && yFar < HARD.MIN_WALL_GAP_MM - HARD.EPS_MM) wallOff.push(i);
-
     // Door reserve: nothing within MIN_DOOR_GAP of the +X end.
     const xFar = C.l - (b.x + b.l);
     if (xFar < HARD.MIN_DOOR_GAP_MM - HARD.EPS_MM) doorOff.push(i);
-
     // Ceiling reserve.
     const zFar = C.h - (b.z + b.h);
     if (zFar < HARD.MIN_CEILING_GAP_MM - HARD.EPS_MM) ceilOff.push(i);
   });
 
-  if (wallOff.length > 0) {
-    violations.push({
-      code: "WALL_GAP",
-      message: `${wallOff.length} box${wallOff.length > 1 ? "es" : ""} closer than ${HARD.MIN_WALL_GAP_MM} mm to a side wall`,
-      placedIdxs: Array.from(new Set(wallOff)),
-    });
-  }
   if (doorOff.length > 0) {
     violations.push({
       code: "DOOR_GAP",
@@ -157,45 +142,19 @@ export function validatePackGeometry(
     });
   }
 
-  // ── 2. Pairwise overlap + neighbour-gap (with vertical overlap) ────────
+  // ── 2. Strict pairwise overlap (no neighbour-gap rule — flush is legal) ───
   const overlapPairs: number[] = [];
-  const gapPairs: number[] = [];
   // O(n²) — fine up to a few hundred boxes (RENDER_CAP = 500).
   for (let i = 0; i < placed.length; i++) {
     const a = placed[i];
     for (let j = i + 1; j < placed.length; j++) {
       const b = placed[j];
-      // Cheap AABB reject: if separated by more than the larger of either box +
-      // the gap on every axis, skip immediately.
-      const margin = HARD.MIN_NEIGHBOUR_GAP_MM + HARD.EPS_MM;
-      if (a.x + a.l + margin <= b.x || b.x + b.l + margin <= a.x) continue;
-      if (a.y + a.w + margin <= b.y || b.y + b.w + margin <= a.y) continue;
-      if (a.z + a.h <= b.z || b.z + b.h <= a.z) continue; // disjoint in Z, no neighbour-gap rule applies
-
+      // Cheap AABB reject.
+      if (a.x + a.l <= b.x || b.x + b.l <= a.x) continue;
+      if (a.y + a.w <= b.y || b.y + b.w <= a.y) continue;
+      if (a.z + a.h <= b.z || b.z + b.h <= a.z) continue;
       const ov = overlapVolume(a, b);
-      if (ov > 0) {
-        overlapPairs.push(i, j);
-        continue;
-      }
-      // Neighbour gap only applies when the two boxes share vertical overlap
-      // > EPS (true side-by-side neighbours, not stacked or vertically disjoint).
-      const zOv = Math.min(a.z + a.h, b.z + b.h) - Math.max(a.z, b.z);
-      if (zOv <= HARD.EPS_MM) continue;
-      // Compute the lateral distance on each axis. If they overlap on one
-      // axis (gap negative) and have a small positive gap on the other,
-      // they are neighbours and the small-gap axis must respect MIN gap.
-      const xGap = Math.max(0, Math.max(a.x, b.x) - Math.min(a.x + a.l, b.x + b.l));
-      const yGap = Math.max(0, Math.max(a.y, b.y) - Math.min(a.y + a.w, b.y + b.w));
-      const xOv = Math.min(a.x + a.l, b.x + b.l) - Math.max(a.x, b.x) > HARD.EPS_MM;
-      const yOv = Math.min(a.y + a.w, b.y + b.w) - Math.max(a.y, b.y) > HARD.EPS_MM;
-      // Side-by-side along X axis (yOv true, xGap > 0) → xGap must be ≥ MIN.
-      if (yOv && !xOv && xGap > 0 && xGap < HARD.MIN_NEIGHBOUR_GAP_MM - HARD.EPS_MM) {
-        gapPairs.push(i, j);
-      }
-      // Side-by-side along Y axis.
-      if (xOv && !yOv && yGap > 0 && yGap < HARD.MIN_NEIGHBOUR_GAP_MM - HARD.EPS_MM) {
-        gapPairs.push(i, j);
-      }
+      if (ov > 0) overlapPairs.push(i, j);
     }
   }
 
@@ -204,13 +163,6 @@ export function validatePackGeometry(
       code: "OVERLAP",
       message: `${overlapPairs.length / 2} pair${overlapPairs.length / 2 > 1 ? "s" : ""} of boxes physically overlap`,
       placedIdxs: Array.from(new Set(overlapPairs)),
-    });
-  }
-  if (gapPairs.length > 0) {
-    violations.push({
-      code: "NEIGHBOUR_GAP",
-      message: `${gapPairs.length / 2} neighbour pair${gapPairs.length / 2 > 1 ? "s" : ""} closer than ${HARD.MIN_NEIGHBOUR_GAP_MM} mm`,
-      placedIdxs: Array.from(new Set(gapPairs)),
     });
   }
 
