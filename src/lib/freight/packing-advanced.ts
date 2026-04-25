@@ -417,9 +417,11 @@ export function packContainerAdvanced(
    * legal in the final audit. Anything failing here is rejected before the
    * commit so the validator can never see a floating / overlapping box.
    *
-   * Lateral neighbour gap and side-wall gap are 0 (per gap-rules.ts). The
-   * STRICT pairwise overlap test is the only thing preventing physical
-   * intersection. _minGap is accepted but unused — kept for call-site compat.
+   * Lateral neighbour gap = `minGap` mm (per gap-rules.ts → 1 mm). A pair of
+   * boxes is illegal when they intersect on every axis within `minGap` of
+   * each other (so flush touching, gap = 0 < 1, is rejected). Side-wall
+   * clearance is also `minGap` on the −X / ±Y faces (door + ceiling have
+   * their own larger reserves).
    */
   function wouldBeLegal(
     x: number,
@@ -428,12 +430,14 @@ export function packContainerAdvanced(
     l: number,
     w: number,
     h: number,
-    _minGap: number,
+    minGap: number,
   ): boolean {
-    // Bounds.
-    if (x < 0 || y < 0 || z < 0) return false;
+    // Bounds + side-wall clearance (door + ceiling reserves handled below).
+    if (x < minGap - 0.001) return false;
+    if (y < minGap - 0.001) return false;
+    if (z < 0) return false;
     if (x + l > C.l + 0.5) return false;
-    if (y + w > C.w + 0.5) return false;
+    if (y + w > C.w - minGap + 0.001) return false;
     if (z + h > C.h + 0.5) return false;
     // Door / ceiling reserves are still enforced.
     if (C.l - (x + l) < DOOR_RESERVE_MM - 1) return false;
@@ -453,15 +457,24 @@ export function packContainerAdvanced(
       if (ratio < SUPPORT_MIN_RATIO) return false;
     }
 
-    // STRICT pairwise overlap — touching faces are legal; only meaningful
-    // intersection is rejected. 0.5mm tolerance matches the validator's
-    // overlap epsilon so flush snap-pass placements aren't rejected by
-    // sub-mm floating-point drift while still catching any real overlap.
+    // Pairwise legality check. Mirrors geometry-validator.ts:
+    //   - Real intersection (overlap on every axis) → reject.
+    //   - Boxes that share a vertical band (gz < 0) must keep ≥ minGap
+    //     clearance on at least one of the lateral axes.
+    //   - Boxes stacked above/below (gz ≥ 0) are exempt — vertical adjacency
+    //     is the supporter relationship, not lateral crowding.
+    const GAP_EPS = 0.5;
+    const minClear = minGap - GAP_EPS;
     for (const p of placedInternal) {
-      const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
-      const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
-      const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
-      if (ox > 0.5 && oy > 0.5 && oz > 0.5) return false;
+      const gx = Math.max(p.x - (x + l), x - (p.x + p.l));
+      const gy = Math.max(p.y - (y + w), y - (p.y + p.w));
+      const gz = Math.max(p.z - (z + h), z - (p.z + p.h));
+      // Real 3-axis intersection.
+      if (gx < -GAP_EPS && gy < -GAP_EPS && gz < -GAP_EPS) return false;
+      // No vertical sharing → no lateral crowding to enforce.
+      if (gz >= -GAP_EPS) continue;
+      // Vertical band shared — both lateral axes must keep ≥ minGap clear.
+      if (gx < minClear && gy < minClear) return false;
     }
     return true;
   }
@@ -594,14 +607,12 @@ export function packContainerAdvanced(
           }
           if (!weightOk) continue;
 
-          // Lateral neighbour gap and side-wall gap are 0 — flush packing
-          // is legal, but the candidate must already pass the strict
-          // physical-overlap airlock. Skipping this check here lets a
-          // lower-score (further-back) overlapping candidate beat a
-          // legal-but-further-forward one and then fail at commit, leaving
-          // the carton unplaced. Filter overlap-fails out of contention
-          // before scoring so the legal placement actually wins.
-          if (!wouldBeLegal(x, y, ev.z, o.l, o.w, o.h, 0)) continue;
+          // Per-package neighbour-gap airlock (1 mm by default; see
+          // gap-rules.ts). Filter gap-failing candidates out of contention
+          // before scoring so a lower-score (further-back) but legal
+          // placement actually wins instead of a tighter-but-illegal one.
+          const candGap = getGapRule(c.packageType).minGap;
+          if (!wouldBeLegal(x, y, ev.z, o.l, o.w, o.h, candGap)) continue;
 
           // Score:
           //  - Tight mode (default, container is well-filled): back-to-front
@@ -681,11 +692,11 @@ export function packContainerAdvanced(
 
     // Snap-to-neighbour: slide the chosen placement toward -X (back wall) then
     // -Y (left wall) to close any sub-stride gap left by the coarse scan.
-    // No lateral or wall-gap rules apply (gap-rules.ts: minGap = wallMin = 0);
-    // the only rejection criterion is strict physical overlap with a placed
-    // box. In spread mode we DISABLE the X-snap so deliberate spacing is
-    // preserved — Y-snap still hugs the left wall (or centre, depending on
-    // the chosen y) which is fine for balance.
+    // Side-wall + neighbour clearance = `snapMinGap` mm (per gap-rules.ts,
+    // 1 mm by default). The slide stops the moment the box would crowd a
+    // neighbour or the wall. In spread mode we DISABLE the X-snap so
+    // deliberate longitudinal spacing is preserved.
+    const snapMinGap = getGapRule(c.packageType).minGap;
     const snapAxis = (axis: "x" | "y") => {
       const tryAt = (nx: number, ny: number) => {
         const ev = evaluatePlacement(nx, ny, bestPick!.orient.l, bestPick!.orient.w, {
@@ -707,29 +718,19 @@ export function packContainerAdvanced(
             return null;
           }
         }
-        // Strict overlap rejection — flush is fine, intersection is not.
-        const ol = bestPick!.orient.l;
-        const ow = bestPick!.orient.w;
-        const oh = bestPick!.orient.h;
-        for (const pb of placedInternal) {
-          if (pb.x + pb.l <= nx || nx + ol <= pb.x) continue;
-          if (pb.y + pb.w <= ny || ny + ow <= pb.y) continue;
-          const zOv = ev.z < pb.z + pb.h && ev.z + oh > pb.z;
-          if (zOv) {
-            const ox = Math.min(nx + ol, pb.x + pb.l) - Math.max(nx, pb.x);
-            const oy = Math.min(ny + ow, pb.y + pb.w) - Math.max(ny, pb.y);
-            if (ox > 0.5 && oy > 0.5) return null;
-          }
+        // Full per-package legality (overlap + neighbour gap + wall gap).
+        if (!wouldBeLegal(nx, ny, ev.z, bestPick!.orient.l, bestPick!.orient.w, bestPick!.orient.h, snapMinGap)) {
+          return null;
         }
         return ev;
       };
 
-      // Coarse 10mm slide.
+      // Coarse 10mm slide. Floor stays at `snapMinGap` (wall clearance).
       const COARSE = 10;
       while (true) {
         const cur = axis === "x" ? bestPick!.x : bestPick!.y;
-        if (cur <= 0) break;
-        const next = Math.max(0, cur - COARSE);
+        if (cur <= snapMinGap) break;
+        const next = Math.max(snapMinGap, cur - COARSE);
         const nx = axis === "x" ? next : bestPick!.x;
         const ny = axis === "y" ? next : bestPick!.y;
         const ev = tryAt(nx, ny);
@@ -742,7 +743,7 @@ export function packContainerAdvanced(
       // Fine 1mm slide for the last sub-coarse gap.
       for (let i = 0; i < COARSE; i++) {
         const cur = axis === "x" ? bestPick!.x : bestPick!.y;
-        if (cur <= 0) break;
+        if (cur <= snapMinGap) break;
         const next = cur - 1;
         const nx = axis === "x" ? next : bestPick!.x;
         const ny = axis === "y" ? next : bestPick!.y;
