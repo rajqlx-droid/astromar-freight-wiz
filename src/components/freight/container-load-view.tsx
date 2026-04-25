@@ -1,5 +1,5 @@
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { Package, Boxes, Box as BoxIcon, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { Package, Boxes, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { LoaderHUD } from "./loader-hud";
 import type { BestPlanMeta } from "@/lib/freight/scenario-runner";
 import { buildPalletSequence, type PalletStep } from "@/lib/freight/loading-rows";
@@ -15,7 +15,6 @@ import {
   totalQty,
   totalWeight,
   type ContainerPreset,
-  type PlacedBox,
 } from "@/lib/freight/packing";
 import { type AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import { type ContainerRecommendation } from "@/lib/freight/container-recommender";
@@ -23,7 +22,6 @@ import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
 import { LoadingRowsPanel } from "./loading-rows-panel";
-import { LoadingVideoButton } from "./loading-video-button";
 import { type ContainerId } from "@/lib/freight/container-ids";
 import { usePackingWorker } from "@/hooks/use-packing-worker";
 
