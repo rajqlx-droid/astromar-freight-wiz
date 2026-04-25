@@ -30,20 +30,31 @@ describe("validatePackGeometry — hard physical rules", () => {
     expect(a.violations).toEqual([]);
   });
 
-  it("passes a flush (zero-gap) two-box floor pack — tight packing is legal", () => {
+  it("flags a flush (zero-gap) two-box floor pack — neighbour gap < 1 mm is illegal", () => {
     const placed = [
       box(60, 60, 0, 1200, 1000, 1000),
-      box(60, 1060, 0, 1200, 1000, 1000), // touching faces along Y, no gap
+      box(60, 1060, 0, 1200, 1000, 1000), // touching faces along Y, 0 mm gap
+    ];
+    const a = validatePackGeometry(placed, HC);
+    expect(a.allLegal).toBe(false);
+    expect(a.violations.some((v) => v.code === "NEIGHBOUR_GAP")).toBe(true);
+  });
+
+  it("passes a 1 mm-spaced two-box floor pack — minimum legal clearance", () => {
+    const placed = [
+      box(60, 60, 0, 1200, 1000, 1000),
+      box(60, 1061, 0, 1200, 1000, 1000), // 1 mm gap on Y
     ];
     const a = validatePackGeometry(placed, HC);
     expect(a.allLegal).toBe(true);
     expect(a.violations).toEqual([]);
   });
 
-  it("passes a flush-against-side-wall pack — wall gap rule is 0", () => {
-    const placed = [box(60, 0, 0, 1200, 1000, 1000)]; // y=0, hugging side wall
+  it("flags a flush-against-side-wall pack — wall clearance must be ≥ 1 mm", () => {
+    const placed = [box(60, 0, 0, 1200, 1000, 1000)]; // y=0, against side wall
     const a = validatePackGeometry(placed, HC);
-    expect(a.allLegal).toBe(true);
+    expect(a.allLegal).toBe(false);
+    expect(a.violations.some((v) => v.code === "WALL_GAP")).toBe(true);
   });
 
   it("detects pairwise overlap (any positive intersection on every axis)", () => {
