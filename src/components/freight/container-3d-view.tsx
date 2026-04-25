@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
+import { pickEdgeColor } from "@/lib/freight/packing";
+import { assignDisplayColors, displayColorKey } from "@/lib/freight/display-colors";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
@@ -535,6 +537,14 @@ function SceneContents({
   // Doors stay open in the static scene ("ready to load").
   const doorOpen = 1;
 
+  // Adjacency-aware display colors: every box that touches a same-coloured
+  // neighbour is shifted to a lighter/darker shade of its base hue so seams
+  // between boxes are always visible — and any actual overlap stands out.
+  const displayColors = useMemo(
+    () => assignDisplayColors(pack.placed),
+    [pack.placed],
+  );
+
   return (
     <>
       <ambientLight intensity={0.55} />
@@ -616,6 +626,7 @@ function SceneContents({
               flyInKey={flyInKey}
               containerL={Cm.l}
               containerH={Cm.h}
+              displayColor={displayColors.get(displayColorKey(b))}
             />
           );
         })}
@@ -1176,6 +1187,7 @@ function CargoBox({
   showCheckmark = false,
   showEdges = true,
   nearCeiling = false,
+  displayColor,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1189,6 +1201,8 @@ function CargoBox({
   showCheckmark?: boolean;
   showEdges?: boolean;
   nearCeiling?: boolean;
+  /** Adjacency-aware shade override; falls back to box.color. */
+  displayColor?: string;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1265,7 +1279,7 @@ function CargoBox({
         lm={lm}
         hm={hm}
         wm={wm}
-        color={box.color}
+        color={displayColor ?? box.color}
         packageType={stat?.packageType}
         fragile={!!fragile}
         hovered={hovered}
@@ -1377,6 +1391,7 @@ function PackageShape(props: PackageShapeProps) {
 }
 
 function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(color);
   return (
     <mesh castShadow receiveShadow onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <boxGeometry args={[lm, hm, wm]} />
@@ -1390,9 +1405,9 @@ function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges
         emissiveIntensity={hovered ? 0.25 : 0}
       />
       {showEdges && (
-        <Edges scale={0.999} color={hovered ? tiltColor : "#1f2937"}>
+        <Edges scale={0.999} color={edgeColor}>
           <lineBasicMaterial
-            color={hovered ? tiltColor : "#1f2937"}
+            color={edgeColor}
             polygonOffset
             polygonOffsetFactor={-1}
             polygonOffsetUnits={-1}
@@ -1403,9 +1418,10 @@ function CartonShape({ lm, hm, wm, color, fragile, hovered, tiltColor, showEdges
   );
 }
 
-function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onFloor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function DrumShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onFloor, onPointerOver, onPointerOut }: PackageShapeProps) {
   const radius = Math.min(lm, wm) / 2;
   const drumColor = color || "#2c5282";
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(drumColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <mesh castShadow receiveShadow>
@@ -1417,6 +1433,16 @@ function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onFloor, onPointerOv
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
+        {showEdges && (
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </Edges>
+        )}
       </mesh>
       <mesh position={[0, hm / 2 - 0.005, 0]}>
         <cylinderGeometry args={[radius * 0.99, radius * 0.99, 0.025, 20]} />
@@ -1448,9 +1474,10 @@ function DrumShape({ lm, hm, wm, color, hovered, tiltColor, onFloor, onPointerOv
   );
 }
 
-function BaleShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function BaleShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   const baleColor = color || "#d4c5a3";
   const bandColor = "#3a2818";
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(baleColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <mesh castShadow receiveShadow>
@@ -1462,6 +1489,16 @@ function BaleShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoi
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
+        {showEdges && (
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </Edges>
+        )}
       </mesh>
       {[-hm * 0.18, hm * 0.18].map((y, i) => (
         <mesh key={`bh-${i}`} position={[0, y, 0]}>
@@ -1481,6 +1518,7 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, o
   const crateColor = color || "#a07a4e";
   const slatColor = "#5a3d20";
   const slatThk = Math.min(lm, wm) * 0.06;
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(crateColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <mesh castShadow receiveShadow>
@@ -1493,8 +1531,13 @@ function CrateShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, o
           emissiveIntensity={hovered ? 0.25 : 0}
         />
         {showEdges && (
-          <Edges scale={0.999} color="#3a2818">
-            <lineBasicMaterial color="#3a2818" />
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
           </Edges>
         )}
       </mesh>
@@ -1523,6 +1566,8 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
   const PALLET_H = 0.12;
   const loadH = Math.max(0.05, hm - PALLET_H);
   const wrapColor = "#a8c5d8";
+  const fillColor = color || "#bcd";
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(fillColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <group position={[0, -hm / 2 + PALLET_H / 2, 0]}>
@@ -1531,7 +1576,7 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
       <mesh castShadow receiveShadow position={[0, -hm / 2 + PALLET_H + loadH / 2, 0]}>
         <boxGeometry args={[lm * 0.96, loadH, wm * 0.96]} />
         <meshStandardMaterial
-          color={color || "#bcd"}
+          color={fillColor}
           roughness={0.4}
           metalness={0.1}
           transparent
@@ -1540,8 +1585,13 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
           emissiveIntensity={hovered ? 0.25 : 0.05}
         />
         {showEdges && (
-          <Edges scale={0.999} color="#5a7a90">
-            <lineBasicMaterial color="#5a7a90" />
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
           </Edges>
         )}
       </mesh>
@@ -1566,7 +1616,7 @@ function buildEarProfile(baseR: number, height: number): THREE.Vector2[] {
   ];
 }
 
-function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function BagShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   // Sack-style bag: a soft rounded box at the real L × H × W footprint, plus
   // two tapered "ear" cones at the top length-ends suggesting the tied /
   // pinch-point corners of an industrial bag. Ears scale with the bag so
@@ -1607,6 +1657,7 @@ function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoin
   // come through cleanly; otherwise keep the existing solid-colour material.
   const bodyColor = jute ? "#ffffff" : sackColor;
   const earColor = jute ? "#ffffff" : sackColor;
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(sackColor);
 
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
@@ -1627,6 +1678,16 @@ function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoin
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
+        {showEdges && (
+          <Edges scale={0.999} color={edgeColor} threshold={20}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </Edges>
+        )}
       </RoundedBox>
       {/* Two tapered ear-ties at the top length-ends. */}
       {[-1, 1].map((sign) => (
