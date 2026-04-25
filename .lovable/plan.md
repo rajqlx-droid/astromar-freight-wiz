@@ -1,87 +1,44 @@
-## Root cause of the "19 boxes floating with no support below" audit
+# Fix 3D viewer: overlapping & hanging cargo
 
-The HUD copy is correct — the packer is **really committing 19 boxes into thin air**. Three concrete bugs in `src/lib/freight/packing-advanced.ts` cooperate to produce this:
+## What you're seeing vs what's actually happening
 
-### Bug 1 — Cell-grid over-sampling inflates `topZ`
-In `evaluatePlacement` (lines 285-297) the footprint scan uses:
-```
-cx1 = Math.ceil((x + l) / CELL_MM)
-```
-For a 1066.8 mm cube at x=0 this samples cells 0..10 → covers 0..1100 mm, i.e. **33 mm beyond the box's real edge**. If any previously-placed taller box overlaps that 33 mm strip, its top-Z is pulled into `topZ`, the new box is committed at that elevated z, and its **actual footprint floats over the empty area** to the left.
+The packing math is correct (regression tests pass, 0 hard violations in the audit). The defect is **purely visual** — three rendering bugs in `container-3d-view.tsx` make tightly packed cartons look like they intersect or float:
 
-### Bug 2 — `topZ` chosen without checking whether the supporters actually cover the footprint
-`topZ` is the **max** height-map value under the (over-sampled) footprint (lines 290-297). The support-ratio check at line 429 then asks "of cells whose top equals topZ, what fraction of the real footprint do they cover?" — but **only cells equal to topZ count**. If the tall column covers ≥85% the gate passes; the area below sits over shorter supporters whose tops are below `topZ`, so those parts of the box are unsupported. The placer commits anyway.
+1. **Every box is inflated by 0.1%.** Line 1255 renders the carton group with `scale={scale * 1.001}`. For a 1067 mm cube that is ~1 mm of extra geometry on every face. Neighbours sitting flush in the packer overlap visually by ~2 mm at every shared seam.
+2. **Near-ceiling halo is 4% larger than its box.** Line 1342 paints an amber "warning lid" with `boxGeometry args={[lm * 1.04, 0.018, wm * 1.04]}`. That lid pokes into the four neighbouring cartons by ~40 mm per side — looks exactly like overlap.
+3. **Pallet only renders when `box.z < 10 mm`.** Line 1212. After the z-snap pass the packer can place a floor-level carton at z = 12–30 mm (resting on a thin runner), and the decorative pallet disappears — leaving a visible air gap that reads as "hanging".
 
-### Bug 3 — Validator's stricter `EPS_MM = 1` exposes #1/#2
-`geometry-validator.ts` line 224 only counts a supporter when `|s.z + s.h − b.z| ≤ 1 mm`. Float32 height-map quantization adds sub-mm drift, so even legal stacks of 1066.8 mm cubes occasionally lose one supporter and cross the FLOATING threshold.
+There is also one minor contributor: the tilt-stripe planes at lines 1300–1314 are offset by `+0.002` m (2 mm) outside the carton face. With the 0.1% inflation removed this is harmless, but worth tightening to `+0.0005` m.
 
-### Secondary: snap & z-snap pass don't re-validate against the *true* footprint
-`snapAxis` (line 513) and the z-snap block (line 592) call `evaluatePlacement` again, inheriting the same over-sampling. They can also slide a box backwards into a position where it's now over a shorter cell column without lowering z.
+## Plan
 
----
+### 1. Remove the per-box mesh inflation
+`src/components/freight/container-3d-view.tsx` line 1255 — change
+`scale={scale * 1.001}` → `scale={scale}`.
+This is the single biggest fix. Polygon-offset on the edges (line 1395-1397) already prevents z-fighting on shared faces, so the 1.001 hack is unnecessary.
 
-## Fix plan
+### 2. Shrink the near-ceiling halo to fit inside the box footprint
+`src/components/freight/container-3d-view.tsx` line 1342 — change
+`boxGeometry args={[lm * 1.04, 0.018, wm * 1.04]}` →
+`boxGeometry args={[lm * 0.98, 0.018, wm * 0.98]}` and lower its Y from `hm/2 + 0.012` to `hm/2 + 0.004`. The halo will sit on top of the carton without poking sideways into neighbours.
 
-### 1. `src/lib/freight/packing-advanced.ts` — exact-footprint sampling
+### 3. Seat any near-floor carton on a pallet, not just `z < 10 mm`
+`src/components/freight/container-3d-view.tsx` line 1212 — change
+`const onFloor = box.z < 10;` →
+`const onFloor = box.z < 50;` (50 mm tolerance covers post-snap floor cartons sitting on dunnage runners). This eliminates the "missing pallet" gap that reads as floating.
 
-- Replace the `Math.ceil` cell expansion with a half-open interval that only samples cells whose **center** lies inside the footprint:
-  ```
-  cx0 = Math.floor(x / CELL_MM)
-  cx1 = Math.ceil((x + l) / CELL_MM)
-  // for each (cx, cy):
-  const cellMidX = cx * CELL_MM + CELL_MM / 2;
-  const cellMidY = cy * CELL_MM + CELL_MM / 2;
-  if (cellMidX < x || cellMidX > x + l) continue;
-  if (cellMidY < y || cellMidY > y + w) continue;
-  ```
-- For boxes whose footprint is smaller than 1.5 × CELL_MM, fall back to a **geometric supporter scan** that ignores the height-map entirely and looks at every box in `placedInternal` whose top face overlaps the candidate footprint. This guarantees correctness for sub-grid boxes (1066.8 mm cubes are right on the boundary).
-- Cap `topZ` at the **highest top-face whose XY footprint actually overlaps the candidate**. If no supporter overlaps, `topZ = 0` (floor).
+### 4. Tighten tilt-stripe offsets
+`src/components/freight/container-3d-view.tsx` lines 1300, 1304, 1308, 1312 — replace each `± 0.002` face offset with `± 0.0005`. Keeps stripes flush on tilted boxes without poking through neighbours.
 
-### 2. `src/lib/freight/packing-advanced.ts` — pre-commit geometry guard
-Just before pushing a box into `placedInternal` (around line 647), call a lightweight `wouldBeLegal(candidateBox, placedInternal, container)` helper that runs the same overlap, support-ratio, and gap checks the validator uses. If it fails:
-- log the rejection into `stackingReasonCounts` (extend with a `geometryGuard` bucket),
-- mark the carton as unplaced,
-- continue to the next carton.
+### 5. Quick QA pass after the edits
+Reload the freight intelligence page with the same 41 × 1067 mm cube scenario. Expected:
+- Cartons sit shoulder-to-shoulder with crisp seams, no visible overlap.
+- Floor row sits on visible wooden pallets across the entire base layer.
+- Top-row amber halos sit on the lid, not on neighbouring boxes.
+- HUD still shows GREEN, score 91, geometry audit clean (we are not touching the packer).
 
-This is the final airlock: **nothing illegal can ever be committed**, regardless of which earlier check missed it. With this in place, `geometry-validator.ts` is guaranteed to report `allLegal === true` for every produced pack.
+## Files to edit
 
-### 3. `src/lib/freight/packing-advanced.ts` — snap pass uses geometric supporter check
-In `snapAxis` (line 513) and the z-snap block (line 592) replace the height-map `evaluatePlacement` re-call with the geometric supporter scan from Fix 1. Snap must never move a box into a position the height-map says is fine but the geometry says is floating.
+- `src/components/freight/container-3d-view.tsx` (5 small edits, lines 1212, 1255, 1300-1314, 1342)
 
-### 4. `src/lib/freight/geometry-validator.ts` — bump EPS to absorb Float32 drift
-- `EPS_MM: 1 → 2`. Height-map values are stored in `Float32Array`; for box dimensions around 1000–3000 mm the rounding is well under 0.5 mm, but accumulating two adds (`z + h`) can push past 1 mm. 2 mm is still tight enough to catch any real floating gap (smallest carton dimension we accept is 50 mm).
-- In the WALL_GAP band check (lines 113-115), require the offending coordinate to be **at least EPS_MM away from 0 and from the wall** before flagging — prevents 0.4 mm float drift from raising false WALL_GAP for boxes physically sitting at y=0.
-
-### 5. `src/lib/freight/packing-advanced.ts` — height-map writes use exact cells
-After committing a box (lines 658-671), only update cells whose centers are inside the real footprint (same half-open interval as Fix 1). This stops the next placement from inheriting an inflated `topZ` halo around every committed box.
-
-### 6. Regression tests — `src/lib/freight/packing-advanced.regression.test.ts`
-Add three deterministic cases:
-- **40 × 1066.8 mm cubes in a 40HC** — assert `allLegal === true`, all 40 placed, zero floating.
-- **41 × 1066.8 mm cubes** — assert `allLegal === true`, 40 placed, 1 in `shutOut`, HUD path is AMBER (no FLOATING).
-- **Mixed 800 mm + 1100 mm cartons** — assert no FLOATING, no WALL_GAP, no NEIGHBOUR_GAP for a 50-carton mix.
-
-### 7. `src/lib/freight/geometry-validator.test.ts`
-Add a "supporter resolution" case: stack three 1066.8 mm cubes at z = 0, 1066.8, 2133.6 → assert support ratios are exactly 1, 1, 1 with EPS = 2.
-
----
-
-## Why this finally closes the loop
-
-| Layer | Before | After |
-|---|---|---|
-| Placer evaluates topZ | over-samples cells outside footprint | only counts cells whose centers are inside |
-| Placer commits | trusts grid even when supporters miss footprint | runs `wouldBeLegal` airlock first |
-| Snap pass | inherits same over-sampling | uses geometric supporter scan |
-| Validator | EPS 1 mm, fights Float32 drift | EPS 2 mm, exact-equal logic |
-| HUD | RED FLOATING on legal-looking packs | matches ground truth |
-
-**Files touched:**
-- `src/lib/freight/packing-advanced.ts` (Fixes 1, 2, 3, 5)
-- `src/lib/freight/geometry-validator.ts` (Fix 4)
-- `src/lib/freight/packing-advanced.regression.test.ts` (Fix 6, new cases)
-- `src/lib/freight/geometry-validator.test.ts` (Fix 7, new case)
-
-No UI / HUD / 3D viewer changes required — those were corrected in the previous round and will simply start showing GREEN/AMBER as soon as the packer stops emitting floating boxes.
-
-**Approve to implement in one shot.**
+No packer, validator, or test changes are needed — the geometry was already correct after the previous fix; only the renderer was lying about it.
