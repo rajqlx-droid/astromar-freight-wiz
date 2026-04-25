@@ -295,6 +295,7 @@ function SinglePlanBody({
   viewerCollapsed = false,
   rollup,
   planMeta = null,
+  isCalculating = false,
 }: {
   pack: AdvancedPackResult;
   weight: number;
@@ -307,6 +308,7 @@ function SinglePlanBody({
   viewerCollapsed?: boolean;
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
   planMeta?: BestPlanMeta | null;
+  isCalculating?: boolean;
 }) {
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
   // The stepper drives the text HUD walkthrough only — it never moves, hides,
