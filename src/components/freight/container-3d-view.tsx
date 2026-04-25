@@ -161,9 +161,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
     getCanvas() {
       return glRef.current?.domElement ?? null;
     },
-      cam.aspect = w / h;
-      cam.updateProjectionMatrix();
-    },
   }));
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
