@@ -20,6 +20,7 @@ import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
 import { pickEdgeColor } from "@/lib/freight/packing";
 import { assignDisplayColors, displayColorKey } from "@/lib/freight/display-colors";
+import { NEIGHBOUR_MIN_GAP_MM } from "@/lib/freight/gap-rules";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
@@ -545,6 +546,20 @@ function SceneContents({
     [pack.placed],
   );
 
+  // Click-to-select: highlights the chosen cargo and renders its 1 mm
+  // clearance envelope so users can visually confirm the gap rule. Click
+  // empty space (the floor) to clear. ESC also clears.
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedIdx(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  // Reset selection when the underlying pack changes (different scenario).
+  useEffect(() => { setSelectedIdx(null); }, [pack]);
+
   return (
     <>
       <ambientLight intensity={0.55} />
@@ -610,7 +625,10 @@ function SceneContents({
           fly-in of boxes whose index is in `flyInIdxs`. The resting position
           for every visible box is the validated packer slot, so once the
           ease-out finishes there is zero overlap and zero floating cargo. */}
-      <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
+      <group
+        position={[-Cm.l / 2, 0, -Cm.w / 2]}
+        onPointerMissed={() => setSelectedIdx(null)}
+      >
         {pack.placed.map((b, i) => {
           if (visiblePlacedIdxs && !visiblePlacedIdxs.has(i)) return null;
           const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
@@ -627,6 +645,8 @@ function SceneContents({
               containerL={Cm.l}
               containerH={Cm.h}
               displayColor={displayColors.get(displayColorKey(b))}
+              selected={selectedIdx === i}
+              onSelect={() => setSelectedIdx((cur) => (cur === i ? null : i))}
             />
           );
         })}
@@ -1188,6 +1208,8 @@ function CargoBox({
   showEdges = true,
   nearCeiling = false,
   displayColor,
+  selected = false,
+  onSelect,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1203,6 +1225,10 @@ function CargoBox({
   nearCeiling?: boolean;
   /** Adjacency-aware shade override; falls back to box.color. */
   displayColor?: string;
+  /** True when this box is the user's current click selection. */
+  selected?: boolean;
+  /** Called when the user clicks the box (toggle selection in parent). */
+  onSelect?: () => void;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
@@ -1293,14 +1319,55 @@ function CargoBox({
     ? [cx + stageOffsetX, cy + palletLift + stageOffsetY, cz]
     : [cx, cy + palletLift, cz];
 
+  // 1 mm clearance envelope (in scene metres). Visualises the mandatory
+  // air-gap that the packer enforces around every cargo unit. Rendered only
+  // when this box is the user's current selection.
+  const envelopePadM = NEIGHBOUR_MIN_GAP_MM / MM_PER_M; // 0.001 m per face
+  const envL = lm + envelopePadM * 2;
+  const envH = hm + envelopePadM * 2;
+  const envW = wm + envelopePadM * 2;
+
   return (
-    <group ref={groupRef} position={initialPosition} scale={scale}>
+    <group
+      ref={groupRef}
+      position={initialPosition}
+      scale={scale}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.();
+      }}
+    >
       {onFloor && stat?.packageType !== "pallet" && <WoodenPallet lm={lm} wm={wm} bottomY={-hm / 2} />}
       {previewHighlight && (
         <mesh position={[0, -hm / 2 + 0.001, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[Math.max(lm, wm) * 0.55, Math.max(lm, wm) * 0.7, 32]} />
           <meshBasicMaterial color="#10b981" transparent opacity={0.85} />
         </mesh>
+      )}
+      {selected && (
+        <group>
+          {/* Translucent shell — the +1 mm air envelope around the unit. */}
+          <mesh raycast={() => null}>
+            <boxGeometry args={[envL, envH, envW]} />
+            <meshBasicMaterial
+              color="#22d3ee"
+              transparent
+              opacity={0.18}
+              depthWrite={false}
+            />
+          </mesh>
+          {/* Crisp wireframe outline so the envelope reads at any angle. */}
+          <lineSegments raycast={() => null}>
+            <edgesGeometry args={[new THREE.BoxGeometry(envL, envH, envW)]} />
+            <lineBasicMaterial color="#0891b2" linewidth={1} />
+          </lineSegments>
+          {/* Floating label confirming the rule + dimensions. */}
+          <Html position={[0, hm / 2 + 0.12, 0]} center zIndexRange={[100, 0]}>
+            <div className="whitespace-nowrap rounded-md bg-cyan-600 px-2 py-1 text-[10px] font-semibold text-white shadow-lg">
+              1 mm clearance · {Math.round(box.l)}×{Math.round(box.w)}×{Math.round(box.h)} mm
+            </div>
+          </Html>
+        </group>
       )}
       <PackageShape
         lm={lm}
