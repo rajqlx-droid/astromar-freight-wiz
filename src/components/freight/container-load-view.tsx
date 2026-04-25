@@ -307,17 +307,11 @@ function SinglePlanBody({
   rollup?: React.ComponentProps<typeof LoadReportPanel>["rollup"];
   planMeta?: BestPlanMeta | null;
 }) {
-  // Per-row "Apply suggested re-shuffle" preview state. Maps placedIdx → metres
-  // along scene-z (container width axis). Cleared when row toggles off.
-  const [shufflePreview, setShufflePreview] = useState<Map<number, number> | null>(
-    null,
-  );
-
   // Pallet stepper. palletIdx = index into PalletStep[], -1 = empty container.
+  // The stepper drives the text HUD walkthrough only — it never moves, hides,
+  // or animates cargo in the 3D scene. The 3D viewer always renders the
+  // physically-packed cargo at exact coordinates.
   const [palletIdx, setPalletIdx] = useState(-1);
-  // Forklift visuals are disabled — kept as a no-op state so the HUD prop
-  // contracts stay intact without rendering anything in the 3D scene.
-  const [showForkliftToken, setShowForkliftToken] = useState(false);
   const [speed, setSpeed] = useState<0.5 | 1 | 2>(1);
 
   // Row groups (back wall → door). Re-derived only when the pack changes.
@@ -336,58 +330,16 @@ function SinglePlanBody({
 
   const stepMode = is3D && palletSequence.length > 0;
 
-  // Visible-placed set: every pallet from index 0..palletIdx.
-  const visiblePlacedSet = useMemo<Set<number> | null>(() => {
-    if (!stepMode) return null;
-    const s = new Set<number>();
-    for (let k = 0; k <= palletIdx; k++) {
-      const step = palletSequence[k];
-      if (step) s.add(step.placedIdx);
-    }
-    return s;
-  }, [stepMode, palletIdx, palletSequence]);
-
-  // Current + next pallet.
+  // Current step (drives the HUD text only).
   const currentStep = palletIdx >= 0 ? palletSequence[palletIdx] ?? null : null;
-  const nextStep =
-    palletIdx + 1 < palletSequence.length ? palletSequence[palletIdx + 1] ?? null : null;
-  const activePalletIdx = currentStep?.placedIdx ?? null;
-  const nextPalletIdx = !stepMode ? null : nextStep?.placedIdx ?? null;
-
-  // Fly-in animation for the most-recently-placed pallet only.
-  const [flyInPlacedSet, setFlyInPlacedSet] = useState<Set<number> | null>(null);
-  const [flyInKey, setFlyInKey] = useState(0);
-  const prevPalletIdxRef = useRef(-1);
-  useEffect(() => {
-    const prev = prevPalletIdxRef.current;
-    prevPalletIdxRef.current = palletIdx;
-    if (!stepMode || palletIdx < 0) {
-      setFlyInPlacedSet(null);
-      return;
-    }
-    if (palletIdx > prev) {
-      const step = palletSequence[palletIdx];
-      if (!step) return;
-      setFlyInPlacedSet(new Set([step.placedIdx]));
-      setFlyInKey((k) => k + 1);
-      const t = setTimeout(() => setFlyInPlacedSet(null), 700);
-      return () => clearTimeout(t);
-    }
-    setFlyInPlacedSet(null);
-  }, [palletIdx, stepMode, palletSequence]);
 
   // Reset stepper when toggling 3D.
   useEffect(() => {
     setPalletIdx(-1);
   }, [is3D]);
 
-  // Active row (right-panel highlight + gap heatmap) = current pallet's row.
+  // Active row (right-panel highlight only).
   const activeRowIdx = currentStep?.rowIdx ?? null;
-  const activeRow = activeRowIdx != null ? rows[activeRowIdx] ?? null : null;
-
-  const [showGapHeatmap, setShowGapHeatmap] = useState(true);
-  const gapHeatmapRow =
-    stepMode && showGapHeatmap && activeRow && activeRow.gapWarning ? activeRow : null;
 
   // Auto-play: 1× = 600ms per pallet, 0.5× = 1200ms, 2× = 300ms.
   const stepDurationMs = Math.round(600 / speed);
