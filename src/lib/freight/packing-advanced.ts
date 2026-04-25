@@ -416,8 +416,9 @@ export function packContainerAdvanced(
    * legal in the final audit. Anything failing here is rejected before the
    * commit so the validator can never see a floating / overlapping box.
    *
-   * Checks: pairwise overlap, neighbour gap (with vertical-overlap gate),
-   * support ratio against actual placed-box geometry, wall/door/ceiling.
+   * Lateral neighbour gap and side-wall gap are 0 (per gap-rules.ts). The
+   * STRICT pairwise overlap test is the only thing preventing physical
+   * intersection. _minGap is accepted but unused — kept for call-site compat.
    */
   function wouldBeLegal(
     x: number,
@@ -426,14 +427,14 @@ export function packContainerAdvanced(
     l: number,
     w: number,
     h: number,
-    minGap: number,
+    _minGap: number,
   ): boolean {
     // Bounds.
     if (x < 0 || y < 0 || z < 0) return false;
     if (x + l > C.l + 0.5) return false;
     if (y + w > C.w + 0.5) return false;
     if (z + h > C.h + 0.5) return false;
-    // Door / ceiling.
+    // Door / ceiling reserves are still enforced.
     if (C.l - (x + l) < DOOR_RESERVE_MM - 1) return false;
     if (C.h - (z + h) < CEILING_RESERVE_MM - 1) return false;
 
@@ -451,22 +452,13 @@ export function packContainerAdvanced(
       if (ratio < SUPPORT_MIN_RATIO) return false;
     }
 
-    // Pairwise overlap + neighbour-gap with vertical-overlap gate.
+    // STRICT pairwise overlap — touching faces (overlap = 0 on any axis)
+    // is legal; any positive intersection on every axis is rejected.
     for (const p of placedInternal) {
-      // 3D overlap?
       const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
       const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
       const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
-      if (ox > 1 && oy > 1 && oz > 1) return false; // physical overlap
-
-      // Neighbour-gap rule only when the two boxes share vertical overlap.
-      if (oz <= 1) continue;
-      const xGap = Math.max(0, Math.max(x, p.x) - Math.min(x + l, p.x + p.l));
-      const yGap = Math.max(0, Math.max(y, p.y) - Math.min(y + w, p.y + p.w));
-      const xOverlap = ox > 1;
-      const yOverlap = oy > 1;
-      if (yOverlap && !xOverlap && xGap > 0 && xGap < minGap - 1) return false;
-      if (xOverlap && !yOverlap && yGap > 0 && yGap < minGap - 1) return false;
+      if (ox > 0.5 && oy > 0.5 && oz > 0.5) return false;
     }
     return true;
   }
