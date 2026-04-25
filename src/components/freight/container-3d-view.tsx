@@ -414,6 +414,7 @@ function SceneContents({
   visiblePlacedIdxs = null,
   flyInIdxs = null,
   flyInKey = 0,
+  persistKey,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
@@ -423,14 +424,59 @@ function SceneContents({
   visiblePlacedIdxs?: ReadonlySet<number> | null;
   flyInIdxs?: ReadonlySet<number> | null;
   flyInKey?: number;
+  persistKey?: string;
 }) {
-  const { camera } = useThree();
+  const { camera, invalidate } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
   const target = useMemo(() => new THREE.Vector3(0, Cm.h / 2, 0), [Cm.h]);
+  // True after we've restored a saved camera frame so the preset effect
+  // doesn't snap us back to iso on first mount.
+  const restoredRef = useRef(false);
+  // Internal preset version: bumped when the user clicks a preset so we
+  // know to apply it even if persistKey would otherwise suppress the move.
+  const presetAppliedRef = useRef<Preset | null>(null);
 
-  // Apply preset whenever it changes.
+  // Restore saved camera frame on mount (once per persistKey).
+  useEffect(() => {
+    if (!persistKey || typeof window === "undefined") return;
+    let raw: string | null = null;
+    try { raw = window.sessionStorage.getItem(persistKey); }
+    catch { return; }
+    if (!raw) return;
+    try {
+      const saved = JSON.parse(raw) as {
+        position?: [number, number, number];
+        target?: [number, number, number];
+        zoom?: number;
+      };
+      const cam = camera as THREE.PerspectiveCamera;
+      if (saved.position) cam.position.set(...saved.position);
+      if (saved.zoom && Number.isFinite(saved.zoom)) {
+        cam.zoom = saved.zoom;
+        cam.updateProjectionMatrix();
+      }
+      if (saved.target) target.set(...saved.target);
+      controlsRef.current?.update?.();
+      restoredRef.current = true;
+      invalidate();
+    } catch {
+      /* corrupt entry — ignore */
+    }
+    // Only run on persistKey change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistKey]);
+
+  // Apply preset whenever it changes — but skip the very first run if we
+  // restored a saved frame (otherwise the user's remembered view is wiped).
   useEffect(() => {
     if (!camera) return;
+    // Skip first run when we have a restored frame and the preset hasn't
+    // changed since mount (still the initial "iso" default).
+    if (restoredRef.current && presetAppliedRef.current === null) {
+      presetAppliedRef.current = preset;
+      return;
+    }
+    presetAppliedRef.current = preset;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
       iso: new THREE.Vector3(Cm.l * 0.9, Cm.h * 1.4, Cm.w * 1.6),
@@ -440,9 +486,34 @@ function SceneContents({
       inside: new THREE.Vector3(-Cm.l / 2 + 0.5, Cm.h * 0.6, 0),
     };
     cam.position.copy(positions[preset]);
+    cam.zoom = 1;
+    cam.updateProjectionMatrix();
     cam.lookAt(preset === "inside" ? new THREE.Vector3(Cm.l / 2, Cm.h / 2, 0) : target);
     controlsRef.current?.update?.();
   }, [preset, Cm.l, Cm.w, Cm.h, camera, target]);
+
+  // Persist camera frame on every OrbitControls change (debounced).
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleControlsChange = () => {
+    if (!persistKey || typeof window === "undefined") return;
+    const cam = camera as THREE.PerspectiveCamera;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      try {
+        window.sessionStorage.setItem(
+          persistKey,
+          JSON.stringify({
+            position: [cam.position.x, cam.position.y, cam.position.z],
+            target: [target.x, target.y, target.z],
+            zoom: cam.zoom,
+          }),
+        );
+      } catch { /* storage blocked — non-fatal */ }
+    }, 150);
+  };
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  }, []);
 
   // Doors stay open in the static scene ("ready to load").
   const doorOpen = 1;
