@@ -122,9 +122,11 @@ export function validatePackGeometry(
   const flags = (idx: number): ValidatorItemFlags =>
     getFlags?.(idx) ?? { stackable: true, fragile: false };
 
-  // ── 1. Door / ceiling clearance (lateral wall gap is 0 — flush is legal) ──
+  // ── 1. Door / ceiling / side-wall clearance ─────────────────────────
   const doorOff: number[] = [];
   const ceilOff: number[] = [];
+  const wallOff: number[] = [];
+  const GAP_EPS = 0.5; // float drift tolerance — must match overlapVolume EPS
   placed.forEach((b, i) => {
     // Door reserve: nothing within MIN_DOOR_GAP of the +X end.
     const xFar = C.l - (b.x + b.l);
@@ -132,6 +134,14 @@ export function validatePackGeometry(
     // Ceiling reserve.
     const zFar = C.h - (b.z + b.h);
     if (zFar < HARD.MIN_CEILING_GAP_MM - HARD.EPS_MM) ceilOff.push(i);
+    // Side walls (−X back wall, ±Y side walls). Floor (z = 0) is intentionally
+    // exempt — boxes rest on the floor.
+    if (HARD.MIN_WALL_GAP_MM > 0) {
+      const minWall = HARD.MIN_WALL_GAP_MM - GAP_EPS;
+      if (b.x < minWall) wallOff.push(i);
+      if (b.y < minWall) wallOff.push(i);
+      if (C.w - (b.y + b.w) < minWall) wallOff.push(i);
+    }
   });
 
   if (doorOff.length > 0) {
@@ -148,20 +158,43 @@ export function validatePackGeometry(
       placedIdxs: Array.from(new Set(ceilOff)),
     });
   }
+  if (wallOff.length > 0) {
+    violations.push({
+      code: "WALL_GAP",
+      message: `${wallOff.length} box${wallOff.length > 1 ? "es" : ""} within ${HARD.MIN_WALL_GAP_MM} mm of a side wall`,
+      placedIdxs: Array.from(new Set(wallOff)),
+    });
+  }
 
-  // ── 2. Strict pairwise overlap (no neighbour-gap rule — flush is legal) ───
+  // ── 2. Strict pairwise overlap + neighbour-gap (≥ 1 mm clearance) ────
   const overlapPairs: number[] = [];
+  const gapPairs: number[] = [];
+  const minNeighbour = HARD.MIN_NEIGHBOUR_GAP_MM - GAP_EPS;
   // O(n²) — fine up to a few hundred boxes (RENDER_CAP = 500).
   for (let i = 0; i < placed.length; i++) {
     const a = placed[i];
     for (let j = i + 1; j < placed.length; j++) {
       const b = placed[j];
-      // Cheap AABB reject.
-      if (a.x + a.l <= b.x || b.x + b.l <= a.x) continue;
-      if (a.y + a.w <= b.y || b.y + b.w <= a.y) continue;
-      if (a.z + a.h <= b.z || b.z + b.h <= a.z) continue;
-      const ov = overlapVolume(a, b);
-      if (ov > 0) overlapPairs.push(i, j);
+      // Cheap AABB reject — boxes that are clearly far apart skip both checks.
+      const gx = Math.max(a.x - (b.x + b.l), b.x - (a.x + a.l));
+      const gy = Math.max(a.y - (b.y + b.w), b.y - (a.y + a.w));
+      const gz = Math.max(a.z - (b.z + b.h), b.z - (a.z + a.h));
+      // Overlap = all three axis "gaps" negative beyond float tolerance.
+      if (gx < -GAP_EPS && gy < -GAP_EPS && gz < -GAP_EPS) {
+        const ov = overlapVolume(a, b);
+        if (ov > 0) overlapPairs.push(i, j);
+        continue;
+      }
+      // Stacking adjacency exempt: bottom of one ≈ top of the other on Z,
+      // and the stacked footprint overlaps in X+Y.
+      const aOnB = Math.abs(b.z + b.h - a.z) <= HARD.EPS_MM;
+      const bOnA = Math.abs(a.z + a.h - b.z) <= HARD.EPS_MM;
+      if ((aOnB || bOnA) && gx < 0 && gy < 0) continue;
+      // Neighbour-gap: boxes are too close on every axis but not actually
+      // intersecting — flag as crowding.
+      if (gx < minNeighbour && gy < minNeighbour && gz < minNeighbour) {
+        gapPairs.push(i, j);
+      }
     }
   }
 
@@ -172,6 +205,14 @@ export function validatePackGeometry(
       placedIdxs: Array.from(new Set(overlapPairs)),
     });
   }
+  if (gapPairs.length > 0) {
+    violations.push({
+      code: "NEIGHBOUR_GAP",
+      message: `${gapPairs.length / 2} pair${gapPairs.length / 2 > 1 ? "s" : ""} of boxes within ${HARD.MIN_NEIGHBOUR_GAP_MM} mm of each other`,
+      placedIdxs: Array.from(new Set(gapPairs)),
+    });
+  }
+
 
   // ── 3. Support / floating cargo, fragile + non-stack carrying load ─────
   const floating: number[] = [];
