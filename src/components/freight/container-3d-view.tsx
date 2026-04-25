@@ -1205,6 +1205,8 @@ function CargoBox({
   showEdges = true,
   nearCeiling = false,
   displayColor,
+  selected = false,
+  onSelect,
 }: {
   box: PlacedBox;
   stat?: { stackable: boolean; fragile: boolean; packageType: string };
@@ -1220,6 +1222,10 @@ function CargoBox({
   nearCeiling?: boolean;
   /** Adjacency-aware shade override; falls back to box.color. */
   displayColor?: string;
+  /** True when this box is the user's current click selection. */
+  selected?: boolean;
+  /** Called when the user clicks the box (toggle selection in parent). */
+  onSelect?: () => void;
 }) {
   const lm = box.l / MM_PER_M;
   const wm = box.w / MM_PER_M;
