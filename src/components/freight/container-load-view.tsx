@@ -501,9 +501,7 @@ function SinglePlanBody({
                   />
                 </div>
               </Suspense>
-            ) : (
-              <IsoContainer pack={pack} />
-            )}
+            ) : null}
             {is3D && palletSequence.length > 0 && (
               <PalletStatusBar
                 currentIdx={palletIdx}
