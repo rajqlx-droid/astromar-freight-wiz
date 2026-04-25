@@ -560,37 +560,34 @@ export function packContainerAdvanced(
           }
           if (!weightOk) continue;
 
-          const gRule = getGapRule(c.packageType);
-          if (x > 0 && x < gRule.wallMin) continue;
-          if (y > 0 && y < gRule.wallMin) continue;
-          if (y + o.w < C.w && y + o.w > C.w - gRule.wallMin) continue;
-          let gapViolation = false;
-          const checkRange = gRule.minGap * 3;
-          for (const pb of placedInternal) {
-            if (Math.abs(pb.x - x) > o.l + checkRange) continue;
-            if (Math.abs(pb.y - y) > o.w + checkRange) continue;
-            // Vertical relationship: a box directly stacked on another (top of pb
-            // meets bottom of new box, or vice-versa) is supported contact —
-            // NOT a gap violation. Only enforce the lateral gap when boxes
-            // overlap vertically by more than 1mm (true side-by-side neighbours).
-            const zOverlapMm = Math.min(ev.z + o.h, pb.z + pb.h) - Math.max(ev.z, pb.z);
-            if (zOverlapMm <= 1) continue; // stacked or non-overlapping in Z
-            const xOv = x < pb.x + pb.l + gRule.minGap && x + o.l + gRule.minGap > pb.x;
-            const yOv = y < pb.y + pb.w + gRule.minGap && y + o.w + gRule.minGap > pb.y;
-            if (xOv && yOv) { gapViolation = true; break; }
-          }
-          if (gapViolation) continue;
+          // Lateral neighbour gap and side-wall gap are 0 — flush packing
+          // is legal. The pre-commit airlock (wouldBeLegal, below) is the
+          // only gate against actual physical overlap.
 
-          // Score (back-to-front row-wise loading):
-          //   1. x position has the highest weight — fully fill the row at the
-          //      back wall before advancing forward (loaders can't climb on cargo).
-          //   2. z (height) — bottom of the current row first.
-          //   3. y position — left-to-right within the row.
-          //   4. support quality tie-break.
-          // Coefficients chosen so a 100mm advance in x always outweighs the
-          // tallest possible stack progression at the same x.
-          const score =
-            x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
+          // Score:
+          //  - Tight mode (default, container is well-filled): back-to-front
+          //    row-wise loading. X dominates so each row finishes against
+          //    the back wall before the next row advances forward.
+          //  - Spread mode (container under 65 % full): place each new
+          //    floor-level carton near its evenly-spaced target slot along
+          //    the length, and bias the lateral position to the centre line.
+          //    This keeps the centre of gravity balanced when the load is
+          //    light enough that we don't need every centimetre.
+          let score: number;
+          if (spreadMode && ev.z === 0) {
+            const targetX = Math.min(usableLengthMm - o.l, spreadCursor * spreadStrideMm);
+            const yCentreOffset = Math.abs((y + o.w / 2) - C.w / 2);
+            score =
+              Math.abs(x - targetX) * 100 +
+              ev.z * 1_000 +
+              yCentreOffset * 0.5 +
+              (1 - ev.supportRatio) * 50;
+          } else {
+            // Tight mode — original back-to-front scoring. Coefficients chosen
+            // so a 100 mm advance in x always outweighs the tallest possible
+            // stack progression at the same x.
+            score = x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
+          }
           if (score < bestScore) {
             bestScore = score;
             bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters, supportRatio: ev.supportRatio };
