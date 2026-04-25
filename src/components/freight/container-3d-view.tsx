@@ -146,24 +146,14 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             pack={pack}
             Cm={Cm}
             preset={preset}
-            shufflePreview={shufflePreview}
-            visiblePlacedSet={visiblePlacedSet}
             hideDoors={hideDoors}
-            gapHeatmapRow={gapHeatmapRow}
-            flyInPlacedSet={flyInPlacedSet}
-            flyInKey={flyInKey}
-            activePalletIdx={activePalletIdx}
-            nextPalletIdx={nextPalletIdx}
-            followCam={followCam}
-            showForkliftToken={showForkliftToken}
             nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
           />
         </Suspense>
       </Canvas>
 
-      {/* Camera preset buttons — hidden in follow-cam mode */}
-      {!followCam && (
-        <div className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg bg-background/85 p-1 shadow backdrop-blur">
+      {/* Camera preset buttons */}
+      <div className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg bg-background/85 p-1 shadow backdrop-blur">
         {(["iso", "front", "side", "top", "inside"] as Preset[]).map((p) => (
           <Button
             key={p}
@@ -181,8 +171,7 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             {p}
           </Button>
         ))}
-        </div>
-      )}
+      </div>
 
       {/* Fullscreen toggle */}
       <button
