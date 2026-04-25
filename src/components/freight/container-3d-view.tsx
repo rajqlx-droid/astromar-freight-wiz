@@ -1474,9 +1474,10 @@ function DrumShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, on
   );
 }
 
-function BaleShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+function BaleShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, onPointerOver, onPointerOut }: PackageShapeProps) {
   const baleColor = color || "#d4c5a3";
   const bandColor = "#3a2818";
+  const edgeColor = hovered ? tiltColor : pickEdgeColor(baleColor);
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
       <mesh castShadow receiveShadow>
@@ -1488,6 +1489,16 @@ function BaleShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPoi
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
+        {showEdges && (
+          <Edges scale={0.999} color={edgeColor}>
+            <lineBasicMaterial
+              color={edgeColor}
+              polygonOffset
+              polygonOffsetFactor={-1}
+              polygonOffsetUnits={-1}
+            />
+          </Edges>
+        )}
       </mesh>
       {[-hm * 0.18, hm * 0.18].map((y, i) => (
         <mesh key={`bh-${i}`} position={[0, y, 0]}>
