@@ -1,51 +1,58 @@
-# Fit a 12th row by using 100% of the door gap (1000 mm cubes in 40HC)
 
-## Audit recap (no bug in the packer)
+# Use only the inner length up to the door (no door-gap reclaim)
 
-Container 40HC inner length = **12,032 mm**. Current door reserve = **100 mm** (`src/lib/freight/gap-rules.ts`). Usable length today = **11,932 mm** → `floor(11,932 / 1,000) = 11` rows. The 932 mm wedge at the door end + the 100 mm door reserve = **1,032 mm of free length** — enough for a 12th 1000 mm row if the door gap is consumed.
+## User clarification
 
-## Decision: use 100% of the door gap
+Previous plan proposed reclaiming the 100 mm `DOOR_RESERVE_MM` to fit a 12th 1000 mm row. User now says: **only the inner dimension up to the door may be used.** That means the door reserve stays mandatory and 11 rows (of 1000 mm cargo) is the correct, final answer for a 40HC. The wedge of 932 mm + the 100 mm reserve at the door end is intentional and must remain empty.
 
-Per user instruction, allow cargo to occupy the door reserve when it unlocks an extra row. This reclaims the wedge in the screenshot and places the 10 unloaded pieces (10.00 m³) into a flush 12th row at the door wall.
+## What this changes vs. the previous plan
+
+- **Drop** all packer changes that consumed the door reserve.
+- **Drop** the validator downgrade — `DOOR_GAP` stays a hard violation.
+- **Drop** the new "12 rows fit" accuracy test — keep the existing 11-row behaviour.
+- **Keep** the diagnostics so the user can see exactly why the 12th row cannot fit.
 
 ## Implementation
 
-### 1. Packer change (`src/lib/freight/packing-advanced.ts`)
-- Replace `usableLengthMm = C.l - DOOR_RESERVE_MM` with `usableLengthMm = C.l` for the row-fit decision.
-- Update the door-end guard at line 438 (`C.l - (x + l) < DOOR_RESERVE_MM - 1`) to allow `x + l ≤ C.l`.
-- Tag boxes whose `x + l > C.l - DOOR_RESERVE_MM` with `placedInDoorGap = true` so the AUDIT chip + 3D label can flag them.
-- Dev-only console line (`import.meta.env.DEV`):
-  `[pack] inner=12032 door=100 usable=12032 rowDepth=1000 rows=12 slack=32 doorGapUsed=true`
+### 1. Packer (`src/lib/freight/packing-advanced.ts`)
+- No behaviour change. `usableLengthMm = C.l - DOOR_RESERVE_MM` stays.
+- Add a dev-only console log (gated by `import.meta.env.DEV`) at the start of each pack:
+  `[pack] inner=12032 door=100 usable=11932 rowDepth=1000 rows=11 slack=932`
+  This is purely informational and runs once per pack call.
 
 ### 2. Validator (`src/lib/freight/geometry-validator.ts`)
-- Downgrade `DOOR_GAP` from a hard violation to an informational note (or skip the check) — door-gap occupancy is now an opt-in feature, not an error.
+- No change. `DOOR_GAP` remains a hard violation — boxes are not allowed within the 100 mm door reserve.
 
-### 3. AUDIT chip (`src/components/freight/container-load-view.tsx`)
-Add a length-budget line, computed live from the active pack:
+### 3. AUDIT panel chip (`src/components/freight/container-load-view.tsx`)
+Add a "Length budget" chip computed from the active pack and active container:
 
 ```
-Length budget — 12 rows × 1000 mm = 12,000 mm of 12,032 mm inner.
-                32 mm slack. Door reserve consumed (100% door gap used).
+Length budget — 11 rows × 1000 mm = 11,000 mm of 11,932 mm usable
+                (12,032 mm inner − 100 mm door reserve).
+                932 mm slack at door end. A 12th row needs 1000 mm.
 ```
 
-Fall back to the standard `inner − 100 mm door reserve` line when no door-gap use is needed.
+When all rows fit perfectly (zero slack, e.g. odd cargo sizes that divide evenly), show the simpler form without the trailing sentence.
 
 ### 4. Door-end label in 3D (`src/components/freight/container-3d-view.tsx`)
-When any placed box has `placedInDoorGap`, render a small chip at the door end: "Door gap used — 100%". Visible only when `showDimensions` is on.
+At the door end of the container, render a small chip (only when `showDimensions` is on) showing the slack and the door reserve:
+
+```
+Door reserve 100 mm · slack 932 mm
+```
+
+No box ever overlaps the reserve, so this is a static label tied to the container preset and the deepest placed-box X.
 
 ### 5. Tests (`src/lib/freight/packing-advanced.accuracy.test.ts`)
-- Remove the `DOOR_GAP` group from `assertAccurate` (no longer a violation).
-- Keep `OVERLAP`, `FLOATING`, `CEILING_GAP` strict.
-- Add a new test: 12 × 1000 mm cubes in 40HC → expect 12 rows fit (was 11).
+- No change. `DOOR_GAP` stays in the strict-violation group.
+- The existing 11-row behaviour for 1000 mm cubes in 40HC is the correct expectation.
 
 ## Files
-- `src/lib/freight/packing-advanced.ts`
-- `src/lib/freight/geometry-validator.ts`
-- `src/lib/freight/packing-advanced.accuracy.test.ts`
-- `src/components/freight/container-load-view.tsx`
-- `src/components/freight/container-3d-view.tsx`
+- `src/lib/freight/packing-advanced.ts` — dev-only log line
+- `src/components/freight/container-load-view.tsx` — Length budget chip
+- `src/components/freight/container-3d-view.tsx` — door-end slack label
 
 ## Out of scope
-- Ceiling reserve (still enforced — crossbeam clearance).
-- Lateral / side-wall gaps (already 0 — flush to walls).
-- Non-door-end packer logic (unchanged).
+- Door-gap reclaim (rejected — contradicts the spec).
+- Ceiling reserve, side-wall gaps, neighbour gaps (unchanged).
+- Packer algorithm (unchanged).
