@@ -145,6 +145,13 @@ export function LimitExplanationPanel({ pack }: Props) {
   const ranked = [...steps].sort((a, b) => a.slackValue - b.slackValue);
   const bottleneck = ranked.find((s) => s.slackValue < s.rowDepth) ?? ranked[0];
 
+  // ── Rotation usage summary ──────────────────────────────────────
+  // Surfaces whether the packer actually used the user's rotation flags.
+  // `rotated` is set per placed box: "sideways" (L↔W) or "axis" (tilted).
+  const sidewaysCount = placed.filter((b) => b.rotated === "sideways").length;
+  const tiltedCount = placed.filter((b) => b.rotated === "axis").length;
+  const totalRotated = sidewaysCount + tiltedCount;
+
   return (
     <div className="rounded-lg border border-brand-navy/20 bg-white shadow-sm dark:bg-[oklch(0.18_0.01_240)]">
       <button
