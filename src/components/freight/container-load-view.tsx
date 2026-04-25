@@ -423,7 +423,17 @@ function SinglePlanBody({
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
-            {is3D && mounted ? (
+            {isCalculating ? (
+              <div className="flex h-[420px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                <Loader2 className="size-7 animate-spin text-brand-orange" />
+                <div className="text-center">
+                  <div className="font-semibold text-brand-navy">Computing optimal fit…</div>
+                  <div className="mt-0.5 text-xs">
+                    Preparing 3D loading view — this usually takes a few seconds.
+                  </div>
+                </div>
+              </div>
+            ) : is3D && mounted ? (
               <Suspense
                 fallback={
                   <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
@@ -437,6 +447,9 @@ function SinglePlanBody({
                     pack={pack}
                     hideDoors={pack.placedCartons === 0}
                     nearCeilingPlacedIdxs={pack.nearCeilingPlacedIdxs ?? null}
+                    visiblePlacedIdxs={visiblePlacedIdxs}
+                    flyInIdxs={flyInIdxs}
+                    flyInKey={flyInKey}
                     overlay={
                       stepMode ? (
                         <LoaderHUD
@@ -450,8 +463,6 @@ function SinglePlanBody({
                           onNext={goNext}
                           onReset={goReset}
                           onSpeedChange={setSpeed}
-                          showForklift={false}
-                          onToggleForklift={() => {}}
                           pack={pack}
                           rows={rows}
                           planMeta={planMeta}
@@ -469,7 +480,7 @@ function SinglePlanBody({
                 </div>
               </Suspense>
             ) : null}
-            {is3D && palletSequence.length > 0 && (
+            {!isCalculating && is3D && palletSequence.length > 0 && (
               <PalletStatusBar
                 currentIdx={palletIdx}
                 total={palletSequence.length}
