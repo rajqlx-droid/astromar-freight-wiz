@@ -20,34 +20,49 @@ function box(x: number, y: number, z: number, l: number, w: number, h: number, i
 }
 
 describe("validatePackGeometry — hard physical rules", () => {
-  it("passes a clean two-box floor pack", () => {
+  it("passes a clean two-box floor pack (with a small gap)", () => {
     const placed = [
       box(60, 60, 0, 1200, 1000, 1000),
-      box(60, 1110, 0, 1200, 1000, 1000), // 50mm gap on Y, well clear of walls
+      box(60, 1110, 0, 1200, 1000, 1000), // 110mm gap on Y, well clear of walls
     ];
     const a = validatePackGeometry(placed, HC);
     expect(a.allLegal).toBe(true);
     expect(a.violations).toEqual([]);
   });
 
-  it("detects pairwise overlap", () => {
+  it("passes a flush (zero-gap) two-box floor pack — tight packing is legal", () => {
     const placed = [
       box(60, 60, 0, 1200, 1000, 1000),
-      box(60, 500, 0, 1200, 1000, 1000), // overlaps the first on Y
+      box(60, 1060, 0, 1200, 1000, 1000), // touching faces along Y, no gap
+    ];
+    const a = validatePackGeometry(placed, HC);
+    expect(a.allLegal).toBe(true);
+    expect(a.violations).toEqual([]);
+  });
+
+  it("passes a flush-against-side-wall pack — wall gap rule is 0", () => {
+    const placed = [box(60, 0, 0, 1200, 1000, 1000)]; // y=0, hugging side wall
+    const a = validatePackGeometry(placed, HC);
+    expect(a.allLegal).toBe(true);
+  });
+
+  it("detects pairwise overlap (any positive intersection on every axis)", () => {
+    const placed = [
+      box(60, 60, 0, 1200, 1000, 1000),
+      box(60, 500, 0, 1200, 1000, 1000), // overlaps the first on Y by 560mm
     ];
     const a = validatePackGeometry(placed, HC);
     expect(a.allLegal).toBe(false);
     expect(a.violations.some((v) => v.code === "OVERLAP")).toBe(true);
   });
 
-  it("detects neighbour gap < 50 mm with vertical overlap", () => {
+  it("detects a 2 mm overlap (strict — no EPS tolerance for intersection)", () => {
     const placed = [
       box(60, 60, 0, 1200, 1000, 1000),
-      box(60, 1080, 0, 1200, 1000, 1000), // only 20mm gap on Y
+      box(60, 1058, 0, 1200, 1000, 1000), // 2 mm intrusion on Y
     ];
     const a = validatePackGeometry(placed, HC);
-    expect(a.allLegal).toBe(false);
-    expect(a.violations.some((v) => v.code === "NEIGHBOUR_GAP")).toBe(true);
+    expect(a.violations.some((v) => v.code === "OVERLAP")).toBe(true);
   });
 
   it("does NOT flag neighbour-gap when one box is stacked above the other", () => {
@@ -85,7 +100,8 @@ describe("validatePackGeometry — hard physical rules", () => {
     ];
     const a = validatePackGeometry(placed, HC);
     expect(a.violations.some((v) => v.code === "FLOATING")).toBe(true);
-    expect(a.supportRatios[0]).toBeLessThan(HARD.EPS_MM);
+    // supportRatios is a 0..1 fraction; floating reads ~0.
+    expect(a.supportRatios[0]).toBeLessThan(0.05);
   });
 
   it("detects weak support (< 85%) when the stacked box hangs off the supporter", () => {
