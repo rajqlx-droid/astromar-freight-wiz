@@ -32,15 +32,17 @@ export interface GapRule {
   notes: string;
 }
 
-// Tight-fit rule for every package type. minGap = 0 and wallMin = 0 mean
-// flush placement is legal; the validator only flags actual overlap.
+// 1 mm minimum gap between every cargo unit and 1 mm wall clearance for
+// every package type. The packer's airlock + the validator both enforce
+// this — no two units may share a face, no unit may sit flush against a
+// side wall.
 export const GAP_RULES_MM: Record<string, GapRule> = {
-  carton: { minGap: 0, wallMin: 0, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Tight pack, door + ceiling reserve enforced" },
-  pallet: { minGap: 0, wallMin: 0, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Tight pack, door + ceiling reserve enforced" },
-  drum:   { minGap: 0, wallMin: 0, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Tight pack, chocks mandatory, upright only" },
-  crate:  { minGap: 0, wallMin: 0, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Tight pack, door + ceiling reserve enforced" },
-  bale:   { minGap: 0, wallMin: 0, maxGap: 100, doorMin: 100, ceilingMin: 80, notes: "Tight pack, compression gaps monitored" },
-  bag:    { minGap: 0, wallMin: 0, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "Tight pack, door + ceiling reserve enforced" },
+  carton: { minGap: 1, wallMin: 1, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "1 mm clearance, door + ceiling reserve enforced" },
+  pallet: { minGap: 1, wallMin: 1, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "1 mm clearance, door + ceiling reserve enforced" },
+  drum:   { minGap: 1, wallMin: 1, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "1 mm clearance, chocks mandatory, upright only" },
+  crate:  { minGap: 1, wallMin: 1, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "1 mm clearance, door + ceiling reserve enforced" },
+  bale:   { minGap: 1, wallMin: 1, maxGap: 100, doorMin: 100, ceilingMin: 80, notes: "1 mm clearance, compression gaps monitored" },
+  bag:    { minGap: 1, wallMin: 1, maxGap: 80, doorMin: 100, ceilingMin: 80, notes: "1 mm clearance, door + ceiling reserve enforced" },
 };
 
 export function getGapRule(packageType: string): GapRule {
