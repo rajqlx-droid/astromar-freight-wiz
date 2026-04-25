@@ -194,16 +194,19 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
         }}
       >
         <Suspense fallback={<Html center>Loading 3D…</Html>}>
-          <SceneContents
-            pack={pack}
-            Cm={Cm}
-            preset={preset}
-            hideDoors={hideDoors}
-            nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
-            visiblePlacedIdxs={visiblePlacedIdxs}
-            flyInIdxs={flyInIdxs}
-            flyInKey={flyInKey}
-          />
+          <BagTextureContext.Provider value={bagTextureCtx}>
+            <SceneContents
+              pack={pack}
+              Cm={Cm}
+              preset={preset}
+              hideDoors={hideDoors}
+              nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
+              visiblePlacedIdxs={visiblePlacedIdxs}
+              flyInIdxs={flyInIdxs}
+              flyInKey={flyInKey}
+              persistKey={persistKey}
+            />
+          </BagTextureContext.Provider>
         </Suspense>
       </Canvas>
 
