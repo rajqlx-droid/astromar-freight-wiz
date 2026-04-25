@@ -367,8 +367,6 @@ function SceneContents({
   pack,
   Cm,
   preset,
-  recording,
-  frame,
   shufflePreview,
   visiblePlacedSet,
   hideDoors,
