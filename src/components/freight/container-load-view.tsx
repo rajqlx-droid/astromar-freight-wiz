@@ -454,6 +454,7 @@ function SinglePlanBody({
                     visiblePlacedIdxs={visiblePlacedIdxs}
                     flyInIdxs={flyInIdxs}
                     flyInKey={flyInKey}
+                    persistKey={`cargo3d:cam:${pack.container.id}`}
                     overlay={
                       stepMode ? (
                         <LoaderHUD
