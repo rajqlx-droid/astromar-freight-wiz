@@ -549,6 +549,7 @@ function SceneContents({
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
+        onChange={handleControlsChange}
       />
 
       {/* Tarmac ground extending past the container — sells the "real yard" */}
