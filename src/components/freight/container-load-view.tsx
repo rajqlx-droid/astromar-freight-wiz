@@ -508,9 +508,6 @@ function SinglePlanBody({
         <LoadingSequence pack={pack} />
         <LoadingRowsPanel
           pack={pack}
-          onApplyShuffle={(map) => setShufflePreview(map)}
-          shufflePreviewActive={shufflePreview !== null}
-          previewRequires3D={!is3D}
           activeRowIdx={activeRowIdx}
           onRowSelect={(idx) => {
             // Clicking a row card jumps to the FIRST pallet of that row.
