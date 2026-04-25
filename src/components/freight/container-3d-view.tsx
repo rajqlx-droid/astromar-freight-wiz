@@ -384,8 +384,6 @@ function SceneContents({
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
-  recording: Timeline | null;
-  frame: number;
   shufflePreview: Map<number, number> | null;
   visiblePlacedSet: Set<number> | null;
   hideDoors: boolean;
@@ -406,9 +404,9 @@ function SceneContents({
   const activeBox = activePalletIdx != null ? pack.placed[activePalletIdx] ?? null : null;
   const nextBox = nextPalletIdx != null ? pack.placed[nextPalletIdx] ?? null : null;
 
-  // Apply preset only when not recording AND not in follow-cam mode.
+  // Apply preset only when not in follow-cam mode.
   useEffect(() => {
-    if (recording || followCam) return;
+    if (followCam) return;
     if (!camera) return;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
@@ -421,21 +419,10 @@ function SceneContents({
     cam.position.copy(positions[preset]);
     cam.lookAt(preset === "inside" ? new THREE.Vector3(Cm.l / 2, Cm.h / 2, 0) : target);
     controlsRef.current?.update?.();
-  }, [preset, Cm.l, Cm.w, Cm.h, camera, target, recording]);
+  }, [preset, Cm.l, Cm.w, Cm.h, camera, target]);
 
-  // Per-frame transforms (only when recording).
-  const transforms = useMemo(
-    () =>
-      recording ? transformsForFrame(pack, recording, frame) : null,
-    [recording, pack, frame],
-  );
-  const staging = useMemo(
-    () => (recording ? stagingForFrame(pack, recording, frame) : null),
-    [recording, pack, frame],
-  );
-  // When NOT recording, leave doors fully open so the static scene reads as
-  // "ready to load" (matches the new realistic shell).
-  const doorOpen = staging?.doorOpen ?? 1;
+  // Doors stay open in the static scene ("ready to load").
+  const doorOpen = 1;
 
   return (
     <>
