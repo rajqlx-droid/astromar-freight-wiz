@@ -1,87 +1,66 @@
-## Goal
+# Restore fly-in loading animation + gate the 3D view behind the optimiser
 
-Make the 3D preview display only the final physically packed cargo: no simulated fly-in/staging, no gap heatmap, no re-shuffle preview offsets, no decorative pallets/dunnage that can look like cargo overlap or floating. The packer remains strict: cargo can touch flush, but cargo cannot overlap and cannot float.
+Three connected fixes for the Container Load Optimiser:
 
-## Findings from the code review
+1. **Cargo flies in and fits into place** during the row walkthrough (the animation code still exists in `CargoBox` but `flyIn` is hard-wired off, so the scene currently appears fully loaded from frame 1).
+2. **Defer the 3D scene until packing finishes**. Today, clicking *Optimize loading* shows the full container immediately because we render `Container3DView` with an empty pack while the Web Worker is still computing. Replace that with a compact "Computing optimal fit…" loader and mount the 3D view only once the worker returns the first real pack.
+3. **Remove the unused 🚜 forklift toggle and tractor icon** from the HUD (already non-functional — `showForklift={false}` and `onToggleForklift={() => {}}`).
 
-The packer/validator already use the core physical rules:
-- Cargo-to-cargo gap: 0 mm allowed, but overlap rejected.
-- Side-wall gap: 0 mm allowed.
-- Door reserve: 100 mm.
-- Ceiling reserve: 80 mm.
-- Stacked cargo must be supported.
+## What changes (technical)
 
-The confusing parts are mostly in the loading simulator / 3D viewer, not the core pack geometry:
-- `shufflePreview` can visually move boxes sideways after packing without re-validating that preview position.
-- Step-loader state (`visiblePlacedSet`, `flyInPlacedSet`, `nextPalletIdx`, `followCam`, forklift token) can show cartons in transitional/staged positions, which can look floating or overlapping during animation.
-- `gapHeatmapRow` paints red floor/wall overlays based on floor-gap warnings, which are advisory and not physical geometry.
-- Decorative floor pallets under non-pallet cartons and per-package stylized shapes can visually extend outside the exact packed bounding box.
-- `mp4-muxer` / `webm-muxer` remain in `package.json` after removing the loading video feature.
-- Some comments/UI props still refer to 2D/video/recording and should be cleaned up.
+### A. Re-enable per-pallet fly-in
 
-## Implementation plan
+`src/components/freight/container-load-view.tsx` (`SinglePlanBody`)
 
-1. **Make 3D preview geometry-only**
-   - Edit `src/components/freight/container-load-view.tsx` so `Container3DView` receives only the final pack and static accuracy flags.
-   - Stop passing these visual-only simulator props into the 3D scene:
-     - `shufflePreview`
-     - `visiblePlacedSet`
-     - `gapHeatmapRow`
-     - `flyInPlacedSet`
-     - `flyInKey`
-     - `activePalletIdx`
-     - `nextPalletIdx`
-     - `followCam`
-     - `showForkliftToken`
-   - Keep row instructions and HUD only as text/navigation if needed, but do not let them alter cargo positions in the 3D view.
+- Track which placed-box indices belong to the **current** pallet step:
+  ```
+  const flyInIdxs = useMemo(() => new Set(currentStep?.placedIdxs ?? []), [currentStep]);
+  ```
+  (The existing `PalletStep` type already exposes the indices of boxes loaded in that step — confirmed in `loading-rows.ts`.)
+- Bump a numeric `flyInKey` every time `palletIdx` changes so `CargoBox` re-triggers the ease-out cubic.
+- Pass `flyInIdxs` + `flyInKey` to `Container3DView` via two new (optional) props.
 
-2. **Remove confusing simulator controls from the loading view**
-   - Remove the “Gaps” heatmap toggle under the viewer.
-   - Remove the “Apply suggested re-shuffle” path from `LoadingRowsPanel` usage, because it creates an unvalidated visual offset.
-   - Remove or disable the forklift/fly-in controls in the HUD path if they are still exposed.
+`src/components/freight/container-3d-view.tsx`
 
-3. **Simplify `container-3d-view.tsx` to render exact cargo only**
-   - Remove props and code for:
-     - shuffle offsets
-     - visible-only subsets
-     - fly-in animation
-     - next-pallet target outline
-     - gap heatmap overlay
-     - follow camera / forklift token hooks if no longer used
-   - Ensure every cargo mesh uses exact dimensions from `PlacedBox` with no shrink/expand scale.
-   - Keep only non-geometric outlines (`Edges`) for separation between touching boxes.
+- Add `flyInIdxs?: ReadonlySet<number>` and `flyInKey?: number` props on `Container3DView` and `SceneContents`.
+- In the `pack.placed.map(...)` block, pass `flyIn={flyInIdxs?.has(i) ?? false}` and `flyInKey={flyInKey}` to each `<CargoBox>` (the prop already exists, lines 946–947).
+- Make sure `InvalidateOnChange` is set to `animate={true}` while any box is mid-flight so the demand-driven canvas keeps ticking. Simplest: pass `animate={!!flyInIdxs && flyInIdxs.size > 0}`.
+- Keep the ground-truth invariant intact: the **resting** position is still the exact packed coordinate, so once the 600 ms ease finishes the box snaps to its validated slot — no overlap, no float.
 
-4. **Remove visual objects that can be mistaken for cargo geometry**
-   - Remove decorative wooden pallets under non-pallet cartons.
-   - For true `packageType: "pallet"`, render the palletized unit inside its exact bounding box, but avoid any decorative elements extending outside the packed dimensions.
-   - Keep drums/cartons/crates visually distinguishable, but ensure the rendered mesh never exceeds its packed AABB.
+Verification: the existing accuracy suite (`packing-advanced.accuracy.test.ts`) keeps protecting the resting geometry. Animation only affects transient transform; resting `position` is unchanged.
 
-5. **Harden packer rules against grid/support drift**
-   - Review `evaluatePlacement`, height-map writes, snap pass, and `wouldBeLegal` in `src/lib/freight/packing-advanced.ts`.
-   - If needed, make the placement airlock stricter by validating each committed candidate with the same final geometry logic before pushing to `placedInternal`.
-   - Keep gap rules simple: flush allowed, overlap blocked, door/ceiling reserve enforced.
+### B. Gate the 3D viewer until packing finishes
 
-6. **Remove leftover video dependencies**
-   - Remove `mp4-muxer` and `webm-muxer` from dependencies if no remaining source code uses them.
-   - Clean comments and prop descriptions that still mention 2D/video/recording.
+`src/components/freight/container-load-view.tsx`
 
-7. **Add simulator-specific accuracy tests**
-   - Extend `src/lib/freight/packing-advanced.accuracy.test.ts` with tougher cases:
-     - the current user-visible cube/mixed-carton cases
-     - low-fill spread cases
-     - stacked non-grid-aligned dimensions
-     - pallets and drums
-   - Add assertions that every placed box has:
-     - no pairwise AABB overlap beyond epsilon
-     - `z = 0` or a matching supporter plane below
-     - no door/ceiling breach
-     - no renderer-only visual offset path
+- We already compute `isCalculating = worker.pending && activePack.placed.length === 0 && hasCargo`.
+- In `SinglePlanBody` (or just before passing the pack to `Container3DView`), branch on it:
+  - `isCalculating` → render a compact full-width card with a spinner and the message **"Computing optimal fit… preparing 3D view"**, keep the height (`h-[420px]`) so layout doesn't jump.
+  - Otherwise → render `Container3DView` exactly as today.
+- The `LoadReportPanel`, `LoadingSequence`, `LoadingRowsPanel` etc. should also show a slim "Calculating…" skeleton or be hidden until the first pack arrives, to avoid showing stale "0 of N loaded" rows.
+- Plumb `isCalculating` from `ContainerLoadView` down to `SinglePlanBody` as a prop.
 
-8. **Run verification**
-   - Run the full Vitest suite.
-   - Run TypeScript/build checks.
-   - Search for leftover `loading-video`, `mp4-muxer`, `webm-muxer`, `shufflePreview`, `gapHeatmap`, `flyIn`, and recording references in active 3D code.
+This means after clicking *Optimize loading*:
+1. Worker spins up → user sees the spinner placeholder (NOT the empty container).
+2. First valid pack returns → 3D scene mounts, doors open, walkthrough is ready.
+3. User presses ▶ on the HUD → cargo flies in row-by-row.
 
-## Expected result
+### C. Remove the forklift toggle
 
-The 3D preview will show a static, exact final packing result only. Any carton that appears in 3D will be at the same coordinates used by the packing validator. Advisory loading rules can still be shown as text, but they will no longer move, animate, hide, or overlay cargo in a way that makes the simulation look physically wrong.
+`src/components/freight/loader-hud.tsx`
+
+- Delete the 🚜 `<button>` block (lines ~319–333) and the divider above it.
+- Remove `showForklift` and `onToggleForklift` from the `Props` interface and the function signature.
+
+`src/components/freight/container-load-view.tsx`
+
+- Drop the `showForklift={false}` and `onToggleForklift={() => {}}` props passed to `<LoaderHUD>`.
+
+No other files reference these props (verified via `rg`).
+
+## Out of scope
+
+- The packer logic itself stays untouched — this is a pure rendering/UX change.
+- No changes to the PDF capture path; snapshots still happen against the resting geometry.
+
+After approval I will implement the three changes, run `tsc --noEmit`, and re-run the accuracy test suite to confirm the resting pack is unchanged.
