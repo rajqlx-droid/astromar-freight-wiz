@@ -642,6 +642,8 @@ function SceneContents({
               containerL={Cm.l}
               containerH={Cm.h}
               displayColor={displayColors.get(displayColorKey(b))}
+              selected={selectedIdx === i}
+              onSelect={() => setSelectedIdx((cur) => (cur === i ? null : i))}
             />
           );
         })}
