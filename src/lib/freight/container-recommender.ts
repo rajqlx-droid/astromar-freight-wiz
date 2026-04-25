@@ -396,7 +396,7 @@ export function analyseGeometricCeiling(
     if (blocksPair && blocksStack) {
       reason = `${it.length.toFixed(0)}×${it.width.toFixed(0)}×${it.height.toFixed(0)} cm only fits 1 across and 1 high in ${currentContainer.name} — wastes most of each row.`;
     } else if (blocksPair) {
-      reason = `${it.width.toFixed(0)} cm wide — only 1 fits across the ${(C.w / 10).toFixed(0)} cm container (need ≤${((C.w - 2 * rule.wallMin - rule.minGap) / 2 / 10).toFixed(0)} cm to pair).`;
+      reason = `${it.width.toFixed(0)} cm wide — only 1 fits across the ${(C.w / 10).toFixed(0)} cm container (need ≤${(C.w / 2 / 10).toFixed(0)} cm to pair).`;
     } else {
       reason = `${it.height.toFixed(0)} cm tall — can't stack 2-high in ${currentContainer.name} (${(C.h / 10).toFixed(0)} cm inner).`;
     }

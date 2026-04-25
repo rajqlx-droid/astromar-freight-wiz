@@ -369,8 +369,8 @@ export function buildRows(
     // footprint in the row. The achievable maximum is the LOWER of the two —
     // a row dominated by 1300 mm pallets cannot magically fit 1066 mm cubes.
     const containerW = pack.container.inner.w;
-    const minGap = 50; // universal neighbour gap (gap-rules.ts)
-    const wallMin = 50; // universal wall gap
+    const minGap = 0; // tight pack — flush placement allowed (gap-rules.ts)
+    const wallMin = 0; // tight pack — cartons may sit flush against side walls
     const floorBoxes = r.boxes.filter((b) => b.z < 10);
     let maxAchievableUtilizationPct = 100;
     if (floorBoxes.length > 0 && rowDepthMm > 0) {
