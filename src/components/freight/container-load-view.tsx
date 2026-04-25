@@ -53,8 +53,6 @@ interface Props {
 
 type ContainerChoice = "auto" | ContainerId;
 
-const COS30 = Math.cos(Math.PI / 6);
-const SIN30 = Math.sin(Math.PI / 6);
 
 /**
  * Empty placeholder pack — used while the worker is computing the first real
