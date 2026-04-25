@@ -234,7 +234,12 @@ export function validatePackGeometry(
     }
     const ratio = Math.min(1, overlapArea / footArea);
     supportRatios[i] = ratio;
-    if (ratio < HARD.EPS_MM) floating.push(i);
+    // FLOATING = essentially zero support (≤ 5% of footprint covered).
+    // WEAK_SUPPORT = some support but below SUPPORT_MIN_RATIO.
+    // (Bug fix: ratio is a 0..1 fraction; previously compared against
+    // EPS_MM which is millimetres — a unit mismatch that mis-flagged real
+    // stacks once EPS was bumped above 1.)
+    if (ratio < 0.05) floating.push(i);
     else if (ratio < HARD.MIN_SUPPORT_RATIO) weak.push(i);
   }
 
