@@ -51,8 +51,6 @@ export function LoaderHUD({
   onNext,
   onReset,
   onSpeedChange,
-  showForklift,
-  onToggleForklift,
   pack = null,
   rows,
   planMeta = null,
