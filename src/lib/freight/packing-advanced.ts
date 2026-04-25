@@ -453,12 +453,14 @@ export function packContainerAdvanced(
     }
 
     // STRICT pairwise overlap — touching faces (overlap = 0 on any axis)
-    // is legal; any positive intersection on every axis is rejected.
+    // is legal; any meaningful intersection on every axis is rejected.
+    // Threshold of 1 mm absorbs Float32 drift from the snap pass without
+    // letting visible overlap through (smallest legal carton dim is 50 mm).
     for (const p of placedInternal) {
       const ox = Math.min(x + l, p.x + p.l) - Math.max(x, p.x);
       const oy = Math.min(y + w, p.y + p.w) - Math.max(y, p.y);
       const oz = Math.min(z + h, p.z + p.h) - Math.max(z, p.z);
-      if (ox > 0.5 && oy > 0.5 && oz > 0.5) return false;
+      if (ox > 1 && oy > 1 && oz > 1) return false;
     }
     return true;
   }
