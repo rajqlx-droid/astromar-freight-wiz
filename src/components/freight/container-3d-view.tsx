@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 import { useFullscreen } from "@/hooks/use-fullscreen";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { PlacedBox } from "@/lib/freight/packing";
+import { pickEdgeColor } from "@/lib/freight/packing";
+import { assignDisplayColors, displayColorKey } from "@/lib/freight/display-colors";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
