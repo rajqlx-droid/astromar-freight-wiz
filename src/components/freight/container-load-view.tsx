@@ -344,6 +344,29 @@ function SinglePlanBody({
   // Active row (right-panel highlight only).
   const activeRowIdx = currentStep?.rowIdx ?? null;
 
+  // ── Row-by-row reveal ─────────────────────────────────────────────
+  // While the walkthrough is active, only show boxes that have already
+  // been "placed" by the loader (steps 0..palletIdx). The box of the
+  // CURRENT step gets the fly-in animation; earlier ones rest at their
+  // validated coordinates. When palletIdx === -1, we show every box
+  // (the "container is fully loaded" preview).
+  const visiblePlacedIdxs = useMemo<ReadonlySet<number> | null>(() => {
+    if (palletSequence.length === 0) return null;
+    if (palletIdx < 0) return null;
+    const s = new Set<number>();
+    for (let i = 0; i <= palletIdx; i++) {
+      const step = palletSequence[i];
+      if (step) s.add(step.placedIdx);
+    }
+    return s;
+  }, [palletSequence, palletIdx]);
+  const flyInIdxs = useMemo<ReadonlySet<number> | null>(() => {
+    if (!currentStep) return null;
+    return new Set([currentStep.placedIdx]);
+  }, [currentStep]);
+  // Bumps every step change so CargoBox re-arms its animation start clock.
+  const flyInKey = palletIdx;
+
   // Auto-play: 1× = 600ms per pallet, 0.5× = 1200ms, 2× = 300ms.
   const stepDurationMs = Math.round(600 / speed);
   const [isPlaying, setIsPlaying] = useState(false);
