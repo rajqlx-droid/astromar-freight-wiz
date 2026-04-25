@@ -104,7 +104,7 @@ export function ContainerLoadView({
     onChoiceChange?.(c === "auto" ? null : c);
   };
 
-  const [is3D, setIs3D] = useState(false);
+  const is3D = true;
   const [mounted, setMounted] = useState(false);
   const [viewerCollapsed, setViewerCollapsed] = useState(false);
   const view3DRef = useRef<Container3DHandle | null>(null);
