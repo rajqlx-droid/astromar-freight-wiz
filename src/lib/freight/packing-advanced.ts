@@ -775,13 +775,21 @@ export function packContainerAdvanced(
     }
 
     // Update height-map and topBoxIdx for footprint.
+    // Same exact-footprint rule as evaluatePlacement: only write to a cell
+    // when its CENTRE is inside the placed box. Without this guard the
+    // ceil() expansion would paint a 100mm "halo" around every box, inflating
+    // the topZ seen by the next placement and re-introducing floating cargo.
     const cx0 = Math.floor(x / CELL_MM);
     const cy0 = Math.floor(y / CELL_MM);
-    const cx1 = Math.ceil((x + orient.l) / CELL_MM);
-    const cy1 = Math.ceil((y + orient.w) / CELL_MM);
+    const cx1 = Math.min(cellsX, Math.ceil((x + orient.l) / CELL_MM));
+    const cy1 = Math.min(cellsY, Math.ceil((y + orient.w) / CELL_MM));
     const newTop = z + orient.h;
     for (let cy = cy0; cy < cy1; cy++) {
+      const cellMidY = cy * CELL_MM + CELL_MM / 2;
+      if (cellMidY < y || cellMidY > y + orient.w) continue;
       for (let cx = cx0; cx < cx1; cx++) {
+        const cellMidX = cx * CELL_MM + CELL_MM / 2;
+        if (cellMidX < x || cellMidX > x + orient.l) continue;
         const idx = cellIdx(cx, cy);
         heightMap[idx] = newTop;
         topBoxIdx[idx] = internalIdx;
