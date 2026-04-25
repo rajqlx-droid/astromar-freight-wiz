@@ -261,6 +261,59 @@ export function recommendContainers(
     };
   }
 
+  // ── 20GP-first policy ────────────────────────────────────────────
+  // If raw CBM and weight both fit a 20GP, ALWAYS recommend a 20GP —
+  // even when geometry leaves a few cartons unplaced. The user wants
+  // the smaller box shown with a clear shut-out + a manual hint to
+  // switch to 40ft if they need to ship the full load.
+  const C20 = CONTAINERS.find((c) => c.id === "20gp")!;
+  if (totalCbm <= USABLE_CBM[C20.id] && totalWt <= C20.maxPayloadKg) {
+    const plan20 = pickBestPlan(items, C20).best.pack;
+    if (plan20.placedCartons >= totalQty) {
+      // Everything fits — clean recommendation, no shut-out.
+      return {
+        units: [
+          {
+            container: C20,
+            fillCbm: totalCbm,
+            fillWeightKg: totalWt,
+            cbmPct: (totalCbm / USABLE_CBM[C20.id]) * 100,
+            weightPct: (totalWt / C20.maxPayloadKg) * 100,
+          },
+        ],
+        summary: `1 × ${C20.name}`,
+        totalCbm,
+        totalWeightKg: totalWt,
+        isMulti: false,
+        reason: "fits-single",
+      };
+    }
+    // Some cartons couldn't be placed by geometry. Keep the 20GP
+    // recommendation but surface a shut-out report with a manual
+    // switch hint — the user explicitly asked NOT to auto-escalate.
+    const shutOut = computeShutOut(items, "exceeds-geometry", plan20);
+    const placedCbm20 = Math.max(0, totalCbm - shutOut.cbm);
+    const placedWt20 = Math.max(0, totalWt - shutOut.weightKg);
+    return {
+      units: [
+        {
+          container: C20,
+          fillCbm: placedCbm20,
+          fillWeightKg: placedWt20,
+          cbmPct: Math.min(100, (placedCbm20 / USABLE_CBM[C20.id]) * 100),
+          weightPct: Math.min(100, (placedWt20 / C20.maxPayloadKg) * 100),
+        },
+      ],
+      summary: `1 × ${C20.name}`,
+      totalCbm,
+      totalWeightKg: totalWt,
+      isMulti: false,
+      reason: "exceeds-single-geometry",
+      reasonDetail: `${totalCbm.toFixed(1)} m³ fits a 20ft GP by volume, but geometry could only place ${plan20.placedCartons} of ${totalQty} packages — ${shutOut.cartons} package${shutOut.cartons === 1 ? "" : "s"} (${shutOut.cbm.toFixed(2)} m³) shut out. Switch manually to a 40ft container to ship the full load.`,
+      shutOut,
+    };
+  }
+
   const single = fitSingle(items);
 
   if (single) {

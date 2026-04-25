@@ -626,6 +626,27 @@ export function packContainerAdvanced(
             // stack progression at the same x.
             score = x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
           }
+          // Tilt-aware bonuses (only for cartons that allow axis rotation —
+          // pallets/crates are rigid units and unaffected). These let the
+          // packer use residual headroom on top of an existing stack instead
+          // of always starting a fresh floor row further forward.
+          if (c.allowAxisRotation && !c.fragile) {
+            // (a) Residual-head reward: this orientation fits in the leftover
+            // headroom above an existing column where the original orientation
+            // wouldn't. Make it dominate fresh-floor competition.
+            const ceilingZ = C.h - CEILING_RESERVE_MM;
+            const fitsHere = ev.z + o.h <= ceilingZ;
+            const origWouldNotFit = ev.z + c.origH > ceilingZ;
+            if (ev.z > 0 && fitsHere && origWouldNotFit) {
+              score -= 50_000;
+            }
+            // (b) Stack-completion bonus: this candidate fully covers an
+            // existing column's top face. Loaders fill columns to the
+            // ceiling before opening a new row — mirror that.
+            if (ev.z > 0 && ev.supportRatio >= 0.98) {
+              score -= 5_000;
+            }
+          }
           if (score < bestScore) {
             bestScore = score;
             bestPick = { x, y, z: ev.z, orient: o, supporters: ev.supporters, supportRatio: ev.supportRatio };

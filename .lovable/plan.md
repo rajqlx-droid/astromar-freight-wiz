@@ -1,58 +1,86 @@
 
-# Use only the inner length up to the door (no door-gap reclaim)
+# Why 27 CBM lands in a 40ft and why upper rows aren't tilted
 
-## User clarification
+## What you are seeing
 
-Previous plan proposed reclaiming the 100 mm `DOOR_RESERVE_MM` to fit a 12th 1000 mm row. User now says: **only the inner dimension up to the door may be used.** That means the door reserve stays mandatory and 11 rows (of 1000 mm cargo) is the correct, final answer for a 40HC. The wedge of 932 mm + the 100 mm reserve at the door end is intentional and must remain empty.
+- **27 CBM but autofit says 40ft.** A 20GP has only 33.23 m³ raw capacity. 27 m³ is 81 % of that. With the 100 mm door reserve, the 80 mm ceiling reserve, and the 50 mm placement stride, the packer can rarely cram 81 % volume into a 20GP without leaving a few cartons unplaced — and the recommender escalates the moment even one carton is unplaced (`fitSingle` requires `placedCartons === totalQty`). The 40ft preview then *looks* half-empty because it is — the cargo only needed ~27/76 = 35 % of an HC.
+- **Pallets pack tight, cartons don't.** Pallets are flagged `isRigidUnit` so the packer disables tilt (`allowAxisRotation = false`) and only tries L↔W. Fewer orientations + identical heights → clean rows.
+- **Upper rows never tilt, even when the carton has tilt enabled.** The packer DOES build tilted orientations, but the scoring formula `score = x * 10_000 + z * 100 + …` makes back-wall floor placements always win. A carton that *could* tilt onto the top of the previous column gets a higher x (frontier moved forward) and loses to a fresh floor placement further forward in the original orientation. By the time the floor is full, the cartons left over are scored against the next-best floor slot rather than the residual headroom on top of column 1, so column tops stay empty.
 
-## What this changes vs. the previous plan
+## Plan
 
-- **Drop** all packer changes that consumed the door reserve.
-- **Drop** the validator downgrade — `DOOR_GAP` stays a hard violation.
-- **Drop** the new "12 rows fit" accuracy test — keep the existing 11-row behaviour.
-- **Keep** the diagnostics so the user can see exactly why the 12th row cannot fit.
+Four changes — recommender policy, packer scoring, a clarifying UI hint, and a manual-switch CTA.
 
-## Implementation
+### 1. New recommender policy: "20GP first when CBM allows"
 
-### 1. Packer (`src/lib/freight/packing-advanced.ts`)
-- No behaviour change. `usableLengthMm = C.l - DOOR_RESERVE_MM` stays.
-- Add a dev-only console log (gated by `import.meta.env.DEV`) at the start of each pack:
-  `[pack] inner=12032 door=100 usable=11932 rowDepth=1000 rows=11 slack=932`
-  This is purely informational and runs once per pack call.
+`src/lib/freight/container-recommender.ts`
 
-### 2. Validator (`src/lib/freight/geometry-validator.ts`)
-- No change. `DOOR_GAP` remains a hard violation — boxes are not allowed within the 100 mm door reserve.
+Today: a 20GP is rejected if even 1 of N cartons is unplaced → escalates to 40GP/40HC.
+New rule the user asked for:
 
-### 3. AUDIT panel chip (`src/components/freight/container-load-view.tsx`)
-Add a "Length budget" chip computed from the active pack and active container:
+- **If `totalCbm ≤ USABLE_CBM["20gp"]` AND `totalWeightKg ≤ 20gp.maxPayloadKg`:**
+  - **Always recommend 20GP**, even when geometry leaves some cartons unplaced.
+  - Pack into the 20GP and report the unplaced cartons via the existing `shutOut` field (`reason: "exceeds-geometry"`).
+  - Add a new `reasonDetail` string the UI can render verbatim, e.g.:
+    *"27.0 m³ fits a 20ft GP by volume. Geometry could only place 58 of 60 cartons — 2 cartons (0.9 m³) shut out. Switch manually to 40ft GP if you want to ship the full load."*
+- **If CBM or weight exceeds the 20GP cap:** existing escalation logic stays — pick the smallest container that fits.
+- **If even a 40HC can't take the full load:** existing shut-out report stays.
+
+This replaces the current `fitSingle()` "all-or-nothing" gate for the 20GP tier. The user explicitly wants 20GP shown even when a few cartons are shut out, with a clear reason and a manual-switch suggestion.
+
+### 2. Manual-switch CTA in the recommendation banner
+
+`src/components/freight/container-suggestion.tsx` (and wherever the recommendation summary is rendered).
+
+When `recommendation.shutOut` is non-null AND the recommended container is the 20GP, render a secondary action:
+
+> **"Switch to 40ft GP"** — clicking it overrides the autofit and re-runs the pack against a 40GP so the full load fits.
+
+The button is a manual override; the recommender itself does not auto-escalate.
+
+### 3. Try tilted orientations on top of existing stacks
+
+`src/lib/freight/packing-advanced.ts`
+
+Two scoring fixes inside the per-carton loop (lines ~544–633):
+
+**(a) Reward filling residual headroom.** When a candidate sits on top of an existing column (`ev.z > 0`) AND its tilted orientation makes it fit under the ceiling where the original wouldn't, lower its score so it can beat a fresh-floor placement of the same carton:
 
 ```
-Length budget — 11 rows × 1000 mm = 11,000 mm of 11,932 mm usable
-                (12,032 mm inner − 100 mm door reserve).
-                932 mm slack at door end. A 12th row needs 1000 mm.
+const fillsResidualHead =
+  ev.z > 0 && (ev.z + o.h) <= (C.h - CEILING_RESERVE_MM)
+            && (ev.z + c.origH) >  (C.h - CEILING_RESERVE_MM);
+if (fillsResidualHead) score -= 50_000;   // wins over a forward floor slot
 ```
 
-When all rows fit perfectly (zero slack, e.g. odd cargo sizes that divide evenly), show the simpler form without the trailing sentence.
+**(b) Stack-completion bonus.** If the candidate's footprint fully covers an existing column's top face (supportRatio ≥ 0.98), shave 5 000 from the score so completing a column beats starting a new one a row forward. This is what loaders do in practice — fill the column before opening a new one.
 
-### 4. Door-end label in 3D (`src/components/freight/container-3d-view.tsx`)
-At the door end of the container, render a small chip (only when `showDimensions` is on) showing the slack and the door reserve:
+Both bonuses only apply to cartons whose `allowAxisRotation === true`, so pallets and crates are unaffected.
 
-```
-Door reserve 100 mm · slack 932 mm
-```
+### 4. Surface rotation usage in the limit panel
 
-No box ever overlaps the reserve, so this is a static label tied to the container preset and the deepest placed-box X.
+`src/components/freight/limit-explanation-panel.tsx`
 
-### 5. Tests (`src/lib/freight/packing-advanced.accuracy.test.ts`)
-- No change. `DOOR_GAP` stays in the strict-violation group.
-- The existing 11-row behaviour for 1000 mm cubes in 40HC is the correct expectation.
+Add one line: **"Tilt enabled: Yes/No — N of M cartons placed sideways/tilted"** using `placed[i].rotated`. Lets the user see whether the packer actually used the rotation flag they ticked.
 
-## Files
-- `src/lib/freight/packing-advanced.ts` — dev-only log line
-- `src/components/freight/container-load-view.tsx` — Length budget chip
-- `src/components/freight/container-3d-view.tsx` — door-end slack label
+## Files to edit
+
+- `src/lib/freight/container-recommender.ts` — new "20GP first when CBM allows" policy + shut-out detail string.
+- `src/components/freight/container-suggestion.tsx` — "Switch to 40ft GP" manual CTA.
+- `src/lib/freight/packing-advanced.ts` — residual-head + stack-completion score adjustments.
+- `src/components/freight/limit-explanation-panel.tsx` — rotation summary line.
+
+## Verification
+
+- Existing accuracy suite (`packing-advanced.accuracy.test.ts`) stays green — no overlap / floating / door-gap / ceiling-gap regressions.
+- New regression: 30 × 90 cm cartons (~22 m³) → recommender returns **20GP** (not 40GP), with `shutOut = null` if all fit, or with a populated `shutOut` + reasonDetail if any don't.
+- New regression: a manifest at 32 m³ (under 33.23 cap) where geometry can only place 90 % → recommender still returns 20GP, `shutOut.cartons > 0`, `reasonDetail` mentions "Switch manually to 40ft".
+- New regression: 12 × tilt-enabled cartons that only fit 8-on-floor + 4-tilted-on-top → ≥ 11 placed in a 20GP (was 8).
+- Manual override path: clicking "Switch to 40ft GP" re-runs against 40GP and the placed count matches a direct 40GP pack.
 
 ## Out of scope
-- Door-gap reclaim (rejected — contradicts the spec).
-- Ceiling reserve, side-wall gaps, neighbour gaps (unchanged).
-- Packer algorithm (unchanged).
+
+- Auto-escalation when 20GP shuts cargo out (user explicitly asked for manual switch).
+- Door-gap reclaim (still rejected).
+- Multi-container loads (still single-container only).
+- Pallet tilt (pallets remain rigid by design).

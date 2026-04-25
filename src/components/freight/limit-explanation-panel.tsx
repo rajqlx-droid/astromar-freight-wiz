@@ -145,6 +145,13 @@ export function LimitExplanationPanel({ pack }: Props) {
   const ranked = [...steps].sort((a, b) => a.slackValue - b.slackValue);
   const bottleneck = ranked.find((s) => s.slackValue < s.rowDepth) ?? ranked[0];
 
+  // ── Rotation usage summary ──────────────────────────────────────
+  // Surfaces whether the packer actually used the user's rotation flags.
+  // `rotated` is set per placed box: "sideways" (L↔W) or "axis" (tilted).
+  const sidewaysCount = placed.filter((b) => b.rotated === "sideways").length;
+  const tiltedCount = placed.filter((b) => b.rotated === "axis").length;
+  const totalRotated = sidewaysCount + tiltedCount;
+
   return (
     <div className="rounded-lg border border-brand-navy/20 bg-white shadow-sm dark:bg-[oklch(0.18_0.01_240)]">
       <button
@@ -188,6 +195,30 @@ export function LimitExplanationPanel({ pack }: Props) {
               />
             ))}
           </ol>
+
+          <div className="mt-3 rounded-md border border-brand-navy/15 bg-muted/40 px-3 py-2 text-[10.5px] leading-relaxed">
+            <span className="font-semibold text-brand-navy">Rotation usage — </span>
+            {totalRotated === 0 ? (
+              <span className="text-muted-foreground">
+                All {placed.length} packages placed in original orientation. No
+                sideways swap or tilt was applied (either the input flags are
+                off, or the original orientation already won every position).
+              </span>
+            ) : (
+              <span className="text-brand-navy/90">
+                {totalRotated} of {placed.length} package{placed.length === 1 ? "" : "s"} rotated to fit:{" "}
+                {sidewaysCount > 0 && (
+                  <strong>{sidewaysCount} sideways (L↔W)</strong>
+                )}
+                {sidewaysCount > 0 && tiltedCount > 0 && ", "}
+                {tiltedCount > 0 && (
+                  <strong>{tiltedCount} tilted onto a side (axis)</strong>
+                )}
+                . Tilt is only attempted on cartons with the <em>allow axis
+                rotation</em> flag enabled.
+              </span>
+            )}
+          </div>
 
           <div className="mt-3 rounded-md bg-brand-orange/10 px-3 py-2 text-[11px] leading-relaxed">
             <span className="font-semibold text-brand-navy">Verdict — </span>
