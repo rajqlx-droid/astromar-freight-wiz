@@ -625,7 +625,10 @@ function SceneContents({
           fly-in of boxes whose index is in `flyInIdxs`. The resting position
           for every visible box is the validated packer slot, so once the
           ease-out finishes there is zero overlap and zero floating cargo. */}
-      <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
+      <group
+        position={[-Cm.l / 2, 0, -Cm.w / 2]}
+        onPointerMissed={() => setSelectedIdx(null)}
+      >
         {pack.placed.map((b, i) => {
           if (visiblePlacedIdxs && !visiblePlacedIdxs.has(i)) return null;
           const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
