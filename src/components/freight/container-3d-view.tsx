@@ -165,6 +165,9 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
             preset={preset}
             hideDoors={hideDoors}
             nearCeilingPlacedIdxs={nearCeilingPlacedIdxs ?? pack.nearCeilingPlacedIdxs ?? null}
+            visiblePlacedIdxs={visiblePlacedIdxs}
+            flyInIdxs={flyInIdxs}
+            flyInKey={flyInKey}
           />
         </Suspense>
       </Canvas>
