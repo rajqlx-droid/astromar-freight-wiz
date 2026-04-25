@@ -423,13 +423,16 @@ function SceneContents({
 
       <ContainerShell Cm={Cm} doorOpen={doorOpen} hideDoors={hideDoors} />
 
-      {/* Cargo — rendered at exact packed coordinates, no offsets, no animations,
-          no decorative dunnage. The packer's airlock guarantees no overlap and
-          no floating cargo, so the 3D view is a direct read-out of the
-          validated geometry. */}
+      {/* Cargo — rendered at exact packed coordinates. The walkthrough may
+          hide boxes whose index is not in `visiblePlacedIdxs` and animate the
+          fly-in of boxes whose index is in `flyInIdxs`. The resting position
+          for every visible box is the validated packer slot, so once the
+          ease-out finishes there is zero overlap and zero floating cargo. */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
         {pack.placed.map((b, i) => {
+          if (visiblePlacedIdxs && !visiblePlacedIdxs.has(i)) return null;
           const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
+          const isFlying = flyInIdxs?.has(i) ?? false;
           return (
             <CargoBox
               key={i}
@@ -437,6 +440,10 @@ function SceneContents({
               stat={pack.perItem[b.itemIdx]}
               showEdges
               nearCeiling={isNearCeiling}
+              flyIn={isFlying}
+              flyInKey={flyInKey}
+              containerL={Cm.l}
+              containerH={Cm.h}
             />
           );
         })}
