@@ -1281,7 +1281,7 @@ const CbmRow = memo(function CbmRow({
             <WeightUnitSelector id={`cbm-wt-unit-${it.id}`} value={rowWt} onChange={onSetWtUnit} compact />
             <Select
               value={it.packageType ?? "carton"}
-              onValueChange={(v) => onUpdatePacking(it.id, { packageType: v as PackageType })}
+              onValueChange={(v) => onUpdatePacking(it.id, withPackageTypeReset({ packageType: v as PackageType }))}
             >
               <SelectTrigger
                 className="h-7 w-auto gap-1 rounded-full border-brand-navy/25 bg-muted/40 px-2.5 py-0 text-[11px] font-medium text-brand-navy shadow-none focus:ring-1"
@@ -1304,13 +1304,14 @@ const CbmRow = memo(function CbmRow({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1">
           {(() => {
-            const isRigidUnit = it.packageType === "crate" || it.packageType === "pallet";
-            const sidewaysOn = isRigidUnit ? true : it.allowSidewaysRotation !== false;
-            const tip = isRigidUnit
-              ? "Pallets and crates are always rotatable (4-way entry)."
+            const policy = getRotationPolicy(it.packageType);
+            const sidewaysAllowed = policy.canSideways;
+            const sidewaysOn = sidewaysAllowed && it.allowSidewaysRotation === true;
+            const tip = !sidewaysAllowed
+              ? (policy.sidewaysReason ?? "Sideways rotation not allowed for this package type.")
               : sidewaysOn
-                ? "Sideways rotation allowed. Click to lock orientation."
-                : "Orientation locked. Click to allow 90° sideways rotation.";
+                ? "Sideways rotation allowed (90° L↔W). Click to lock orientation."
+                : "Orientation locked. Click to allow 90° sideways rotation (L↔W).";
             return (
               <TooltipProvider delayDuration={200}>
                 <Tooltip>
@@ -1319,15 +1320,15 @@ const CbmRow = memo(function CbmRow({
                       type="button"
                       aria-pressed={sidewaysOn}
                       aria-label={
-                        isRigidUnit
-                          ? "Sideways rotation locked on for pallets/crates"
+                        !sidewaysAllowed
+                          ? "Sideways rotation not allowed for this package type"
                           : sidewaysOn
                             ? "Disable sideways rotation"
                             : "Enable sideways rotation"
                       }
-                      disabled={isRigidUnit}
+                      disabled={!sidewaysAllowed}
                       onClick={() => {
-                        if (isRigidUnit) return;
+                        if (!sidewaysAllowed) return;
                         onUpdatePacking(it.id, { allowSidewaysRotation: !sidewaysOn });
                       }}
                       className={cn(
@@ -1335,7 +1336,7 @@ const CbmRow = memo(function CbmRow({
                         sidewaysOn
                           ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
                           : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
-                        isRigidUnit && "cursor-not-allowed opacity-80",
+                        !sidewaysAllowed && "cursor-not-allowed opacity-60",
                       )}
                     >
                       <span aria-hidden>{sidewaysOn ? "↻" : "⛔"}</span>
@@ -1344,7 +1345,7 @@ const CbmRow = memo(function CbmRow({
                       </span>
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[220px] text-xs">
+                  <TooltipContent side="top" className="max-w-[240px] text-xs">
                     {tip}
                   </TooltipContent>
                 </Tooltip>
