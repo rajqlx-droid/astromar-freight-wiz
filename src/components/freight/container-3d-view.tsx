@@ -10,7 +10,7 @@
  */
 import { Suspense, forwardRef, useImperativeHandle, useMemo, useRef, useState, useEffect } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { OrbitControls, Edges, Grid, Html } from "@react-three/drei";
+import { OrbitControls, Edges, Grid, Html, RoundedBox } from "@react-three/drei";
 import { Maximize2, Minimize2 } from "lucide-react";
 import * as THREE from "three";
 import { Button } from "@/components/ui/button";
@@ -1378,18 +1378,53 @@ function PalletShape({ lm, hm, wm, color, hovered, tiltColor, showEdges = true, 
 }
 
 function BagShape({ lm, hm, wm, color, hovered, tiltColor, onPointerOver, onPointerOut }: PackageShapeProps) {
+  // Sack-style bag: a soft rounded box at the real L × H × W footprint, plus
+  // two small "ear" nubs at the top length-ends to suggest the tied / carry
+  // pinch-points of an industrial bag. Ears scale with the bag so they stay
+  // proportionate from a 25 kg cement sack to a 1-tonne FIBC.
+  const minDim = Math.min(lm, hm, wm);
+  const corner = Math.max(0.02, Math.min(minDim * 0.18, minDim * 0.45));
+  const earR = Math.max(0.015, Math.min(hm, wm) * 0.12);
+  const earOffsetX = lm / 2 - earR * 0.4; // tucked just inside the top edge
+  const earOffsetY = hm / 2 + earR * 0.55; // poking above the top face
+  const sackColor = color || "#c4a574";
   return (
     <group onPointerOver={onPointerOver} onPointerOut={onPointerOut}>
-      <mesh castShadow receiveShadow scale={[lm / 2, hm / 2, wm / 2]}>
-        <sphereGeometry args={[1, 14, 10]} />
+      {/* Main sack body — rounded box at the bag's actual dimensions. */}
+      <RoundedBox
+        args={[lm, hm, wm]}
+        radius={corner}
+        smoothness={3}
+        creaseAngle={0.6}
+        castShadow
+        receiveShadow
+      >
         <meshStandardMaterial
-          color={color || "#c4a574"}
+          color={sackColor}
           roughness={0.95}
           metalness={0}
           emissive={hovered ? tiltColor : "#000000"}
           emissiveIntensity={hovered ? 0.25 : 0}
         />
-      </mesh>
+      </RoundedBox>
+      {/* Two carrying "ears" at the top length-ends. */}
+      {[-1, 1].map((sign) => (
+        <mesh
+          key={sign}
+          position={[sign * earOffsetX, earOffsetY, 0]}
+          castShadow
+          receiveShadow
+        >
+          <sphereGeometry args={[earR, 12, 10]} />
+          <meshStandardMaterial
+            color={sackColor}
+            roughness={0.95}
+            metalness={0}
+            emissive={hovered ? tiltColor : "#000000"}
+            emissiveIntensity={hovered ? 0.25 : 0}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }

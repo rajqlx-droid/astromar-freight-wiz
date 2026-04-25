@@ -1,74 +1,51 @@
-# Rotation rules per package type
+# Bag 3D shape: rectangular sack with carrying ears
 
-## The new matrix
+## Today
 
-| Package type | 90° floor swap (L↔W "sideways") | Tip onto side (H↔L/W "axis tilt") |
-|---|---|---|
-| Carton | Allowed (toggle, default ON) | Allowed (toggle, default OFF) |
-| Bale | Allowed (toggle, default ON) | Allowed (toggle, default OFF) |
-| Bag | Allowed (toggle, default ON) | Allowed (toggle, default OFF) |
-| Drum | Allowed (toggle, default ON) | **Forbidden** (toggle disabled, tooltip: "Drums must stay upright") |
-| Pallet | Allowed but **never auto-assumed** — toggle visible, default OFF, user must opt in | **Forbidden** (toggle disabled, tooltip: "Pallets ship in fixed upright orientation") |
-| Crate | Allowed but **never auto-assumed** — toggle visible, default OFF, user must opt in | **Forbidden** (toggle disabled, tooltip: "Crates ship in fixed upright orientation") |
+In `src/components/freight/container-3d-view.tsx`, `BagShape` (line 1380) renders bags as a **sphere** scaled to `lm × hm × wm`. That looks like a generic blob and ignores how the cargo is actually stacked in the container — the sphere doesn't sit flush, doesn't tile, and reads as "ball" not "sack."
 
-Key change vs today: pallets and crates currently force `allowSideways = true` and hide the toggle entirely. Per spec they must instead show the toggle (default OFF) so the user has to consciously confirm a 90° swap is acceptable.
+The 2D icon in `package-type-icon.tsx` already shows the correct mental model: a sack with a tied/handled neck.
 
-## UI behavior (cbm-calculator.tsx)
+## What changes
 
-Both rotation toggles ("Can lay sideways" and "Can stand on side") always render for every package type — no more "rigid unit" hidden block. Each toggle independently consults a small policy table:
+Rewrite `BagShape` so a bag in the 3D view is a **soft rectangular sack** at its real `L × H × W` footprint, with two small **"ears"** (tied / carry-handle nubs) on top.
 
-- If forbidden → render the toggle in a disabled state, value forced to `false`, with a one-line tooltip / helper text explaining why ("Drums must stay upright", "Pallets ship in fixed upright orientation", etc.).
-- If allowed → render normally.
-
-When the user changes package type on an existing row, immediately clear any flags the new type forbids (set to `false`) and reset to the new type's default (sideways default is ON for carton/bale/bag/drum, OFF for pallet/crate; tilt default is OFF for everyone).
-
-The amber "rigid unit" info box (lines 952–958) is removed — replaced by inline disabled toggles with tooltips.
-
-## Packer behavior (packing-advanced.ts)
-
-Replace the current ad-hoc check at lines 183–185 with a single helper `getRotationPolicy(packageType)` returning `{ canSideways, canAxis }`. Then:
+Visually:
 
 ```
-const policy = getRotationPolicy(it.packageType);
-const allowSideways = policy.canSideways && (it.allowSidewaysRotation === true);
-const allowAxis     = policy.canAxis     && (it.allowAxisRotation === true);
+        .─.       .─.
+       (   )-----(   )       ← two ear nubs at top length-ends
+        '─'       '─'
+       ╭─────────────╮
+       │             │       ← rounded-corner sack body
+       │             │         at full L × H × W
+       ╰─────────────╯
 ```
 
-Note the explicit `=== true`: pallets/crates no longer get a free pass to rotate sideways; the user's stored flag is the source of truth, gated by policy.
+### Implementation
 
-The new policy table:
+1. Add `RoundedBox` to the existing drei import (`@react-three/drei` is already a dep, `RoundedBox` is exported).
+2. Replace the spherical body with `<RoundedBox args={[lm, hm, wm]} radius={…} smoothness={3} />` — corner radius derived from the smallest dimension (~18 % of `min(lm, hm, wm)`, capped) so a tall bag still looks plump and a flat bag stays thin.
+3. Add two small sphere "ears" on the top face, positioned at the +/- length ends (`x = ± lm/2`, `y = hm/2 + earR`, `z = 0`). Ear radius scales with `min(hm, wm) * 0.12` so it stays proportionate.
+4. Same colour, roughness 0.95, no metalness, hover-emissive behaviour preserved.
+5. Sack rotates correctly when the packer tilts the bag — because the geometry is dimension-driven, the ears always sit on whichever face is "up" after rotation (the parent group already applies the rotation transform).
 
-```
-carton: { canSideways: true,  canAxis: true  }
-bale:   { canSideways: true,  canAxis: true  }
-bag:    { canSideways: true,  canAxis: true  }
-drum:   { canSideways: true,  canAxis: false }
-pallet: { canSideways: true,  canAxis: false }
-crate:  { canSideways: true,  canAxis: false }
-```
+### Why ears at the length-ends (not corners)
 
-The same helper is exported and reused by the UI so the rules live in one place.
-
-## Defaults & migration (calculators.ts / emptyCbmItem)
-
-`emptyCbmItem` already defaults `allowSidewaysRotation = true` and `allowAxisRotation = false` for cartons. No change needed for new items. For existing saved items where `packageType` is pallet/crate and `allowSidewaysRotation` is still `undefined`, the packer's `=== true` check will treat them as OFF — which matches the new "always ask" rule. Users will see the toggle off and can opt in.
+Industrial sacks (cement, grain, fertiliser) carry from two pinch-points along the long edge. Anchoring ears at `± lm/2` mirrors that real-world grip and reads correctly even when bags are stacked tightly side-by-side along the width axis.
 
 ## Files to edit
 
-- `src/lib/freight/packing-advanced.ts` — add `getRotationPolicy`, replace lines 183–185, export the helper.
-- `src/components/freight/cbm-calculator.tsx` — replace the rigid-unit branch (lines 952–976) with always-visible toggles that consult the policy; add disabled/tooltip styling; handle flag reset inside the `packageType` change handler at lines 1081 and 1241.
-- `src/lib/freight/calculators.ts` — small helper if needed for the type-change reset (e.g. `defaultsForPackageType`).
-
-## Verification
-
-- Pick "drum" → tilt toggle is disabled with tooltip; sideways toggle works.
-- Pick "pallet" → both toggles visible, sideways default OFF, tilt disabled. Packer leaves pallets unrotated unless user opts in.
-- Pick "bag" → both toggles enabled, tilt allowed.
-- Switch a row from carton (tilt ON) to drum → tilt flag cleared; switch back to carton → tilt stays cleared (user re-enables).
-- Existing accuracy suite stays green; add one regression: a pallet with `allowSidewaysRotation` unset packs in original orientation only.
+- `src/components/freight/container-3d-view.tsx` — import `RoundedBox` from drei; rewrite the `BagShape` function (~16 lines → ~50 lines).
 
 ## Out of scope
 
-- Changing the recommender or 20GP-first policy.
-- Changing the tilt scoring bonuses.
-- Per-orientation max-stack rules.
+- 2D `PackageTypeIcon` (already correct).
+- PDF bag glyph in `pdf-icons.ts` (separate render path, not requested).
+- Drum / bale / pallet / crate / carton shapes — unchanged.
+
+## Verification
+
+- Pick "bag" as package type, open container 3D view → bags render as soft rectangular sacks at their real dimensions with two visible ear nubs on top.
+- Tilt a bag (axis rotation) → the ears follow the rotation; sack still reads correctly with the new "top" face.
+- Stack bags → they tile flush along their footprints (no more gaps from spherical curvature).
