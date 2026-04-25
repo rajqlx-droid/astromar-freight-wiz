@@ -48,7 +48,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { calcCbm, emptyCbmItem, type CbmItem, type PackageType } from "@/lib/freight/calculators";
+import { calcCbm, defaultsForPackageType, emptyCbmItem, getRotationPolicy, type CbmItem, type PackageType } from "@/lib/freight/calculators";
 import { CONTAINERS, ITEM_COLORS } from "@/lib/freight/packing";
 import {
   analyseGeometricCeiling,
