@@ -306,44 +306,21 @@ function SceneContents({
   pack,
   Cm,
   preset,
-  shufflePreview,
-  visiblePlacedSet,
   hideDoors,
-  gapHeatmapRow,
-  flyInPlacedSet,
-  flyInKey,
-  activePalletIdx,
-  nextPalletIdx,
-  followCam,
-  showForkliftToken,
   nearCeilingPlacedIdxs,
 }: {
   pack: AdvancedPackResult;
   Cm: { l: number; w: number; h: number };
   preset: Preset;
-  shufflePreview: Map<number, number> | null;
-  visiblePlacedSet: Set<number> | null;
   hideDoors: boolean;
-  gapHeatmapRow: RowGroup | null;
-  flyInPlacedSet: Set<number> | null;
-  flyInKey: number;
-  activePalletIdx: number | null;
-  nextPalletIdx: number | null;
-  followCam: boolean;
-  showForkliftToken: boolean;
   nearCeilingPlacedIdxs: number[] | null;
 }) {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls> | null>(null);
   const target = useMemo(() => new THREE.Vector3(0, Cm.h / 2, 0), [Cm.h]);
 
-  // Active / next pallet boxes for highlights + follow cam.
-  const activeBox = activePalletIdx != null ? pack.placed[activePalletIdx] ?? null : null;
-  const nextBox = nextPalletIdx != null ? pack.placed[nextPalletIdx] ?? null : null;
-
-  // Apply preset only when not in follow-cam mode.
+  // Apply preset whenever it changes.
   useEffect(() => {
-    if (followCam) return;
     if (!camera) return;
     const cam = camera as THREE.PerspectiveCamera;
     const positions: Record<Preset, THREE.Vector3> = {
@@ -381,40 +358,19 @@ function SceneContents({
       <hemisphereLight intensity={0.35} groundColor={"#ddd"} />
 
       <InvalidateOnChange
-        deps={[
-          preset,
-          flyInPlacedSet ? flyInPlacedSet.size : 0,
-          flyInKey,
-          activePalletIdx ?? -1,
-          nextPalletIdx ?? -1,
-          followCam ? 1 : 0,
-          gapHeatmapRow ? 1 : 0,
-          showForkliftToken ? 1 : 0,
-          visiblePlacedSet ? visiblePlacedSet.size : -1,
-          hideDoors ? 1 : 0,
-        ]}
-        animate={
-          followCam ||
-          (flyInPlacedSet?.size ?? 0) > 0 ||
-          nextPalletIdx != null ||
-          showForkliftToken
-        }
+        deps={[preset, hideDoors ? 1 : 0]}
+        animate={false}
       />
 
       <OrbitControls
         ref={controlsRef}
         target={target}
         enablePan
-        enabled={!followCam}
         minDistance={Math.max(Cm.l, Cm.w) * 0.3}
         maxDistance={Math.max(Cm.l, Cm.w) * 4}
         maxPolarAngle={Math.PI / 2 - 0.05}
       />
 
-      {/* Follow camera — drives camera & target every frame when active */}
-      {followCam && (
-        <FollowCam Cm={Cm} activeBox={activeBox} />
-      )}
       {/* Tarmac ground extending past the container — sells the "real yard" */}
       <mesh
         receiveShadow
@@ -439,54 +395,25 @@ function SceneContents({
         infiniteGrid={false}
       />
 
-      <WarehouseAmbience Cm={Cm} />
-
       <ContainerShell Cm={Cm} doorOpen={doorOpen} hideDoors={hideDoors} />
 
-      {/* Cargo */}
+      {/* Cargo — rendered at exact packed coordinates, no offsets, no animations,
+          no decorative dunnage. The packer's airlock guarantees no overlap and
+          no floating cargo, so the 3D view is a direct read-out of the
+          validated geometry. */}
       <group position={[-Cm.l / 2, 0, -Cm.w / 2]}>
-        {(() => {
-          // Always show edge outlines so individual cartons stay visually
-          // distinct even when packed flush against each other (no enforced
-          // gap rule). Edge geometry is cheap and the visible seam matters.
-          const showEdges = true;
-          return pack.placed.map((b, i) => {
-            // Manual row-stepper: hide boxes whose placedIdx is not in the visible set.
-            if (visiblePlacedSet && !visiblePlacedSet.has(i)) return null;
-            // Apply the shuffle preview offset (scene-z, container width axis).
-            const shuffleZ = shufflePreview?.get(i) ?? 0;
-            const offset: [number, number, number] = [0, 0, shuffleZ];
-            const isPreviewed = shuffleZ !== 0;
-            const flyIn = !!flyInPlacedSet?.has(i);
-            const isActivePallet = i === activePalletIdx;
-            const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
-            return (
-              <CargoBox
-                key={i}
-                box={b}
-                stat={pack.perItem[b.itemIdx]}
-                offset={offset}
-                previewHighlight={isPreviewed}
-                flyIn={flyIn}
-                flyInKey={flyInKey}
-                containerL={Cm.l}
-                containerH={Cm.h}
-                showCheckmark={isActivePallet}
-                showEdges={showEdges}
-                nearCeiling={isNearCeiling}
-              />
-            );
-          });
-        })()}
-        {/* Pulsing yellow target outline at the NEXT pallet's slot */}
-        {nextBox && (
-          <NextPalletTarget box={nextBox} />
-        )}
-        {/* Gap heatmap overlay — translucent red rectangles on the floor and
-            back wall of the active row's slice. */}
-        {gapHeatmapRow && (
-          <GapHeatmap row={gapHeatmapRow} containerW={pack.container.inner.w} containerH={pack.container.inner.h} />
-        )}
+        {pack.placed.map((b, i) => {
+          const isNearCeiling = nearCeilingPlacedIdxs?.includes(i) ?? false;
+          return (
+            <CargoBox
+              key={i}
+              box={b}
+              stat={pack.perItem[b.itemIdx]}
+              showEdges
+              nearCeiling={isNearCeiling}
+            />
+          );
+        })}
       </group>
 
       {/* Dimension labels */}
