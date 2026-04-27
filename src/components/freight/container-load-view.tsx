@@ -497,6 +497,7 @@ function SinglePlanBody({
                           pack={pack}
                           rows={rows}
                           planMeta={planMeta}
+                          visiblePlacedIdxs={visiblePlacedIdxs}
                           onJumpToRow={(rowIdx1Based) => {
                             // Jump the stepper to the first pallet of that row.
                             const target = palletSequence.findIndex(
