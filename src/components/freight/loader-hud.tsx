@@ -35,6 +35,8 @@ interface Props {
    *   - !allLegal → RED "EXPORT BLOCKED" with the optimiser's hard violations
    */
   planMeta?: BestPlanMeta | null;
+  /** Indices of currently revealed boxes — drives the live "no overlap" audit chip. */
+  visiblePlacedIdxs?: ReadonlySet<number> | null;
   /** Called when the user clicks a failed Foundation Audit row. */
   onJumpToRow?: (rowIdx1Based: number) => void;
 }
