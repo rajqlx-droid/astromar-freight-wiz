@@ -546,6 +546,44 @@ function SceneContents({
     [pack.placed],
   );
 
+  // ── Cargo skyline (scene metres) for fly-in clearance ─────────────────
+  // Highest top-Y of any *already-resting* visible neighbour (i.e. visible
+  // boxes that are NOT currently in the fly-in set). The incoming box's
+  // horizontal staging glide must travel above this skyline so it never
+  // visually intersects an already-placed neighbour while approaching its
+  // slot. Recomputed once per step (flyInKey) — cheap O(n).
+  const cargoSkylineM = useMemo(() => {
+    let maxTopMm = 0;
+    for (let i = 0; i < pack.placed.length; i++) {
+      if (visiblePlacedIdxs && !visiblePlacedIdxs.has(i)) continue;
+      if (flyInIdxs?.has(i)) continue; // exclude the box currently flying in
+      const b = pack.placed[i];
+      const top = b.z + b.h;
+      if (top > maxTopMm) maxTopMm = top;
+    }
+    return maxTopMm / MM_PER_M;
+    // visiblePlacedIdxs identity changes on every step; flyInKey is the
+    // cheap proxy that guarantees re-computation when the step changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pack.placed, flyInKey, visiblePlacedIdxs?.size]);
+
+  // One-shot diagnostic: log the final-state geometry audit so the user can
+  // confirm the packer's resting positions are clean (no overlaps) for the
+  // current scenario. Visual artefacts during fly-in are separate from this.
+  useEffect(() => {
+    if (pack.placed.length === 0) return;
+    const audit = validateAdvancedPack(pack);
+    if (audit.allLegal) {
+      // eslint-disable-next-line no-console
+      console.info(
+        `[3D] Geometry audit: ✓ ${pack.placed.length} boxes, no overlaps, no gap violations.`,
+      );
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn("[3D] Geometry audit FAILED:", audit.violations);
+    }
+  }, [pack]);
+
   // Click-to-select: highlights the chosen cargo and renders its 1 mm
   // clearance envelope so users can visually confirm the gap rule. Click
   // empty space (the floor) to clear. ESC also clears.
