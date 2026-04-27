@@ -11,6 +11,7 @@ import type { PalletStep, RowGroup } from "@/lib/freight/loading-rows";
 import { computeComplianceReport } from "@/lib/freight/compliance";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { BestPlanMeta } from "@/lib/freight/scenario-runner";
+import { validateAdvancedPackSubset } from "@/lib/freight/geometry-validator";
 
 interface Props {
   step: PalletStep | null;
