@@ -125,6 +125,26 @@ export function LoaderHUD({
 
   return (
     <div className="pointer-events-auto absolute bottom-2 left-1/2 z-10 -translate-x-1/2 max-w-[min(620px,92%)]">
+      {liveAudit && (
+        <div
+          className={cn(
+            "mb-1.5 flex items-center justify-center gap-1.5 rounded-full border bg-background/95 px-3 py-0.5 text-[10px] font-bold shadow backdrop-blur",
+            liveOk
+              ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
+              : "border-red-500 text-red-700 dark:text-red-300",
+          )}
+          title={
+            liveOk
+              ? "Live geometry check on the currently revealed cargo: no overlaps, no sub-1 mm crowding."
+              : `Live geometry check found ${liveCount} overlapping/crowded box reference(s) on revealed cargo.`
+          }
+        >
+          <span>{liveOk ? "✓" : "✕"}</span>
+          <span className="uppercase tracking-wide">
+            {liveOk ? "No overlap · 1 mm gap kept" : `${liveCount} overlap${liveCount > 1 ? "s" : ""} detected`}
+          </span>
+        </div>
+      )}
       {(compliance || planMeta) && (
         <div
           className="mb-1.5 flex items-center justify-center gap-2 rounded-full border bg-background/95 px-3 py-1 text-[10px] font-bold shadow backdrop-blur"
