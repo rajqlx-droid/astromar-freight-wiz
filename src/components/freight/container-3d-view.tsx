@@ -1259,6 +1259,8 @@ function CargoBox({
   previewHighlight?: boolean;
   flyIn?: boolean;
   flyInKey?: number;
+  /** Max top-Y (in scene metres) of any already-resting visible neighbour. The fly-in glide is lifted above this so the incoming box never visually intersects placed cargo. */
+  cargoSkylineM?: number;
   containerL?: number;
   containerH?: number;
   showCheckmark?: boolean;
