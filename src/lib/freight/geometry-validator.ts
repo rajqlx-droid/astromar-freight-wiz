@@ -314,3 +314,28 @@ export function validateAdvancedPack(pack: AdvancedPackResult): GeometryAudit {
     };
   });
 }
+
+/**
+ * Validate only the boxes whose `pack.placed` index is in `visibleIdxs`.
+ * Used by the live "no overlap" badge during the row-by-row walkthrough so
+ * the user can confirm at every step that the currently-shown subset is
+ * still geometrically clean (no two boxes occupy the same slot, no fly-in
+ * artefact has snuck a real overlap into the placed array).
+ */
+export function validateAdvancedPackSubset(
+  pack: AdvancedPackResult,
+  visibleIdxs: ReadonlySet<number> | null,
+): GeometryAudit {
+  if (!visibleIdxs) return validateAdvancedPack(pack);
+  const subset: PlacedBox[] = [];
+  for (let i = 0; i < pack.placed.length; i++) {
+    if (visibleIdxs.has(i)) subset.push(pack.placed[i]);
+  }
+  return validatePackGeometry(subset, pack.container, (itemIdx) => {
+    const stat = pack.perItem[itemIdx];
+    return {
+      stackable: stat?.stackable ?? true,
+      fragile: stat?.fragile ?? false,
+    };
+  });
+}
