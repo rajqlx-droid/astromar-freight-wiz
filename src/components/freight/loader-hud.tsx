@@ -57,11 +57,26 @@ export function LoaderHUD({
   pack = null,
   rows,
   planMeta = null,
+  visiblePlacedIdxs = null,
   onJumpToRow,
 }: Props) {
   const isEmpty = currentIdx < 0 || !step;
   const atLast = currentIdx >= totalSteps - 1;
   const compliance = pack ? computeComplianceReport(pack, { rows }) : null;
+
+  // ── Live overlap audit (visible subset only) ────────────────────────
+  // Re-runs whenever the revealed step changes. Confirms that the boxes
+  // currently on-screen are still legal (no two boxes share a slot, no
+  // sub-1 mm crowding). The fly-in animation is purely visual — this
+  // chip proves the resting placed[] coordinates remain clean throughout
+  // the walkthrough.
+  const liveAudit = pack
+    ? validateAdvancedPackSubset(pack, visiblePlacedIdxs ?? null)
+    : null;
+  const overlapPair = liveAudit?.violations.find((v) => v.code === "OVERLAP");
+  const gapPair = liveAudit?.violations.find((v) => v.code === "NEIGHBOUR_GAP");
+  const liveOk = liveAudit ? !overlapPair && !gapPair : true;
+  const liveCount = (overlapPair?.placedIdxs.length ?? 0) + (gapPair?.placedIdxs.length ?? 0);
 
   // ── HUD state machine ────────────────────────────────────────────────
   // Prefer optimiser meta when available (single source of truth, matches
