@@ -135,13 +135,21 @@ export function LoaderHUD({
           )}
           title={
             liveOk
-              ? "Live geometry check on the currently revealed cargo: no overlaps, no sub-1 mm crowding."
-              : `Live geometry check found ${liveCount} overlapping/crowded box reference(s) on revealed cargo.`
+              ? `Step ${isEmpty ? 0 : currentIdx + 1}/${totalSteps} · live geometry check passes — no overlaps, no sub-1 mm crowding on revealed cargo.`
+              : `Step ${isEmpty ? 0 : currentIdx + 1}/${totalSteps} · ${liveCount} overlapping/crowded box ref(s). Offending placed indices: ${[
+                  ...(overlapPair?.placedIdxs ?? []),
+                  ...(gapPair?.placedIdxs ?? []),
+                ]
+                  .slice(0, 12)
+                  .join(", ")}`
           }
         >
+          <span className="rounded-full bg-current/15 px-1.5 py-[1px] text-[9px] font-black tracking-wider">
+            STEP {isEmpty ? 0 : currentIdx + 1}/{totalSteps}
+          </span>
           <span>{liveOk ? "✓" : "✕"}</span>
           <span className="uppercase tracking-wide">
-            {liveOk ? "No overlap · 1 mm gap kept" : `${liveCount} overlap${liveCount > 1 ? "s" : ""} detected`}
+            {liveOk ? "Clean · 1 mm gap kept" : `${liveCount} overlap${liveCount > 1 ? "s" : ""} detected`}
           </span>
         </div>
       )}

@@ -1318,15 +1318,22 @@ function CargoBox({
   // Distance from the slot's door-side face to the door (scene metres). The
   // staging horizontal offset is capped to "slot → door + 0.5 m" so back-row
   // boxes don't have to traverse the full container length on every step.
+  // Front-row slots get a guaranteed minimum traverse so the box visibly
+  // glides in instead of "popping" at its final position.
   const slotXFromOrigin = cx; // group is centred on origin
-  const distToDoor = Math.max(0.5, containerL / 2 - slotXFromOrigin + 0.5);
-  const stageOffsetX = Math.min(Math.max(1.5, containerL * 0.4), distToDoor);
-  // Lift the glide above EVERY already-placed visible neighbour. Without this,
-  // the incoming box descends through stacks that already reach close to the
-  // ceiling (e.g. bales at ~2.4 m in a 2.39 m container) and visually appears
-  // to land on top of the wrong neighbour. +0.25 m clearance margin.
-  const minClearOverSkyline = Math.max(0, cargoSkylineM - cy + 0.25);
-  const stageOffsetY = Math.max(1.2, containerH * 0.7, minClearOverSkyline);
+  const distToDoor = Math.max(0.8, containerL / 2 - slotXFromOrigin + 0.5);
+  const stageOffsetX = Math.min(Math.max(1.0, containerL * 0.35), distToDoor);
+  // Lift the glide above EVERY already-placed visible neighbour. The skyline
+  // reference is measured against the *bottom face* of the incoming box (not
+  // its centre) so tall incoming bales/pallets keep their entire body above
+  // the cargo skyline, never just their centre line. +0.25 m clearance.
+  const incomingBottomY = cy - hm / 2;
+  const minClearOverSkyline = Math.max(0, cargoSkylineM - incomingBottomY + 0.25);
+  const stageOffsetYRaw = Math.max(1.2, containerH * 0.7, minClearOverSkyline);
+  // Cap the lift so the box never visually punches through the container roof
+  // during the glide phase (top face must stay ~5 cm under the ceiling).
+  const ceilingHeadroomM = containerH - (cy + hm / 2) - 0.05;
+  const stageOffsetY = Math.min(stageOffsetYRaw, Math.max(0.4, ceilingHeadroomM));
   // Fraction of the animation spent travelling horizontally over the cargo
   // before descending vertically into the slot. Keeps the box clear of
   // already-placed neighbours instead of tunneling through them on a
