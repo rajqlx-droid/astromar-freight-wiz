@@ -681,6 +681,7 @@ function SceneContents({
               nearCeiling={isNearCeiling}
               flyIn={isFlying}
               flyInKey={flyInKey}
+              cargoSkylineM={cargoSkylineM}
               containerL={Cm.l}
               containerH={Cm.h}
               displayColor={displayColors.get(displayColorKey(b))}
