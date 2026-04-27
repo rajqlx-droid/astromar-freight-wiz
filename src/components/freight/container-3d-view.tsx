@@ -21,6 +21,7 @@ import type { PlacedBox } from "@/lib/freight/packing";
 import { pickEdgeColor } from "@/lib/freight/packing";
 import { assignDisplayColors, displayColorKey } from "@/lib/freight/display-colors";
 import { NEIGHBOUR_MIN_GAP_MM } from "@/lib/freight/gap-rules";
+import { validateAdvancedPack } from "@/lib/freight/geometry-validator";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
