@@ -21,6 +21,7 @@ import type { PlacedBox } from "@/lib/freight/packing";
 import { pickEdgeColor } from "@/lib/freight/packing";
 import { assignDisplayColors, displayColorKey } from "@/lib/freight/display-colors";
 import { NEIGHBOUR_MIN_GAP_MM } from "@/lib/freight/gap-rules";
+import { validateAdvancedPack } from "@/lib/freight/geometry-validator";
 
 type Preset = "iso" | "front" | "side" | "top" | "inside";
 
@@ -546,6 +547,44 @@ function SceneContents({
     [pack.placed],
   );
 
+  // ── Cargo skyline (scene metres) for fly-in clearance ─────────────────
+  // Highest top-Y of any *already-resting* visible neighbour (i.e. visible
+  // boxes that are NOT currently in the fly-in set). The incoming box's
+  // horizontal staging glide must travel above this skyline so it never
+  // visually intersects an already-placed neighbour while approaching its
+  // slot. Recomputed once per step (flyInKey) — cheap O(n).
+  const cargoSkylineM = useMemo(() => {
+    let maxTopMm = 0;
+    for (let i = 0; i < pack.placed.length; i++) {
+      if (visiblePlacedIdxs && !visiblePlacedIdxs.has(i)) continue;
+      if (flyInIdxs?.has(i)) continue; // exclude the box currently flying in
+      const b = pack.placed[i];
+      const top = b.z + b.h;
+      if (top > maxTopMm) maxTopMm = top;
+    }
+    return maxTopMm / MM_PER_M;
+    // visiblePlacedIdxs identity changes on every step; flyInKey is the
+    // cheap proxy that guarantees re-computation when the step changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pack.placed, flyInKey, visiblePlacedIdxs?.size]);
+
+  // One-shot diagnostic: log the final-state geometry audit so the user can
+  // confirm the packer's resting positions are clean (no overlaps) for the
+  // current scenario. Visual artefacts during fly-in are separate from this.
+  useEffect(() => {
+    if (pack.placed.length === 0) return;
+    const audit = validateAdvancedPack(pack);
+    if (audit.allLegal) {
+      // eslint-disable-next-line no-console
+      console.info(
+        `[3D] Geometry audit: ✓ ${pack.placed.length} boxes, no overlaps, no gap violations.`,
+      );
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn("[3D] Geometry audit FAILED:", audit.violations);
+    }
+  }, [pack]);
+
   // Click-to-select: highlights the chosen cargo and renders its 1 mm
   // clearance envelope so users can visually confirm the gap rule. Click
   // empty space (the floor) to clear. ESC also clears.
@@ -642,6 +681,7 @@ function SceneContents({
               nearCeiling={isNearCeiling}
               flyIn={isFlying}
               flyInKey={flyInKey}
+              cargoSkylineM={cargoSkylineM}
               containerL={Cm.l}
               containerH={Cm.h}
               displayColor={displayColors.get(displayColorKey(b))}
@@ -1202,6 +1242,7 @@ function CargoBox({
   previewHighlight = false,
   flyIn = false,
   flyInKey = 0,
+  cargoSkylineM = 0,
   containerL = 12,
   containerH = 2.6,
   showCheckmark = false,
@@ -1218,6 +1259,8 @@ function CargoBox({
   previewHighlight?: boolean;
   flyIn?: boolean;
   flyInKey?: number;
+  /** Max top-Y (in scene metres) of any already-resting visible neighbour. The fly-in glide is lifted above this so the incoming box never visually intersects placed cargo. */
+  cargoSkylineM?: number;
   containerL?: number;
   containerH?: number;
   showCheckmark?: boolean;
@@ -1272,14 +1315,23 @@ function CargoBox({
   }, [flyIn, flyInKey]);
 
   const FLY_DURATION = 0.6; // seconds
-  // Staging offset (relative to slot): up by container height, +x toward door.
-  const stageOffsetX = Math.max(2, containerL * 0.55);
-  const stageOffsetY = Math.max(1.2, containerH * 0.7);
+  // Distance from the slot's door-side face to the door (scene metres). The
+  // staging horizontal offset is capped to "slot → door + 0.5 m" so back-row
+  // boxes don't have to traverse the full container length on every step.
+  const slotXFromOrigin = cx; // group is centred on origin
+  const distToDoor = Math.max(0.5, containerL / 2 - slotXFromOrigin + 0.5);
+  const stageOffsetX = Math.min(Math.max(1.5, containerL * 0.4), distToDoor);
+  // Lift the glide above EVERY already-placed visible neighbour. Without this,
+  // the incoming box descends through stacks that already reach close to the
+  // ceiling (e.g. bales at ~2.4 m in a 2.39 m container) and visually appears
+  // to land on top of the wrong neighbour. +0.25 m clearance margin.
+  const minClearOverSkyline = Math.max(0, cargoSkylineM - cy + 0.25);
+  const stageOffsetY = Math.max(1.2, containerH * 0.7, minClearOverSkyline);
   // Fraction of the animation spent travelling horizontally over the cargo
   // before descending vertically into the slot. Keeps the box clear of
   // already-placed neighbours instead of tunneling through them on a
   // straight-line path from staging to slot.
-  const PHASE_SPLIT = 0.45;
+  const PHASE_SPLIT = 0.35;
   const easeInOutCubic = (t: number) =>
     t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 

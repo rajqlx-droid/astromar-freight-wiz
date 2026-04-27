@@ -11,6 +11,7 @@ import type { PalletStep, RowGroup } from "@/lib/freight/loading-rows";
 import { computeComplianceReport } from "@/lib/freight/compliance";
 import type { AdvancedPackResult } from "@/lib/freight/packing-advanced";
 import type { BestPlanMeta } from "@/lib/freight/scenario-runner";
+import { validateAdvancedPackSubset } from "@/lib/freight/geometry-validator";
 
 interface Props {
   step: PalletStep | null;
@@ -34,6 +35,8 @@ interface Props {
    *   - !allLegal → RED "EXPORT BLOCKED" with the optimiser's hard violations
    */
   planMeta?: BestPlanMeta | null;
+  /** Indices of currently revealed boxes — drives the live "no overlap" audit chip. */
+  visiblePlacedIdxs?: ReadonlySet<number> | null;
   /** Called when the user clicks a failed Foundation Audit row. */
   onJumpToRow?: (rowIdx1Based: number) => void;
 }
@@ -54,11 +57,26 @@ export function LoaderHUD({
   pack = null,
   rows,
   planMeta = null,
+  visiblePlacedIdxs = null,
   onJumpToRow,
 }: Props) {
   const isEmpty = currentIdx < 0 || !step;
   const atLast = currentIdx >= totalSteps - 1;
   const compliance = pack ? computeComplianceReport(pack, { rows }) : null;
+
+  // ── Live overlap audit (visible subset only) ────────────────────────
+  // Re-runs whenever the revealed step changes. Confirms that the boxes
+  // currently on-screen are still legal (no two boxes share a slot, no
+  // sub-1 mm crowding). The fly-in animation is purely visual — this
+  // chip proves the resting placed[] coordinates remain clean throughout
+  // the walkthrough.
+  const liveAudit = pack
+    ? validateAdvancedPackSubset(pack, visiblePlacedIdxs ?? null)
+    : null;
+  const overlapPair = liveAudit?.violations.find((v) => v.code === "OVERLAP");
+  const gapPair = liveAudit?.violations.find((v) => v.code === "NEIGHBOUR_GAP");
+  const liveOk = liveAudit ? !overlapPair && !gapPair : true;
+  const liveCount = (overlapPair?.placedIdxs.length ?? 0) + (gapPair?.placedIdxs.length ?? 0);
 
   // ── HUD state machine ────────────────────────────────────────────────
   // Prefer optimiser meta when available (single source of truth, matches
@@ -107,6 +125,26 @@ export function LoaderHUD({
 
   return (
     <div className="pointer-events-auto absolute bottom-2 left-1/2 z-10 -translate-x-1/2 max-w-[min(620px,92%)]">
+      {liveAudit && (
+        <div
+          className={cn(
+            "mb-1.5 flex items-center justify-center gap-1.5 rounded-full border bg-background/95 px-3 py-0.5 text-[10px] font-bold shadow backdrop-blur",
+            liveOk
+              ? "border-emerald-500 text-emerald-700 dark:text-emerald-300"
+              : "border-red-500 text-red-700 dark:text-red-300",
+          )}
+          title={
+            liveOk
+              ? "Live geometry check on the currently revealed cargo: no overlaps, no sub-1 mm crowding."
+              : `Live geometry check found ${liveCount} overlapping/crowded box reference(s) on revealed cargo.`
+          }
+        >
+          <span>{liveOk ? "✓" : "✕"}</span>
+          <span className="uppercase tracking-wide">
+            {liveOk ? "No overlap · 1 mm gap kept" : `${liveCount} overlap${liveCount > 1 ? "s" : ""} detected`}
+          </span>
+        </div>
+      )}
       {(compliance || planMeta) && (
         <div
           className="mb-1.5 flex items-center justify-center gap-2 rounded-full border bg-background/95 px-3 py-1 text-[10px] font-bold shadow backdrop-blur"
