@@ -1242,6 +1242,7 @@ function CargoBox({
   previewHighlight = false,
   flyIn = false,
   flyInKey = 0,
+  cargoSkylineM = 0,
   containerL = 12,
   containerH = 2.6,
   showCheckmark = false,
