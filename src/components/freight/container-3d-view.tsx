@@ -1315,14 +1315,23 @@ function CargoBox({
   }, [flyIn, flyInKey]);
 
   const FLY_DURATION = 0.6; // seconds
-  // Staging offset (relative to slot): up by container height, +x toward door.
-  const stageOffsetX = Math.max(2, containerL * 0.55);
-  const stageOffsetY = Math.max(1.2, containerH * 0.7);
+  // Distance from the slot's door-side face to the door (scene metres). The
+  // staging horizontal offset is capped to "slot → door + 0.5 m" so back-row
+  // boxes don't have to traverse the full container length on every step.
+  const slotXFromOrigin = cx; // group is centred on origin
+  const distToDoor = Math.max(0.5, containerL / 2 - slotXFromOrigin + 0.5);
+  const stageOffsetX = Math.min(Math.max(1.5, containerL * 0.4), distToDoor);
+  // Lift the glide above EVERY already-placed visible neighbour. Without this,
+  // the incoming box descends through stacks that already reach close to the
+  // ceiling (e.g. bales at ~2.4 m in a 2.39 m container) and visually appears
+  // to land on top of the wrong neighbour. +0.25 m clearance margin.
+  const minClearOverSkyline = Math.max(0, cargoSkylineM - cy + 0.25);
+  const stageOffsetY = Math.max(1.2, containerH * 0.7, minClearOverSkyline);
   // Fraction of the animation spent travelling horizontally over the cargo
   // before descending vertically into the slot. Keeps the box clear of
   // already-placed neighbours instead of tunneling through them on a
   // straight-line path from staging to slot.
-  const PHASE_SPLIT = 0.45;
+  const PHASE_SPLIT = 0.35;
   const easeInOutCubic = (t: number) =>
     t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
