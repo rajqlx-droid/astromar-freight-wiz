@@ -4,7 +4,7 @@
  * shows a "Cargo shut out" warning with the number of cartons / volume that
  * cannot be loaded so the user can adjust their manifest.
  */
-import { AlertTriangle, Download, Lightbulb, PackageX, Sparkles } from "lucide-react";
+import { AlertTriangle, Download, PackageX, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
