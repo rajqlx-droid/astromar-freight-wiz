@@ -608,9 +608,6 @@ function EmptyState() {
       <div className="text-sm font-medium text-muted-foreground">
         Add cartons to generate loading plan
       </div>
-      <div className="text-xs text-muted-foreground/70">
-        Enter dimensions and quantity above to see the container fill visualisation.
-      </div>
     </div>
   );
 }
