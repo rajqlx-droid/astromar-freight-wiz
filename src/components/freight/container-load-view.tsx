@@ -526,30 +526,7 @@ function SinglePlanBody({
   );
 }
 
-/* ---------------- Slim status bar (under the 3D viewer) ---------------- */
-
-function PalletStatusBar({
-  currentIdx,
-  total,
-  rowIdx,
-  totalRows,
-}: {
-  currentIdx: number;
-  total: number;
-  rowIdx: number | null;
-  totalRows: number;
-}) {
-  const empty = currentIdx < 0;
-  const status = empty
-    ? "Empty container — press ▶ in the HUD to walk through loading order"
-    : `Pallet ${currentIdx + 1} of ${total}${rowIdx != null ? ` · row ${rowIdx + 1} / ${totalRows}` : ""}`;
-  return (
-    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-brand-navy/20 bg-background/60 px-2.5 py-1.5">
-      <span className="text-[11px] font-medium text-muted-foreground">{status}</span>
-    </div>
-  );
-}
-
+/* ---------------- Sub-components ---------------- */
 
 /* ---------------- Sub-components ---------------- */
 
