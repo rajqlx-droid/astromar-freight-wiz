@@ -627,29 +627,8 @@ function FreightIntelligencePage() {
                     </div>
                   </div>
 
-                {/* Action cluster: Compare/History stacked vertically (1 column, 2 rows) */}
-                <div className="ml-auto flex shrink-0 flex-col items-stretch gap-1.5 rounded-lg border border-brand-navy/30 bg-background p-1.5 shadow-sm">
-                  <Tooltip>
-                    <CompareDialog
-                      active={active}
-                      onConfirm={(left, right) => setCompareMode({ left, right })}
-                      trigger={
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            aria-label="Compare calculators"
-                            className="h-8 justify-start gap-2 rounded-md px-2.5 text-xs font-medium text-brand-navy hover:bg-brand-navy-soft"
-                          >
-                            <GitCompareArrows className="size-3.5" />
-                            <span className="hidden sm:inline">Compare</span>
-                          </Button>
-                        </TooltipTrigger>
-                      }
-                    />
-                    <TooltipContent side="left" className="sm:hidden">Compare calculators</TooltipContent>
-                  </Tooltip>
-                  <div aria-hidden className="mx-1 h-px bg-brand-navy/15" />
+                {/* Action cluster: History only */}
+                <div className="ml-auto flex shrink-0 items-center rounded-lg border border-brand-navy/30 bg-background p-1.5 shadow-sm">
                   <Sheet open={historySheetOpen} onOpenChange={setHistorySheetOpen}>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -723,15 +702,6 @@ function FreightIntelligencePage() {
                   </button>
                 </div>
               )}
-
-              {/* Recent calculations strip — full width, scrolls horizontally on mobile */}
-              <div className="mb-4">
-                <MiniHistoryStrip
-                  type={active}
-                  variant="inline"
-                  onOpenFullHistory={() => setHistorySheetOpen(true)}
-                />
-              </div>
 
               {renderCalculator(active)}
             </>
