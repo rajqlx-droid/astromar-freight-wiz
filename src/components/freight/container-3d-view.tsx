@@ -250,23 +250,6 @@ export const Container3DView = forwardRef<Container3DHandle, Props>(function Con
         Drag to rotate · Scroll to zoom · Double-click to reset
       </div>
 
-      {/* Jute / fabric texture toggle for bag surfaces. Off by default. */}
-      <button
-        type="button"
-        onClick={() => setJute((v) => !v)}
-        aria-pressed={jute}
-        title={jute ? "Switch bags to soft material (default)" : "Apply jute / hessian weave to bags"}
-        className={cn(
-          "absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold backdrop-blur transition-colors",
-          jute
-            ? "border-amber-500/70 bg-amber-100/90 text-amber-900 hover:bg-amber-100"
-            : "border-brand-navy/30 bg-background/85 text-brand-navy hover:bg-background",
-        )}
-      >
-        <span aria-hidden>{jute ? "▦" : "▢"}</span>
-        Jute
-      </button>
-
       {overlay}
     </div>
   );
