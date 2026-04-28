@@ -448,25 +448,19 @@ function SinglePlanBody({
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
         <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
-        <LengthBudgetChip pack={pack} />
         <LimitExplanationPanel pack={pack} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
             {isCalculating ? (
               <div className="flex h-[420px] flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <Loader2 className="size-7 animate-spin text-brand-orange" />
-                <div className="text-center">
-                  <div className="font-semibold text-brand-navy">Computing optimal fit…</div>
-                  <div className="mt-0.5 text-xs">
-                    Preparing 3D loading view — this usually takes a few seconds.
-                  </div>
-                </div>
+                <div className="font-semibold text-brand-navy">Computing optimal fit…</div>
               </div>
             ) : is3D && mounted ? (
               <Suspense
                 fallback={
                   <div className="flex h-[420px] items-center justify-center text-sm text-muted-foreground">
-                    Loading 3D viewer…
+                    Loading viewer…
                   </div>
                 }
               >
@@ -511,14 +505,6 @@ function SinglePlanBody({
                 </div>
               </Suspense>
             ) : null}
-            {!isCalculating && is3D && palletSequence.length > 0 && (
-              <PalletStatusBar
-                currentIdx={palletIdx}
-                total={palletSequence.length}
-                rowIdx={currentStep?.rowIdx ?? null}
-                totalRows={rows.length}
-              />
-            )}
           </div>
         )}
         <Legend items={items} />
@@ -534,9 +520,6 @@ function SinglePlanBody({
             if (firstStepInRow >= 0) setPalletIdx(firstStepInRow);
           }}
         />
-        <p className="text-[11px] leading-relaxed text-muted-foreground">
-          Indicative loading pattern. Actual stow depends on weight distribution, carton orientation, and dunnage.
-        </p>
       </div>
       <LoadReportPanel pack={pack} rollup={rollup} />
     </div>
