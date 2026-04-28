@@ -528,8 +528,6 @@ function SinglePlanBody({
 
 /* ---------------- Sub-components ---------------- */
 
-/* ---------------- Sub-components ---------------- */
-
 function PillButton({
   active,
   onClick,
