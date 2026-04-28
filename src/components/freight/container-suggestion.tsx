@@ -186,34 +186,25 @@ export function ContainerSuggestion({
               value={`${shutOut.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
             />
           </div>
-          {unit.container.id === "20gp" ? (
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] italic text-rose-900/80 dark:text-rose-200/80">
-                Switch manually to a larger container if you need to ship every package.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="h-7 bg-brand-navy px-2.5 text-[11px] text-white hover:bg-brand-navy/90"
-                  onClick={() => onApply("40gp")}
-                >
-                  Switch to 40ft GP
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 border-brand-navy/40 px-2.5 text-[11px] text-brand-navy hover:bg-brand-navy/5"
-                  onClick={() => onApply("40hc")}
-                >
-                  40ft HC
-                </Button>
-              </div>
+          {unit.container.id === "20gp" && (
+            <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+              <Button
+                size="sm"
+                variant="default"
+                className="h-7 bg-brand-navy px-2.5 text-[11px] text-white hover:bg-brand-navy/90"
+                onClick={() => onApply("40gp")}
+              >
+                Switch to 40ft GP
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 border-brand-navy/40 px-2.5 text-[11px] text-brand-navy hover:bg-brand-navy/5"
+                onClick={() => onApply("40hc")}
+              >
+                40ft HC
+              </Button>
             </div>
-          ) : (
-            <p className="mt-1.5 text-[10px] italic text-rose-900/80 dark:text-rose-200/80">
-              Reduce quantities, change packaging, or split the shipment to load the excess separately.
-            </p>
           )}
         </div>
       )}
