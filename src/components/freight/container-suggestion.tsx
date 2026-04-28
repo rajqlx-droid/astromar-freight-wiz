@@ -4,7 +4,7 @@
  * shows a "Cargo shut out" warning with the number of cartons / volume that
  * cannot be loaded so the user can adjust their manifest.
  */
-import { AlertTriangle, Download, Lightbulb, PackageX, Sparkles } from "lucide-react";
+import { AlertTriangle, Download, PackageX, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -85,7 +85,7 @@ export function ContainerSuggestion({
   currentChoice,
   onApply,
 }: Props) {
-  const { units, summary, reason, totalCbm, totalWeightKg, shutOut } = recommendation;
+  const { units, summary, totalCbm, totalWeightKg, shutOut } = recommendation;
   const unit = units[0];
   if (!unit) return null;
 
@@ -107,15 +107,9 @@ export function ContainerSuggestion({
     ? "text-rose-900 dark:text-rose-200"
     : "text-emerald-900 dark:text-emerald-200";
 
-  const reasonText =
-    reason === "exceeds-single-cbm"
-      ? `Your ${totalCbm.toFixed(1)} m³ shipment exceeds the largest container (40ft HC ≈ 70 m³ usable). Excess cargo is shut out.`
-      : reason === "exceeds-single-weight"
-        ? `Your ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg payload exceeds the 40ft HC's weight limit. Excess cargo is shut out.`
-        : reason === "exceeds-single-geometry"
-          ? recommendation.reasonDetail ??
-            `Cargo volume fits on paper, but height/footprint geometry prevents the 40ft HC from physically holding every piece.`
-          : `Optimal fit for ${totalCbm.toFixed(1)} m³ / ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg.`;
+  const reasonText = hasShutOut
+    ? `${totalCbm.toFixed(1)} m³ / ${totalWeightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg exceed 40ft HC capacity.`
+    : null;
 
   return (
     <div className={cn("rounded-lg border-2 p-3 sm:p-4", tone)}>
@@ -132,10 +126,9 @@ export function ContainerSuggestion({
         </Button>
       </div>
 
-      <p className={cn("mb-3 flex items-start gap-1.5 text-[11px]", headTone, "opacity-90")}>
-        <Lightbulb className="mt-0.5 size-3 shrink-0" />
-        <span>{reasonText}</span>
-      </p>
+      {reasonText && (
+        <p className={cn("mb-3 text-[11px]", headTone, "opacity-90")}>{reasonText}</p>
+      )}
 
       <div className="rounded-md border border-black/5 bg-white/80 p-2 text-xs shadow-sm dark:border-white/10 dark:bg-black/30">
         <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -193,34 +186,25 @@ export function ContainerSuggestion({
               value={`${shutOut.weightKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
             />
           </div>
-          {unit.container.id === "20gp" ? (
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[10px] italic text-rose-900/80 dark:text-rose-200/80">
-                Switch manually to a larger container if you need to ship every package.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                <Button
-                  size="sm"
-                  variant="default"
-                  className="h-7 bg-brand-navy px-2.5 text-[11px] text-white hover:bg-brand-navy/90"
-                  onClick={() => onApply("40gp")}
-                >
-                  Switch to 40ft GP
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 border-brand-navy/40 px-2.5 text-[11px] text-brand-navy hover:bg-brand-navy/5"
-                  onClick={() => onApply("40hc")}
-                >
-                  40ft HC
-                </Button>
-              </div>
+          {unit.container.id === "20gp" && (
+            <div className="mt-2 flex flex-wrap justify-end gap-1.5">
+              <Button
+                size="sm"
+                variant="default"
+                className="h-7 bg-brand-navy px-2.5 text-[11px] text-white hover:bg-brand-navy/90"
+                onClick={() => onApply("40gp")}
+              >
+                Switch to 40ft GP
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 border-brand-navy/40 px-2.5 text-[11px] text-brand-navy hover:bg-brand-navy/5"
+                onClick={() => onApply("40hc")}
+              >
+                40ft HC
+              </Button>
             </div>
-          ) : (
-            <p className="mt-1.5 text-[10px] italic text-rose-900/80 dark:text-rose-200/80">
-              Reduce quantities, change packaging, or split the shipment to load the excess separately.
-            </p>
           )}
         </div>
       )}

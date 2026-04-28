@@ -1,104 +1,82 @@
-## Goal
+# Declutter the 3D Viewer + Optimisation Plan Text
 
-Stress-test the 3D loader across **every container** (20GP, 40GP, 40HC) with **multiple realistic cargo mixes**, observe the Play/Next walkthrough from every camera preset (Iso, Front, Side, Top, Inside), catch visual errors, and fix them.
+Scope: text-only / overlay-only cleanup inside the **Optimise loading** result. No layout, no calculator, no math, no PDF changes. No edits outside the listed files.
 
-Resting positions are already proven legal by `validateAdvancedPack` (the on-mount `console.info` confirms this every load). The hunt is for **animation / rendering artefacts** that don't reflect a real packer bug.
+## What's noisy today
 
-## Test matrix
+**Inside the 3D viewer (`LoaderHUD` overlay, pinned to the bottom of the scene):**
+1. A "live geometry audit" pill ("STEP k/N · ✓ Clean · 1 mm gap kept").
+2. A second compliance pill ("READY TO LOAD" + score + Audit dropdown).
+3. The instruction bar with two text lines: action + `itemLabel · dimsLabel · 📍 positionText` + warning suffix.
+4. An expandable Foundation Audit panel that can stack a third overlay over the cargo.
 
-| # | Container | Cargo mix | What it stresses |
-|---|---|---|---|
-| 1 | 20GP | 60 cartons + 8 drums + 6 bales | Mixed shapes, short container, tight back-row staging |
-| 2 | 20GP | 100 same-size cartons stacked 3-high | Dense vertical stack — supporter reveal order |
-| 3 | 40GP | 40 bales (ground) + 30 bags on top | Bag-on-bale stacking, jute texture on/off |
-| 4 | 40HC | Tall stack to ceiling (2.55 m) of pallets | Skyline ≈ ceiling — fly-in glide must clear |
-| 5 | 40HC | Mixed crates + drums + non-stackable | Tilt-rotated boxes during fly-in |
-| 6 | 40HC | 8 oversized cubes (1.22 m) | Huge boxes traversing long container |
+That's up to **3 stacked chips + a 2-line instruction** floating on top of the cargo at once.
 
-For each cell: walk through with **Next** one step at a time at every camera preset, then run **Play** at 0.5× and 2×. Capture screenshots / observations.
+**Above and below the 3D viewer (`container-load-view.tsx`):**
+5. `LengthBudgetChip` — a full prose paragraph with mm math ("12 row · 11,800 mm of 12,000 mm usable…").
+6. `LimitExplanationPanel` — extra explanatory block.
+7. `PalletStatusBar` redundantly restating "Pallet k of N · row r/R" when the HUD already shows `k/N`.
+8. Trailing "Indicative loading pattern…" disclaimer paragraph.
 
-## Expected / suspected visual issues to verify
+**In the optimisation plan banner (`ContainerSuggestion`):**
+9. A 2-line "Smart recommendation" header + a separate lightbulb sentence ("Optimal fit for X m³ / Y kg.") + a verbose reason paragraph for shut-out cases — three text bands stacked above a single progress bar.
 
-From reading `container-3d-view.tsx` (lines 1276–1372) the current animation has these latent risks:
+## What changes
 
-1. **`stageOffsetY` ignores the *incoming* box's own height.** `minClearOverSkyline = max(0, cargoSkylineM − cy + 0.25)` measures from the **centre** of the new box. When the new box is tall (e.g. a bale 1.2 m high) and the skyline is also tall, the bottom of the staging box can still dip below the skyline by ~0.5·hm. Likely → tall incoming boxes clip neighbours during glide.
-2. **Phase-2 vertical descent path.** Phase 1 ends at `dx = 0` (directly above the slot) at full `stageOffsetY`. If a *taller* box was just placed in an adjacent column on the door-side, the descending box can clip its top corner because the skyline is computed once per step, not continuously.
-3. **`distToDoor` cap can be negative for boxes past the door midpoint.** `containerL/2 − slotXFromOrigin + 0.5` — for a slot near the +X (door) face this is small or near zero, so back-row boxes still get a long traverse but front-row boxes barely move; the box can appear to "pop" rather than fly in. (Cosmetic, not a collision.)
-4. **No per-step audit during walkthrough.** The HUD chip exists, but there is no *recorded* per-step pass/fail set we can show in the test matrix. Need a way to confirm "step N showed clean" for every container × scenario.
-5. **Camera framing on Top / Side presets** can put the staging point off-screen, making the fly-in look like a teleport from outside the frame. Cosmetic but disorienting.
-6. **Pallet-on-pallet stacks**: when a stacked box's supporter is auto-included by `visiblePlacedIdxs` (lines 369–388), the supporter appears in the same step as its stacker — visually two boxes pop in together. Confusing during a "one box per click" walkthrough.
+### `src/components/freight/loader-hud.tsx` — collapse the overlay to one bar
 
-## Plan
+- **Remove** the live-audit pill (lines 128–155). The "1 mm gap kept" chip is dev/QA grade signal — its absence does not change correctness, and the compliance pill already conveys legality.
+- **Merge** the compliance pill into the main playback bar instead of stacking it above. New layout: a single rounded bar with `[state dot] [k/N] [short instruction] | [◀ ▶ ▶▶] [speed]`.
+- **Simplify the instruction line** from two lines to one:
+  - Drop the secondary line (`itemLabel · dimsLabel · 📍 positionText`) from the always-on overlay.
+  - Keep only `step.action` (e.g. "Load Item 2 — back-left, layer 2"), truncated.
+  - Show the warning indicator as a single `⚠` icon (no inline text), with the warning text moved into the element's `title` tooltip.
+- **Move the Foundation Audit** out of an in-scene dropdown:
+  - Remove the inline `auditOpen` panel (lines 183–258) from the overlay.
+  - Replace the "Audit" button with a small `i` info button that opens the same audit content in a Radix `Popover` anchored above the bar (so it doesn't permanently float over cargo, and only renders when the user clicks).
+  - When `state === "RED"` and `planMeta.hardViolations` exist, keep a single-line summary visible (e.g. "✗ 2 hard violations · view") that opens the popover.
+- **Empty state** ("Press ▶ to load the first pallet") shortens to "Press ▶ to start".
 
-### Step 1 — Verification harness (programmatic, fast)
+Net: from 3 overlays + 2-line text to **1 overlay + 1-line text**, with the deep audit on demand.
 
-Add `src/lib/freight/__dev__/walkthrough-audit.test.ts` that, for each scenario in the matrix:
+### `src/components/freight/container-load-view.tsx` — trim chrome around the viewer
 
-- Builds the `CbmItem[]` mix and the container preset.
-- Runs `pickBestPlan` to get the plan.
-- Reproduces `visiblePlacedIdxs` exactly the way `container-load-view.tsx` does (including the supporter-inclusion loop).
-- For every step `k = 0…N`, calls `validateAdvancedPackSubset(pack, visibleAtStep_k)` and asserts `allLegal === true`.
+- **Delete** the `LengthBudgetChip` block above the viewer (line 452 + helper at lines 601–640). The mm-level explanation belongs in the report PDF, not on screen.
+- **Delete** the `PalletStatusBar` under the viewer (lines 515–522 + helper at 549–569). The HUD `k/N` chip already states this.
+- **Replace** the trailing 2-line indicative paragraph (lines 538–540) with a single muted sentence: "Indicative pattern — actual stow varies." Or move it into the `Indicative` chip's `title` tooltip and remove the standalone line entirely.
+- Keep `StatsBar`, `LimitExplanationPanel`, `Legend`, `LoadingSequence`, `LoadingRowsPanel`, `LoadReportPanel` untouched (those are separate, sectioned content — not viewer overlay noise).
+- Shorten the calculating fallback: "Computing optimal fit…" + 2-line subhint becomes "Computing optimal fit…" only.
+- Shorten the suspense fallback "Loading 3D viewer…" to "Loading viewer…".
+- Empty state: drop the second helper line; keep the icon + "Add cartons to generate loading plan."
 
-This proves that **at every revealed frame** the resting positions are physically legal, independent of any animation. If a step ever fails, we know it's a real packer/reveal-order bug, not a fly-in artefact.
+### `src/components/freight/container-suggestion.tsx` — tighten the recommendation banner
 
-### Step 2 — Fix `stageOffsetY` height calculation
+- Collapse the **header + lightbulb sentence + reason paragraph** into a single one-line strapline:
+  - Non-shut-out happy path: hide the lightbulb sentence entirely (the banner is already hidden when current choice matches; when shown after a manual override, "Smart recommendation: 1 × 40ft HC · Apply" is enough).
+  - Shut-out path: keep one sentence ("`<X>` m³ / `<Y>` kg exceed 40ft HC capacity.") and drop the duplicated reason variants. The detail moves into the existing shut-out stat grid which already shows packages/volume/weight.
+- Drop the italic 2-line follow-ups under the shut-out grid ("Reduce quantities…" / "Switch manually to a larger container…"); the action buttons (`Switch to 40ft GP` / `40ft HC` / `Download summary`) already say what to do.
 
-In `CargoBox` (`src/components/freight/container-3d-view.tsx`):
+### Text style rules applied across the three files
 
-- Change `minClearOverSkyline` to measure from the **bottom** of the incoming box, not its centre:
-  `const minClearOverSkyline = Math.max(0, cargoSkylineM − (cy − hm/2) + 0.25);`
-  This guarantees the **bottom face** of the flying box is at least 25 cm above any neighbour's top, regardless of incoming box height.
-- Cap `stageOffsetY` so the box never visually punches through the ceiling. Compute:
-  `const ceilingHeadroomM = containerH − (cy + hm/2) − 0.05;`
-  `const stageOffsetY = Math.min(stageOffsetYRaw, Math.max(0.4, ceilingHeadroomM));`
-  When a 40HC is packed near the roof we still get a believable arc; we just don't intersect the roof skin.
+- Max 1 sentence per informational element shown on the 3D viewer surface.
+- No emoji or unit-math inside overlay chips (📍, mm totals → moved into tooltips/PDF).
+- Detail-level content (foundation audit, length budget, mm slack) is opt-in via popover/tooltip, not always-rendered.
 
-### Step 3 — Continuous-skyline check during descent
+## Files touched (only these)
 
-The skyline is currently captured once when `flyInKey` changes. That's correct because nothing else moves during the step, so a recompute would yield the same value. We keep it, but add one safety: if the descending column's slot has a stacked supporter that is itself in `flyInIdxs` (rare — only happens when the stepper batches stacker+supporter into one step), descend along the supporter's top instead of `0`. Patch the Phase-2 endpoint:
+- `src/components/freight/loader-hud.tsx`
+- `src/components/freight/container-load-view.tsx`
+- `src/components/freight/container-suggestion.tsx`
 
-```
-const slotFloorM = (box.z) / MM_PER_M; // resting bottom-Y in scene
-// dy goes from stageOffsetY → 0 ; final position lands at cy + 0
-// (cy = slotFloorM + hm/2). No change unless we ever animate supporters.
-```
+Nothing else changes — calculators, packing math, 3D scene, PDF export, audit logic, and routing all stay as-is. Compliance + audit data remain available; only their on-screen surface area shrinks.
 
-In practice, the current "auto-include supporter in earlier step" rule already prevents this; we just document and assert it in the harness so a future change can't regress.
+## Acceptance criteria
 
-### Step 4 — Front-row "pop" fix
+- Only **one** floating bar is visible inside the 3D viewer at any time (no second pill above it, no expanded panel by default).
+- HUD instruction line is **single-line**, with warning details moved to a tooltip.
+- Foundation audit and hard-violation detail open via a click into a Popover, not as a permanent overlay.
+- The viewer card no longer shows the `Length budget` paragraph or the duplicate `Pallet k of N · row r/R` strip.
+- The `ContainerSuggestion` banner shows at most one descriptive sentence above its stat row.
+- All existing tests still pass; no behaviour change for compliance/audit/recommendation logic.
 
-Replace the `distToDoor` formula with a **minimum traverse** so even front-row boxes get a short visible glide (not a static drop):
-
-```
-const distToDoor = Math.max(0.8, containerL / 2 − slotXFromOrigin + 0.5);
-const stageOffsetX = Math.min(Math.max(1.0, containerL * 0.35), distToDoor);
-```
-
-Front-row boxes now glide ~0.8–1.0 m before descending, which reads as "carried in by the loader" instead of "appears from the slot".
-
-### Step 5 — Per-step audit chip in the HUD (display-only)
-
-`src/components/freight/loader-hud.tsx` already runs `validateAdvancedPackSubset`. Add a tiny rolling counter:
-`Step k/N · ✓ clean` (green) or `Step k/N · ✕ overlap` (red, with offending placed indices on hover). This gives the user the same proof during interactive Play that the harness gives in the test.
-
-### Step 6 — Optional: stage-clearance gizmo (debug only)
-
-Behind a `?debug=fly-in` URL flag (read once in `SceneContents`), render a translucent yellow plane at `cargoSkylineM + 0.25 m` while a box is flying in. This makes the clearance rule visible during QA so future regressions are spotted in seconds.
-
-### Step 7 — Manual visual sweep
-
-After Steps 2–5 land, walk the test matrix in the preview and confirm:
-- No box visually intersects another at any step in any scenario × container.
-- Front-row boxes glide visibly instead of popping.
-- Tall incoming bales/pallets in 40HC clear the skyline cleanly.
-- Side / Top / Inside presets show the same clean fly-in as Iso.
-
-## Files
-
-| File | Change |
-|---|---|
-| `src/lib/freight/__dev__/walkthrough-audit.test.ts` | **New.** Harness asserting every revealed-step subset is legal across the test matrix. |
-| `src/components/freight/container-3d-view.tsx` | Fix `stageOffsetY` (bottom-of-box reference + ceiling cap), tighten `stageOffsetX` minimum, optional debug plane. |
-| `src/components/freight/loader-hud.tsx` | Show per-step audit chip with offending indices on hover. |
-
-No packer logic, no gap rule, no compliance scoring changes. The 1 mm neighbour rule, 100 mm door reserve, 80 mm ceiling reserve, and 0.85 support ratio remain untouched.
+Approve to apply these trims.
