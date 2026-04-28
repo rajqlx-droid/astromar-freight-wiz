@@ -85,7 +85,7 @@ export function ContainerSuggestion({
   currentChoice,
   onApply,
 }: Props) {
-  const { units, summary, reason, totalCbm, totalWeightKg, shutOut } = recommendation;
+  const { units, summary, totalCbm, totalWeightKg, shutOut } = recommendation;
   const unit = units[0];
   if (!unit) return null;
 
