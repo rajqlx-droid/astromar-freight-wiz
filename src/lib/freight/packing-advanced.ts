@@ -530,11 +530,12 @@ export function packContainerAdvanced(
   // always tight-pack against the back wall.
   const distinctSkus = new Set(expanded.map((c) => c.itemIdx)).size;
   const strategyAllowsSpread = strategy === "auto" || strategy === "mixed";
-  const spreadMode =
+  const autoSpread =
     volumeFill < 0.40 &&
     (distinctSkus <= 1 || expanded.length <= 8) &&
     strategyAllowsSpread &&
     tightFillLengthMm >= usableLengthMm * 0.5;
+  const spreadMode = forceSpreadMode ?? autoSpread;
   // Estimate how many cartons will land on the floor (1 layer). Used to
   // choose the stride for evenly-spaced target slots in spread mode.
   const avgFloorFootprintMm2 = expanded.length > 0
