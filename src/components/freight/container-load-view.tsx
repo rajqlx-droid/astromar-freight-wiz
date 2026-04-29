@@ -569,17 +569,16 @@ function PillButton({
 }
 
 
-function StatsBar({
-  pack,
-  weight,
-  qty,
-}: {
-  pack: AdvancedPackResult;
-  weight: number;
-  qty: number;
-}) {
+function StatsBar({ pack }: { pack: AdvancedPackResult }) {
   const util = Math.min(100, pack.utilizationPct);
   const utilColor = util < 80 ? "bg-emerald-500" : util < 95 ? "bg-amber-500" : "bg-rose-500";
+
+  const placedCbm = pack.placedCargoCbm;
+  const totalCbm = pack.cargoCbm;
+  const unloadedCbm = Math.max(0, totalCbm - placedCbm);
+  const placedKg = pack.placedWeightKg;
+  const totalKg = pack.weightKg;
+  const partial = pack.placedCartons < pack.totalCartons;
 
   return (
     <div className="grid gap-3 sm:grid-cols-4">
@@ -587,16 +586,26 @@ function StatsBar({
         <div className="flex items-baseline justify-between text-xs">
           <span className="font-medium text-muted-foreground">Used volume</span>
           <span className="font-semibold text-brand-navy">
-            {pack.cargoCbm.toFixed(2)} / {pack.container.capCbm} m³ · {util.toFixed(0)}%
+            {placedCbm.toFixed(2)} / {pack.container.capCbm} m³ · {util.toFixed(0)}%
           </span>
         </div>
         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
           <div className={cn("h-full transition-all", utilColor)} style={{ width: `${util}%` }} />
         </div>
+        {partial && (
+          <div className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+            of {totalCbm.toFixed(2)} m³ requested · {unloadedCbm.toFixed(2)} m³ unloaded
+          </div>
+        )}
       </div>
       <Stat
         label="Weight"
-        value={`${weight.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
+        value={`${placedKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
+        hint={
+          partial && totalKg > placedKg
+            ? `of ${totalKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg requested`
+            : undefined
+        }
       />
       <Stat label="Packages loaded" value={`${pack.placedCartons} / ${pack.totalCartons}`} />
     </div>
