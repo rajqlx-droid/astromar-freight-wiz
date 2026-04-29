@@ -165,8 +165,13 @@ export function usePackingWorker(): UsePackingWorker {
   );
 
   const optimise = useCallback<UsePackingWorker["optimise"]>(
-    async (items, container) => {
-      const r = await send<OptimiseResponse>({ kind: "optimise", items, container });
+    async (items, container, previousStrategyId) => {
+      const r = await send<OptimiseResponse>({
+        kind: "optimise",
+        items,
+        container,
+        previousStrategyId,
+      });
       return r.result;
     },
     [send],
@@ -180,10 +185,37 @@ export function usePackingWorker(): UsePackingWorker {
     [send],
   );
 
+  // Cancel-burst tracking: if cancelAll fires more than 2× in <500 ms
+  // (rapid container switching), terminate the worker so no zombie
+  // computation eats CPU. Next request lazily re-creates the worker.
+  const cancelTimestampsRef = useRef<number[]>([]);
+
+  const cancelAll = useCallback(() => {
+    // Bump seq so any in-flight response gets dropped as stale by id-check.
+    seqRef.current++;
+    // Reject every pending promise with the sentinel error.
+    pendingRef.current.forEach((req) =>
+      req.reject(new Error("Cancelled: superseded")),
+    );
+    pendingRef.current.clear();
+    setInflight(0);
+    // Burst detection — terminate worker if cancellation rate is excessive.
+    const now = Date.now();
+    cancelTimestampsRef.current.push(now);
+    cancelTimestampsRef.current = cancelTimestampsRef.current.filter(
+      (t) => now - t < 500,
+    );
+    if (cancelTimestampsRef.current.length > 2 && workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+      cancelTimestampsRef.current = [];
+    }
+  }, []);
+
   const pending = inflight > 0;
 
   return useMemo<UsePackingWorker>(
-    () => ({ pack, scenarios, optimise, recommend, pending }),
-    [pack, scenarios, optimise, recommend, pending],
+    () => ({ pack, scenarios, optimise, recommend, pending, cancelAll }),
+    [pack, scenarios, optimise, recommend, pending, cancelAll],
   );
 }
