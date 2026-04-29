@@ -41,6 +41,7 @@ export type PackingRequest =
       kind: "optimise";
       items: CbmItem[];
       container: ContainerPreset;
+      previousStrategyId?: StrategyId;
     }
   | {
       kind: "recommend";
@@ -89,7 +90,7 @@ self.addEventListener("message", (event: MessageEvent<IncomingMessage>) => {
       case "optimise":
         response = {
           kind: "optimise",
-          result: pickBestPlan(payload.items, payload.container),
+          result: pickBestPlan(payload.items, payload.container, payload.previousStrategyId),
         };
         break;
       case "recommend": {
