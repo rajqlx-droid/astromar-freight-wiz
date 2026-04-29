@@ -460,7 +460,7 @@ function SinglePlanBody({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
-        <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
+        <StatsBar pack={pack} />
         <LimitExplanationPanel pack={pack} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
@@ -569,17 +569,16 @@ function PillButton({
 }
 
 
-function StatsBar({
-  pack,
-  weight,
-  qty,
-}: {
-  pack: AdvancedPackResult;
-  weight: number;
-  qty: number;
-}) {
+function StatsBar({ pack }: { pack: AdvancedPackResult }) {
   const util = Math.min(100, pack.utilizationPct);
   const utilColor = util < 80 ? "bg-emerald-500" : util < 95 ? "bg-amber-500" : "bg-rose-500";
+
+  const placedCbm = pack.placedCargoCbm;
+  const totalCbm = pack.cargoCbm;
+  const unloadedCbm = Math.max(0, totalCbm - placedCbm);
+  const placedKg = pack.placedWeightKg;
+  const totalKg = pack.weightKg;
+  const partial = pack.placedCartons < pack.totalCartons;
 
   return (
     <div className="grid gap-3 sm:grid-cols-4">
@@ -587,29 +586,42 @@ function StatsBar({
         <div className="flex items-baseline justify-between text-xs">
           <span className="font-medium text-muted-foreground">Used volume</span>
           <span className="font-semibold text-brand-navy">
-            {pack.cargoCbm.toFixed(2)} / {pack.container.capCbm} m³ · {util.toFixed(0)}%
+            {placedCbm.toFixed(2)} / {pack.container.capCbm} m³ · {util.toFixed(0)}%
           </span>
         </div>
         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
           <div className={cn("h-full transition-all", utilColor)} style={{ width: `${util}%` }} />
         </div>
+        {partial && (
+          <div className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+            of {totalCbm.toFixed(2)} m³ requested · {unloadedCbm.toFixed(2)} m³ unloaded
+          </div>
+        )}
       </div>
       <Stat
         label="Weight"
-        value={`${weight.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
+        value={`${placedKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg`}
+        hint={
+          partial && totalKg > placedKg
+            ? `of ${totalKg.toLocaleString("en-IN", { maximumFractionDigits: 0 })} kg requested`
+            : undefined
+        }
       />
       <Stat label="Packages loaded" value={`${pack.placedCartons} / ${pack.totalCartons}`} />
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
       <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
       <div className="text-sm font-semibold text-brand-navy">{value}</div>
+      {hint && (
+        <div className="mt-0.5 text-[10px] text-amber-700 dark:text-amber-400">{hint}</div>
+      )}
     </div>
   );
 }
