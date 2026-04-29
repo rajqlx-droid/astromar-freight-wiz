@@ -82,11 +82,7 @@ export function runAllScenarios(
 
   const strategies = allStrategies.filter((s) => strategiesToRun.includes(s.id));
 
-  const totalQty = items.reduce((s, i) => s + i.qty, 0);
-  const scaleFactor = totalQty > 300 ? 300 / totalQty : 1;
-  const safeItems = scaleFactor < 1
-    ? items.map(i => ({ ...i, qty: Math.max(1, Math.round(i.qty * scaleFactor)) }))
-    : items;
+  const safeItems = items;
 
   const results = strategies.map((s) => {
     // Pass the strategy id straight to the packer so its internal sort actually
