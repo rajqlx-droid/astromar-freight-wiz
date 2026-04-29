@@ -156,6 +156,12 @@ export function packContainerAdvanced(
   items: CbmItem[],
   container: ContainerPreset,
   strategy: PackStrategy = "auto",
+  /**
+   * Optional override for spread mode. When `true`, force CoG-spread mode
+   * regardless of the auto-trigger (used by pickBestPlan's CoG-rescue retry).
+   * When `false`, force tight-pack mode. Default `undefined` = auto-trigger.
+   */
+  forceSpreadMode?: boolean,
 ): AdvancedPackResult {
   const C = container.inner;
 
