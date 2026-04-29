@@ -567,6 +567,15 @@ export function CbmCalculator({ items, setItems }: Props) {
           <Button onClick={clear} size="sm" variant="ghost" className="text-muted-foreground">
             Clear all
           </Button>
+          <Button
+            onClick={resetAll}
+            size="sm"
+            variant="outline"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            title="Reset all values and start a new optimization"
+          >
+            <RotateCcw className="size-4" /> Reset
+          </Button>
         </div>
       </div>
       <div className="lg:col-span-5">
