@@ -668,45 +668,59 @@ export function packContainerAdvanced(
               yCentreOffset * 0.5 +
               (1 - ev.supportRatio) * 50;
           } else {
-            // Tight mode — back-wall densification.
-            //   Priority 1: minimise X (advance forward only when forced)
-            //   Priority 2: within the current row, fill width then height
-            //   Priority 3: prefer well-supported placements
+            // Tight mode — row-phase scoring.
             //
-            // Coefficients are spaced so any legal placement at a smaller X
-            // ALWAYS beats any placement at a larger X, no matter its (y, z).
+            // Phase A (floor first): inside the current back-most row, fill
+            //   the FLOOR across the full width before stacking anything.
+            // Phase B (stack aligned): once the row floor is full (or no
+            //   floor slot remains in the row), stack vertically on
+            //   completed columns — strongly aligned with the supporter.
+            // Phase C (advance): only after the row's floor + columns are
+            //   exhausted does the next x row open.
             //
-            // "Same row" means x is within 1 carton-length of the back wall
-            // frontier (rowTolerance). Inside the row, going UP costs ~Y to
-            // discourage tall thin columns until the floor row is laid;
-            // outside the row (i.e. opening a fresh forward row), going UP
-            // becomes very expensive so we never start row N+1 with a stack.
+            // Implementation: x dominates with the largest weight, then
+            // floor-vs-stack within the same row, then y across the width.
+            // An "aligned stack" bonus snaps stacked cartons to sit
+            // directly above the supporter (kills zig-zag towers).
             const rowTolerance = Math.max(o.l, 1);
             const inCurrentRow = x <= frontierX + rowTolerance * 0.01 || frontierX === 0;
-            const zCost = inCurrentRow ? 1_000 : 1_000_000;
+            // Inside the current row, FLOOR slots beat stack slots.
+            // Outside the current row, going UP is extremely expensive so
+            // we never start a forward row with a stack.
+            const zCost = inCurrentRow ? 200_000 : 5_000_000;
             score =
               x * 10_000_000 +
               ev.z * zCost +
               y * 1_000 +
               (1 - ev.supportRatio) * 50;
           }
-          // Tilt-aware bonuses (only for cartons that allow axis rotation —
-          // pallets/crates are rigid units and unaffected). These let the
-          // packer use residual headroom on top of an existing stack instead
-          // of always starting a fresh floor row further forward.
+          // Aligned-stack bonus: when stacking, prefer placements whose
+          // (x, y) match an existing supporter exactly. This collapses
+          // diagonal/zig-zag towers into clean vertical columns.
+          if (ev.z > 0 && ev.supporters.size > 0) {
+            let bestAlign = Infinity;
+            for (const sIdx of ev.supporters) {
+              const s = placedInternal[sIdx];
+              if (!s) continue;
+              const dx = Math.abs(s.x - x);
+              const dy = Math.abs(s.y - y);
+              const sameSize =
+                Math.abs(s.l - o.l) <= 5 && Math.abs(s.w - o.w) <= 5;
+              const align = dx + dy + (sameSize ? 0 : 200);
+              if (align < bestAlign) bestAlign = align;
+            }
+            // Strong reward for perfect column alignment, penalty for offset.
+            if (bestAlign <= 5) score -= 100_000;
+            else score += bestAlign * 200;
+          }
+          // Tilt-aware bonuses (only for cartons that allow axis rotation).
           if (c.allowAxisRotation && !c.fragile) {
-            // (a) Residual-head reward: this orientation fits in the leftover
-            // headroom above an existing column where the original orientation
-            // wouldn't. Make it dominate fresh-floor competition.
             const ceilingZ = C.h - CEILING_RESERVE_MM;
             const fitsHere = ev.z + o.h <= ceilingZ;
             const origWouldNotFit = ev.z + c.origH > ceilingZ;
             if (ev.z > 0 && fitsHere && origWouldNotFit) {
               score -= 50_000;
             }
-            // (b) Stack-completion bonus: this candidate fully covers an
-            // existing column's top face. Loaders fill columns to the
-            // ceiling before opening a new row — mirror that.
             if (ev.z > 0 && ev.supportRatio >= 0.98) {
               score -= 5_000;
             }
