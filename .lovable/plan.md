@@ -1,27 +1,37 @@
-## Reset & refresh defaults: cm + carton
+## Bug
 
-When the user clicks Reset (or refreshes the page), the calculator should default to:
-- Length unit: **cm**
-- Weight unit: **kg** (already default)
-- Package type: **carton**
-- Quantity: 0 (already handled)
+In `src/components/freight/container-load-view.tsx`, the `StatsBar` shows totals from the **whole manifest** instead of the **loaded** cartons, while the percentage and "Packages loaded" counter reflect only what fit. This makes the numbers internally inconsistent.
 
-Currently the unit picker is persisted in `localStorage` (`usePersistentLengthUnit` / `usePersistentWeightUnit`), so a previous user choice (e.g. `in`, `ft`, `lb`) sticks across refreshes and survives Reset. Reset also doesn't touch `lenUnit` or per-row `lenUnit`/`packageType`.
+Example from the user's screen:
+- Used volume: **27.41 / 33.23 m³ · 42%** ← the 27.41 is *all 121 cartons*, but 42% is computed off only the 62 placed.
+- Weight: **2,541 kg** ← total manifest weight, not just the 62 loaded.
+- Packages loaded: **62 / 121** ← correct.
 
-### Changes
+The pack object already exposes the right fields (`packing-advanced.ts` lines 52–57):
+- `cargoCbm` — total CBM of placed + unplaced (currently shown — wrong).
+- `placedCargoCbm` — CBM of placed cartons only (should be shown).
+- `weightKg` — total manifest weight.
+- `placedWeightKg` — placed cartons only.
 
-**1. `src/components/freight/cbm-calculator.tsx` — `resetAll`**
-- Reset global `lenUnit` to `"cm"` and global `weightUnit` to `"kg"` via the persistent setters (which also clears localStorage to `cm`/`kg`).
-- Replace items with a fresh `emptyCbmItem` whose `lenUnit` is unset (so it inherits cm), `packageType: "carton"`, `qty: 0`.
+## Fix
 
-**2. `src/components/freight/unit-selector.tsx` — persistence**
-- Change `usePersistentLengthUnit` / `usePersistentWeightUnit` so the default on refresh is always `cm` / `kg`, and only switches when the user explicitly changes the picker in the current session.
-- Approach: stop hydrating from localStorage on mount (or clear the stored value on load). Keep the setter writing to localStorage only if we want intra-session persistence; simplest is to drop persistence entirely and always boot at `cm`/`kg`.
+Edit `src/components/freight/container-load-view.tsx`:
 
-**3. Per-row defaults**
-- `emptyCbmItem` already has `packageType: "carton"` and no `lenUnit` (falls back to global `cm`), so no change needed in `calculators.ts`. The `add` row helper continues to inherit cm + carton.
+1. **Line ~590** — change the "Used volume" numerator from `pack.cargoCbm` to `pack.placedCargoCbm`. Also show the *total manifest CBM* as a small secondary label so users still see how much they tried to load vs. how much fit:
 
-### Result
-- Page load → cm + carton + kg, regardless of previous session.
-- Reset button → wipes manifest, restores cm + carton + kg, clears forced container, clears 3D pack.
-- Manual change to inches/lb/crate during a session still works as today, but doesn't survive a refresh or a Reset.
+   ```
+   Used volume                     14.05 / 33.23 m³ · 42%
+                                   of 27.41 m³ requested · 13.36 m³ unloaded
+   ```
+
+2. **Line ~599** — change the Weight stat to `pack.placedWeightKg` (loaded weight) and append a small "of X kg requested" hint when `placedWeightKg < weightKg`.
+
+3. **Caller of `StatsBar`** (line 463): the `weight={weight}` prop currently passes total manifest weight. Either drop the prop and read both `placedWeightKg`/`weightKg` directly from `pack` inside `StatsBar`, or rename it to `totalWeight` and add a new `placedWeight` prop. Reading from `pack` is cleaner since both fields already live there.
+
+4. **Optional polish**: when `pack.placedCartons < pack.totalCartons`, color the secondary "X unloaded" hint amber so the partial-fit case is visually obvious.
+
+No changes needed to the packer or worker — the data is already correct, only the display is wrong. No new dependencies.
+
+## Result
+
+Stats will be self-consistent: the m³, kg, % and package count will all describe the **same 62 cartons** that actually fit, with the requested totals shown as context so the user immediately sees how much was left out.
