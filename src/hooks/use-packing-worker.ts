@@ -66,7 +66,7 @@ interface UsePackingWorker {
   optimise: (
     items: CbmItem[],
     container: ContainerPreset,
-    previousStrategyId?: import("@/lib/freight/packing-advanced").PackStrategy extends infer P ? Extract<P, "row-back" | "weight-first" | "floor-first" | "mixed"> : never,
+    previousStrategyId?: StrategyId,
   ) => Promise<BestPlan>;
   /** Geometry-aware recommendation in one round trip. */
   recommend: (items: CbmItem[]) => Promise<RecommendResponseResult>;
@@ -75,8 +75,9 @@ interface UsePackingWorker {
   /**
    * Cancel every in-flight worker job. Bumps the seq id so any later
    * response is dropped as stale, rejects pending promises with a
-   * sentinel error, and clears the pending state. Use on container-type
-   * change or any other invalidation that makes prior results meaningless.
+   * sentinel error ("Cancelled: superseded"), and clears the pending state.
+   * Use on container-type change or any other invalidation that makes prior
+   * results meaningless.
    */
   cancelAll: () => void;
 }
