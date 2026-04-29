@@ -631,14 +631,12 @@ export function packContainerAdvanced(
           if (!wouldBeLegal(x, y, ev.z, o.l, o.w, o.h, candGap)) continue;
 
           // Score:
-          //  - Tight mode (default, container is well-filled): back-to-front
-          //    row-wise loading. X dominates so each row finishes against
-          //    the back wall before the next row advances forward.
-          //  - Spread mode (container under 65 % full): place each new
-          //    floor-level carton near its evenly-spaced target slot along
-          //    the length, and bias the lateral position to the centre line.
-          //    This keeps the centre of gravity balanced when the load is
-          //    light enough that we don't need every centimetre.
+          //  - Tight mode (default): pack the BACK WALL densely first.
+          //    Within the current back-most row (x close to frontierX), going
+          //    UP and going SIDEWAYS are both cheap — fill the row floor-to-
+          //    ceiling and wall-to-wall. Only once that row is exhausted does
+          //    advancing X become the cheapest move.
+          //  - Spread mode (rare, sparse single-SKU loads): unchanged.
           let score: number;
           if (spreadMode && ev.z === 0) {
             const targetX = Math.min(usableLengthMm - o.l, spreadCursor * spreadStrideMm);
@@ -649,10 +647,27 @@ export function packContainerAdvanced(
               yCentreOffset * 0.5 +
               (1 - ev.supportRatio) * 50;
           } else {
-            // Tight mode — original back-to-front scoring. Coefficients chosen
-            // so a 100 mm advance in x always outweighs the tallest possible
-            // stack progression at the same x.
-            score = x * 10_000 + ev.z * 100 + y * 0.1 + (1 - ev.supportRatio) * 50;
+            // Tight mode — back-wall densification.
+            //   Priority 1: minimise X (advance forward only when forced)
+            //   Priority 2: within the current row, fill width then height
+            //   Priority 3: prefer well-supported placements
+            //
+            // Coefficients are spaced so any legal placement at a smaller X
+            // ALWAYS beats any placement at a larger X, no matter its (y, z).
+            //
+            // "Same row" means x is within 1 carton-length of the back wall
+            // frontier (rowTolerance). Inside the row, going UP costs ~Y to
+            // discourage tall thin columns until the floor row is laid;
+            // outside the row (i.e. opening a fresh forward row), going UP
+            // becomes very expensive so we never start row N+1 with a stack.
+            const rowTolerance = Math.max(o.l, 1);
+            const inCurrentRow = x <= frontierX + rowTolerance * 0.01 || frontierX === 0;
+            const zCost = inCurrentRow ? 1_000 : 1_000_000;
+            score =
+              x * 10_000_000 +
+              ev.z * zCost +
+              y * 1_000 +
+              (1 - ev.supportRatio) * 50;
           }
           // Tilt-aware bonuses (only for cartons that allow axis rotation —
           // pallets/crates are rigid units and unaffected). These let the
@@ -771,14 +786,22 @@ export function packContainerAdvanced(
         bestPick!.supportRatio = ev.supportRatio;
       }
     };
-    // Always re-snap to the back wall — even in spread mode the back-wall
-    // slide only closes empty corridors; lateral spread is preserved by Y.
+    // Always re-snap to the back wall — densifies the rear bulkhead.
+    // We deliberately DO NOT snap toward y=0 in tight mode: that would drag
+    // every carton to the same side wall and re-create the lopsided pile.
+    // The Y position chosen by the scorer (which prefers small y but also
+    // prefers filling the row across the width) is already correct.
     snapAxis("x");
-    snapAxis("y");
-    // Second pass: the first XY snap can leave a small Y gap that only
-    // opens up after the X slide. Cheap and routinely closes 1-3% extra
-    // slack on mixed pallet loads.
-    snapAxis("y");
+    if (spreadMode) {
+      // Spread mode keeps its centred lateral bias, so a y-snap toward the
+      // wall would fight the spread heuristic — skip it there too.
+    } else {
+      // Tight mode: a single y-snap closes sub-stride gaps against the
+      // PREVIOUS carton in the same row without yanking us to the wall,
+      // because snapAxis stops the moment a neighbour blocks the slide.
+      snapAxis("y");
+    }
+    // Second X-snap closes any sub-stride x slack opened by the y-snap.
     snapAxis("x");
 
     // Z-snap: re-evaluate the resting plane after the XY snaps. If a shorter
