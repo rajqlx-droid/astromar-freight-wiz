@@ -77,50 +77,34 @@ const isWtUnit = (v: unknown): v is WeightUnit =>
   typeof v === "string" && WEIGHT_UNITS.some((u) => u.value === v);
 
 /**
- * Returns [unit, setUnit]. Always seeds with the SSR default ("cm" / "kg") on
- * first render so server and client markup match, then hydrates the stored
- * preference inside useEffect to avoid hydration mismatches.
+ * Returns [unit, setUnit]. Always boots at "cm" / "kg" on every page load so
+ * a fresh visit (or refresh) starts in metric. The setter only updates the
+ * in-memory value for the current session — no localStorage persistence — so
+ * any in-session change is forgotten on refresh, matching Reset behavior.
  */
 export function usePersistentLengthUnit(): [LengthUnit, (u: LengthUnit) => void] {
   const [unit, setUnit] = useState<LengthUnit>("cm");
+  // Clear any legacy stored preference so old sessions don't leak through.
   useEffect(() => {
     try {
-      const v = localStorage.getItem(LEN_KEY);
-      if (isLenUnit(v)) setUnit(v);
+      localStorage.removeItem(LEN_KEY);
     } catch {
       /* ignore */
     }
   }, []);
-  const set = (u: LengthUnit) => {
-    setUnit(u);
-    try {
-      localStorage.setItem(LEN_KEY, u);
-    } catch {
-      /* ignore */
-    }
-  };
-  return [unit, set];
+  return [unit, setUnit];
 }
 
 export function usePersistentWeightUnit(): [WeightUnit, (u: WeightUnit) => void] {
   const [unit, setUnit] = useState<WeightUnit>("kg");
   useEffect(() => {
     try {
-      const v = localStorage.getItem(WT_KEY);
-      if (isWtUnit(v)) setUnit(v);
+      localStorage.removeItem(WT_KEY);
     } catch {
       /* ignore */
     }
   }, []);
-  const set = (u: WeightUnit) => {
-    setUnit(u);
-    try {
-      localStorage.setItem(WT_KEY, u);
-    } catch {
-      /* ignore */
-    }
-  };
-  return [unit, set];
+  return [unit, setUnit];
 }
 
 /* -------- UI components -------- */
