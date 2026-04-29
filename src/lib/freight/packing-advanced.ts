@@ -827,16 +827,9 @@ export function packContainerAdvanced(
     // The Y position chosen by the scorer (which prefers small y but also
     // prefers filling the row across the width) is already correct.
     snapAxis("x");
-    if (spreadMode) {
-      // Spread mode keeps its centred lateral bias, so a y-snap toward the
-      // wall would fight the spread heuristic — skip it there too.
-    } else {
-      // Tight mode: a single y-snap closes sub-stride gaps against the
-      // PREVIOUS carton in the same row without yanking us to the wall,
-      // because snapAxis stops the moment a neighbour blocks the slide.
-      snapAxis("y");
-    }
-    // Second X-snap closes any sub-stride x slack opened by the y-snap.
+    // Tight mode: do NOT snap toward y=0 — the row-phase scorer + edge
+    // candidates already pick exact y slots; a Y wall snap would drag
+    // every box to one side and re-create the lopsided pile.
     snapAxis("x");
 
     // Z-snap: re-evaluate the resting plane after the XY snaps. If a shorter
