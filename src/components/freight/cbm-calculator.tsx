@@ -13,6 +13,7 @@ import {
   Container as ContainerIcon,
   Box,
   Video,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -400,6 +401,14 @@ export function CbmCalculator({ items, setItems }: Props) {
   );
   const add = useCallback(() => pushItems([...items, emptyCbmItem()]), [items, pushItems]);
   const clear = useCallback(() => pushItems([emptyCbmItem(0)]), [pushItems]);
+  const resetAll = useCallback(() => {
+    pushItems([emptyCbmItem(0)]);
+    setForcedChoice(null);
+    setOptimizationRequested(false);
+    setActivePack(null);
+    setOpenPopoverId(null);
+    setConfirmModalOpen(false);
+  }, [pushItems]);
 
   /** Copy one row's packing options to every other row & mark them all confirmed. */
   const applyToAll = useCallback(
@@ -557,6 +566,15 @@ export function CbmCalculator({ items, setItems }: Props) {
           </Button>
           <Button onClick={clear} size="sm" variant="ghost" className="text-muted-foreground">
             Clear all
+          </Button>
+          <Button
+            onClick={resetAll}
+            size="sm"
+            variant="outline"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            title="Reset all values and start a new optimization"
+          >
+            <RotateCcw className="size-4" /> Reset
           </Button>
         </div>
       </div>
