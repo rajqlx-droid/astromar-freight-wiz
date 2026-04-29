@@ -173,6 +173,14 @@ export interface BestPlan {
 export function pickBestPlan(
   items: CbmItem[],
   container: ContainerPreset,
+  /**
+   * Optional hint: the strategy id that won the previous call for the SAME
+   * container. If the new winner's `placedCargoCbm` is within 1% of the
+   * previous winner AND `placedCartons` matches exactly, keep the previous
+   * winner to prevent flicker on tiny input edits. Pass `undefined` on
+   * container-type changes — stickiness must not bleed across geometries.
+   */
+  previousStrategyId?: StrategyId,
 ): BestPlan {
   const allStrategies: Array<{ id: StrategyId; name: string }> = [
     { id: "row-back",     name: "Row: Back → Front" },
