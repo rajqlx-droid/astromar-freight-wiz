@@ -93,6 +93,7 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
 
 export function ContainerLoadView({
   items,
+  recommendation,
   forcedChoice,
   onChoiceChange,
   onReady,
