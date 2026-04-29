@@ -612,13 +612,16 @@ function StatsBar({ pack }: { pack: AdvancedPackResult }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-md bg-muted/40 px-2.5 py-1.5">
       <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
       <div className="text-sm font-semibold text-brand-navy">{value}</div>
+      {hint && (
+        <div className="mt-0.5 text-[10px] text-amber-700 dark:text-amber-400">{hint}</div>
+      )}
     </div>
   );
 }
