@@ -193,7 +193,20 @@ export function pickBestPlan(
   const results: ScenarioResult[] = allStrategies.map((s) => {
     // No qty scaling here: the optimise path must use 100% of the manifest
     // against 100% of the container's geometric inner dimensions.
-    const pack = packContainerAdvanced(items, container, s.id);
+    let pack = packContainerAdvanced(items, container, s.id);
+    // CoG-rescue: if the tight pack is dangerously off-centre (>18% offset),
+    // retry that strategy with spread mode forced ON and keep whichever
+    // pack has the better |cogOffsetPct| — but only when the rescue doesn't
+    // sacrifice cartons placed.
+    if (Math.abs(pack.cogOffsetPct) > 0.18) {
+      const rescue = packContainerAdvanced(items, container, s.id, true);
+      if (
+        rescue.placedCartons >= pack.placedCartons &&
+        Math.abs(rescue.cogOffsetPct) < Math.abs(pack.cogOffsetPct)
+      ) {
+        pack = rescue;
+      }
+    }
     const rows = pack.placed.length > 0 ? buildRows(pack) : [];
     const geometryAudit = validateAdvancedPack(pack);
     audits.set(s.id, geometryAudit);
