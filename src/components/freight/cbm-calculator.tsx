@@ -402,7 +402,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   const add = useCallback(() => pushItems([...items, emptyCbmItem()]), [items, pushItems]);
   const clear = useCallback(() => pushItems([emptyCbmItem(0)]), [pushItems]);
   const resetAll = useCallback(() => {
-    pushItems([emptyCbmItem(0)]);
+    pushItems([{ ...emptyCbmItem(0), qty: 0 }]);
     setForcedChoice(null);
     setOptimizationRequested(false);
     setActivePack(null);
