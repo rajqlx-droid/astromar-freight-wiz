@@ -402,13 +402,15 @@ export function CbmCalculator({ items, setItems }: Props) {
   const add = useCallback(() => pushItems([...items, emptyCbmItem()]), [items, pushItems]);
   const clear = useCallback(() => pushItems([emptyCbmItem(0)]), [pushItems]);
   const resetAll = useCallback(() => {
-    pushItems([{ ...emptyCbmItem(0), qty: 0 }]);
+    pushItems([{ ...emptyCbmItem(0), qty: 0, lenUnit: undefined, wtUnit: undefined, packageType: "carton" }]);
+    setLenUnit("cm");
+    setWtUnit("kg");
     setForcedChoice(null);
     setOptimizationRequested(false);
     setActivePack(null);
     setOpenPopoverId(null);
     setConfirmModalOpen(false);
-  }, [pushItems]);
+  }, [pushItems, setLenUnit, setWtUnit]);
 
   /** Copy one row's packing options to every other row & mark them all confirmed. */
   const applyToAll = useCallback(
