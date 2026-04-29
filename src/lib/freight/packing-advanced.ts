@@ -572,15 +572,36 @@ export function packContainerAdvanced(
     const cartonRejects = { support: 0, sealed: 0, stackWeight: 0, nonStackable: 0 };
 
     for (const o of orients) {
-      // Candidate XY positions on a coarse grid.
+      // Candidate XY positions: union of (a) coarse stride grid and
+      // (b) exact edges of already-placed cargo (right/front faces + their
+      // own start coordinates). The edge candidates let identical cubes
+      // close the floor row exactly with sub-stride precision instead of
+      // missing the slot and stacking prematurely.
       const stepX = Math.min(placeStep, Math.max(25, Math.floor(o.l / 4)));
       const stepY = Math.min(placeStep, Math.max(25, Math.floor(o.w / 4)));
-      // Frontier bound: back-to-front scoring guarantees no better placement
-      // exists far past the furthest already-placed box. Limit X scan to
-      // frontierX + 2 × maxBoxLen (clamped to container length).
       const xLimit = Math.min(C.l - o.l, frontierX + 2 * maxItemLen);
-      for (let y = 0; y + o.w <= C.w; y += stepY) {
-        for (let x = 0; x <= xLimit; x += stepX) {
+
+      // Build candidate axis arrays.
+      const wallGap = getGapRule(c.packageType).minGap;
+      const xCandSet = new Set<number>();
+      const yCandSet = new Set<number>();
+      xCandSet.add(wallGap);
+      yCandSet.add(wallGap);
+      for (let x = 0; x <= xLimit; x += stepX) xCandSet.add(x);
+      for (let y = 0; y + o.w <= C.w; y += stepY) yCandSet.add(y);
+      for (const p of placedInternal) {
+        const xRight = p.x + p.l + wallGap;
+        if (xRight + o.l <= C.l && xRight <= xLimit) xCandSet.add(xRight);
+        if (p.x <= xLimit) xCandSet.add(p.x);
+        const yFront = p.y + p.w + wallGap;
+        if (yFront + o.w <= C.w) yCandSet.add(yFront);
+        yCandSet.add(p.y);
+      }
+      const xCandidates = [...xCandSet].filter((x) => x >= 0 && x + o.l <= C.l && x <= xLimit).sort((a, b) => a - b);
+      const yCandidates = [...yCandSet].filter((y) => y >= 0 && y + o.w <= C.w).sort((a, b) => a - b);
+
+      for (const y of yCandidates) {
+        for (const x of xCandidates) {
           const ev = evaluatePlacement(x, y, o.l, o.w, {
             ...c,
             origL: o.l,
@@ -647,45 +668,59 @@ export function packContainerAdvanced(
               yCentreOffset * 0.5 +
               (1 - ev.supportRatio) * 50;
           } else {
-            // Tight mode — back-wall densification.
-            //   Priority 1: minimise X (advance forward only when forced)
-            //   Priority 2: within the current row, fill width then height
-            //   Priority 3: prefer well-supported placements
+            // Tight mode — row-phase scoring.
             //
-            // Coefficients are spaced so any legal placement at a smaller X
-            // ALWAYS beats any placement at a larger X, no matter its (y, z).
+            // Phase A (floor first): inside the current back-most row, fill
+            //   the FLOOR across the full width before stacking anything.
+            // Phase B (stack aligned): once the row floor is full (or no
+            //   floor slot remains in the row), stack vertically on
+            //   completed columns — strongly aligned with the supporter.
+            // Phase C (advance): only after the row's floor + columns are
+            //   exhausted does the next x row open.
             //
-            // "Same row" means x is within 1 carton-length of the back wall
-            // frontier (rowTolerance). Inside the row, going UP costs ~Y to
-            // discourage tall thin columns until the floor row is laid;
-            // outside the row (i.e. opening a fresh forward row), going UP
-            // becomes very expensive so we never start row N+1 with a stack.
+            // Implementation: x dominates with the largest weight, then
+            // floor-vs-stack within the same row, then y across the width.
+            // An "aligned stack" bonus snaps stacked cartons to sit
+            // directly above the supporter (kills zig-zag towers).
             const rowTolerance = Math.max(o.l, 1);
             const inCurrentRow = x <= frontierX + rowTolerance * 0.01 || frontierX === 0;
-            const zCost = inCurrentRow ? 1_000 : 1_000_000;
+            // Inside the current row, FLOOR slots beat stack slots.
+            // Outside the current row, going UP is extremely expensive so
+            // we never start a forward row with a stack.
+            const zCost = inCurrentRow ? 200_000 : 5_000_000;
             score =
               x * 10_000_000 +
               ev.z * zCost +
               y * 1_000 +
               (1 - ev.supportRatio) * 50;
           }
-          // Tilt-aware bonuses (only for cartons that allow axis rotation —
-          // pallets/crates are rigid units and unaffected). These let the
-          // packer use residual headroom on top of an existing stack instead
-          // of always starting a fresh floor row further forward.
+          // Aligned-stack bonus: when stacking, prefer placements whose
+          // (x, y) match an existing supporter exactly. This collapses
+          // diagonal/zig-zag towers into clean vertical columns.
+          if (ev.z > 0 && ev.supporters.size > 0) {
+            let bestAlign = Infinity;
+            for (const sIdx of ev.supporters) {
+              const s = placedInternal[sIdx];
+              if (!s) continue;
+              const dx = Math.abs(s.x - x);
+              const dy = Math.abs(s.y - y);
+              const sameSize =
+                Math.abs(s.l - o.l) <= 5 && Math.abs(s.w - o.w) <= 5;
+              const align = dx + dy + (sameSize ? 0 : 200);
+              if (align < bestAlign) bestAlign = align;
+            }
+            // Strong reward for perfect column alignment, penalty for offset.
+            if (bestAlign <= 5) score -= 100_000;
+            else score += bestAlign * 200;
+          }
+          // Tilt-aware bonuses (only for cartons that allow axis rotation).
           if (c.allowAxisRotation && !c.fragile) {
-            // (a) Residual-head reward: this orientation fits in the leftover
-            // headroom above an existing column where the original orientation
-            // wouldn't. Make it dominate fresh-floor competition.
             const ceilingZ = C.h - CEILING_RESERVE_MM;
             const fitsHere = ev.z + o.h <= ceilingZ;
             const origWouldNotFit = ev.z + c.origH > ceilingZ;
             if (ev.z > 0 && fitsHere && origWouldNotFit) {
               score -= 50_000;
             }
-            // (b) Stack-completion bonus: this candidate fully covers an
-            // existing column's top face. Loaders fill columns to the
-            // ceiling before opening a new row — mirror that.
             if (ev.z > 0 && ev.supportRatio >= 0.98) {
               score -= 5_000;
             }
@@ -792,16 +827,9 @@ export function packContainerAdvanced(
     // The Y position chosen by the scorer (which prefers small y but also
     // prefers filling the row across the width) is already correct.
     snapAxis("x");
-    if (spreadMode) {
-      // Spread mode keeps its centred lateral bias, so a y-snap toward the
-      // wall would fight the spread heuristic — skip it there too.
-    } else {
-      // Tight mode: a single y-snap closes sub-stride gaps against the
-      // PREVIOUS carton in the same row without yanking us to the wall,
-      // because snapAxis stops the moment a neighbour blocks the slide.
-      snapAxis("y");
-    }
-    // Second X-snap closes any sub-stride x slack opened by the y-snap.
+    // Tight mode: do NOT snap toward y=0 — the row-phase scorer + edge
+    // candidates already pick exact y slots; a Y wall snap would drag
+    // every box to one side and re-create the lopsided pile.
     snapAxis("x");
 
     // Z-snap: re-evaluate the resting plane after the XY snaps. If a shorter

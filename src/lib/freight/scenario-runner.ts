@@ -82,11 +82,7 @@ export function runAllScenarios(
 
   const strategies = allStrategies.filter((s) => strategiesToRun.includes(s.id));
 
-  const totalQty = items.reduce((s, i) => s + i.qty, 0);
-  const scaleFactor = totalQty > 300 ? 300 / totalQty : 1;
-  const safeItems = scaleFactor < 1
-    ? items.map(i => ({ ...i, qty: Math.max(1, Math.round(i.qty * scaleFactor)) }))
-    : items;
+  const safeItems = items;
 
   const results = strategies.map((s) => {
     // Pass the strategy id straight to the packer so its internal sort actually
@@ -198,10 +194,15 @@ export function pickBestPlan(
     // retry that strategy with spread mode forced ON and keep whichever
     // pack has the better |cogOffsetPct| — but only when the rescue doesn't
     // sacrifice cartons placed.
-    if (Math.abs(pack.cogOffsetPct) > 0.18) {
+    // CoG-rescue: only consider spread mode when the tight pack is BOTH
+    // dangerously off-centre AND not densely packed. Dense / partial-fit
+    // cargo must always prioritise maximum stowage — never trade cartons
+    // or volume for CoG balance.
+    if (Math.abs(pack.cogOffsetPct) > 0.18 && pack.utilizationPct < 55) {
       const rescue = packContainerAdvanced(items, container, s.id, true);
       if (
         rescue.placedCartons >= pack.placedCartons &&
+        rescue.placedCargoCbm >= pack.placedCargoCbm * 0.999 &&
         Math.abs(rescue.cogOffsetPct) < Math.abs(pack.cogOffsetPct)
       ) {
         pack = rescue;
