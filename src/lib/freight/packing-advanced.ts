@@ -242,7 +242,7 @@ export function packContainerAdvanced(
   // Cells under a fragile or fragile-supported column are sealed.
   const sealed = new Uint8Array(cellsX * cellsY);
 
-  const placeStep = expanded.length > 30 ? 100 : PLACE_STEP_MM;
+  const placeStep = expanded.length > 200 ? 100 : expanded.length > 60 ? 75 : PLACE_STEP_MM;
   const maxItemLen = expanded.reduce((m, c) => Math.max(m, c.origL, c.origW, c.origH), 0);
   let frontierX = 0;
 
