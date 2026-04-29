@@ -194,10 +194,15 @@ export function pickBestPlan(
     // retry that strategy with spread mode forced ON and keep whichever
     // pack has the better |cogOffsetPct| — but only when the rescue doesn't
     // sacrifice cartons placed.
-    if (Math.abs(pack.cogOffsetPct) > 0.18) {
+    // CoG-rescue: only consider spread mode when the tight pack is BOTH
+    // dangerously off-centre AND not densely packed. Dense / partial-fit
+    // cargo must always prioritise maximum stowage — never trade cartons
+    // or volume for CoG balance.
+    if (Math.abs(pack.cogOffsetPct) > 0.18 && pack.utilizationPct < 55) {
       const rescue = packContainerAdvanced(items, container, s.id, true);
       if (
         rescue.placedCartons >= pack.placedCartons &&
+        rescue.placedCargoCbm >= pack.placedCargoCbm * 0.999 &&
         Math.abs(rescue.cogOffsetPct) < Math.abs(pack.cogOffsetPct)
       ) {
         pack = rescue;
