@@ -1,37 +1,38 @@
-## Bug
+# Approved scope — execute on approval
 
-In `src/components/freight/container-load-view.tsx`, the `StatsBar` shows totals from the **whole manifest** instead of the **loaded** cartons, while the percentage and "Packages loaded" counter reflect only what fit. This makes the numbers internally inconsistent.
+The live preview already calls `worker.optimise(...)` (i.e. `pickBestPlan`) inside `container-load-view.tsx`. Remaining work:
 
-Example from the user's screen:
-- Used volume: **27.41 / 33.23 m³ · 42%** ← the 27.41 is *all 121 cartons*, but 42% is computed off only the 62 placed.
-- Weight: **2,541 kg** ← total manifest weight, not just the 62 loaded.
-- Packages loaded: **62 / 121** ← correct.
+## 1. `src/lib/freight/scenario-runner.ts`
+- `pickBestPlan(items, container, previousStrategyId?)`:
+  - **Full-fit ranking** (every plan placed everything): keep current — densest CBM → most cartons → compliance.
+  - **Partial-fit ranking** (any plan has shut-out): **most cartons placed → most CBM → most weight → fewest red violations → compliance score**. Apply to BOTH legal pool and red-fallback pool.
+  - **Stickiness:** if `previousStrategyId` matches a candidate within 1% `placedCargoCbm` and same `placedCartons`, keep it.
 
-The pack object already exposes the right fields (`packing-advanced.ts` lines 52–57):
-- `cargoCbm` — total CBM of placed + unplaced (currently shown — wrong).
-- `placedCargoCbm` — CBM of placed cartons only (should be shown).
-- `weightKg` — total manifest weight.
-- `placedWeightKg` — placed cartons only.
+## 2. `src/lib/freight/packing-advanced.ts`
+- Spread-mode trigger: `volumeFill < 0.40` AND (≤1 SKU OR ≤8 cartons) AND strategy ∈ {`auto`,`mixed`}. (Was `< 0.65`.)
+- Always run X-snap (remove the `if (!spreadMode)` guard at line 759).
+- Add second snap pass: `snapAxis("y"); snapAxis("x")` after the first.
+- Adaptive `placeStep`: `>200 → 100`, `>60 → 75`, else `50`.
+- CoG-rescue: if tight pack returns `|cogOffsetPct| > 0.18`, retry that strategy with spread enabled and pick whichever pack has lower |cogOffsetPct|.
 
-## Fix
+## 3. `src/lib/freight/packing-worker.ts` + `src/hooks/use-packing-worker.ts`
+- Forward optional `previousStrategyId` through the `optimise` request.
+- Add `cancelAll()` to the hook: bumps `seqRef`, rejects pending promises with sentinel `"Cancelled: superseded"`, resets `inflight`. Auto-recreate worker if >2 cancellations in <500 ms.
 
-Edit `src/components/freight/container-load-view.tsx`:
+## 4. `src/components/freight/container-load-view.tsx`
+- Track previous `activeContainer.id` in a ref. On change:
+  1. `worker.cancelAll()`
+  2. reset `singlePack` to `makeEmptyPack(newContainer)`, `planMeta` to `null`, sticky strategy ref to `undefined`
+  3. fire fresh `worker.optimise(items, container, undefined)`
+- On manifest/items change (not container change), pass current sticky `previousStrategyId`.
+- Catch the `"Cancelled: superseded"` error silently.
 
-1. **Line ~590** — change the "Used volume" numerator from `pack.cargoCbm` to `pack.placedCargoCbm`. Also show the *total manifest CBM* as a small secondary label so users still see how much they tried to load vs. how much fit:
+## 5. Tests — `src/lib/freight/scenario-runner.test.ts`
+- New: partial-fit ranking — when manifest exceeds container, the winner has the highest `placedCartons` of all 4 strategies.
+- New: stickiness — passing `previousStrategyId` keeps the previous winner when within 1% / same carton count.
+- New: container-change semantics — calling without `previousStrategyId` ignores stickiness.
 
-   ```
-   Used volume                     14.05 / 33.23 m³ · 42%
-                                   of 27.41 m³ requested · 13.36 m³ unloaded
-   ```
+## 6. Run vitest
+- `bunx vitest run` after changes. Update only snapshots where `placedCartons` improved or held while bounding box shrank. Reject any regression.
 
-2. **Line ~599** — change the Weight stat to `pack.placedWeightKg` (loaded weight) and append a small "of X kg requested" hint when `placedWeightKg < weightKg`.
-
-3. **Caller of `StatsBar`** (line 463): the `weight={weight}` prop currently passes total manifest weight. Either drop the prop and read both `placedWeightKg`/`weightKg` directly from `pack` inside `StatsBar`, or rename it to `totalWeight` and add a new `placedWeight` prop. Reading from `pack` is cleaner since both fields already live there.
-
-4. **Optional polish**: when `pack.placedCartons < pack.totalCartons`, color the secondary "X unloaded" hint amber so the partial-fit case is visually obvious.
-
-No changes needed to the packer or worker — the data is already correct, only the display is wrong. No new dependencies.
-
-## Result
-
-Stats will be self-consistent: the m³, kg, % and package count will all describe the **same 62 cartons** that actually fit, with the requested totals shown as context so the user immediately sees how much was left out.
+**Approve to execute.**

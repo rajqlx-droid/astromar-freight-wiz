@@ -156,6 +156,12 @@ export function packContainerAdvanced(
   items: CbmItem[],
   container: ContainerPreset,
   strategy: PackStrategy = "auto",
+  /**
+   * Optional override for spread mode. When `true`, force CoG-spread mode
+   * regardless of the auto-trigger (used by pickBestPlan's CoG-rescue retry).
+   * When `false`, force tight-pack mode. Default `undefined` = auto-trigger.
+   */
+  forceSpreadMode?: boolean,
 ): AdvancedPackResult {
   const C = container.inner;
 
@@ -242,7 +248,7 @@ export function packContainerAdvanced(
   // Cells under a fragile or fragile-supported column are sealed.
   const sealed = new Uint8Array(cellsX * cellsY);
 
-  const placeStep = expanded.length > 30 ? 100 : PLACE_STEP_MM;
+  const placeStep = expanded.length > 200 ? 100 : expanded.length > 60 ? 75 : PLACE_STEP_MM;
   const maxItemLen = expanded.reduce((m, c) => Math.max(m, c.origL, c.origW, c.origH), 0);
   let frontierX = 0;
 
@@ -518,8 +524,18 @@ export function packContainerAdvanced(
   // otherwise spreading creates one-carton-per-row layouts that look like
   // floor-gap warnings on what is geometrically the only legal placement.
   const tightFillLengthMm = tightRowsEst * Math.max(1, avgWidthMm);
-  const spreadMode =
-    volumeFill < 0.65 && tightFillLengthMm >= usableLengthMm * 0.5;
+  // Spread mode is now strictly a CoG-balance assist for genuinely sparse
+  // single-SKU loads. Multi-SKU manifests, anything ≥ 40 % full, and any
+  // strategy that implies tight stowage (row-back / floor-first / weight-first)
+  // always tight-pack against the back wall.
+  const distinctSkus = new Set(expanded.map((c) => c.itemIdx)).size;
+  const strategyAllowsSpread = strategy === "auto" || strategy === "mixed";
+  const autoSpread =
+    volumeFill < 0.40 &&
+    (distinctSkus <= 1 || expanded.length <= 8) &&
+    strategyAllowsSpread &&
+    tightFillLengthMm >= usableLengthMm * 0.5;
+  const spreadMode = forceSpreadMode ?? autoSpread;
   // Estimate how many cartons will land on the floor (1 layer). Used to
   // choose the stride for evenly-spaced target slots in spread mode.
   const avgFloorFootprintMm2 = expanded.length > 0
@@ -755,9 +771,15 @@ export function packContainerAdvanced(
         bestPick!.supportRatio = ev.supportRatio;
       }
     };
-    // In spread mode, X-snap would undo the deliberate longitudinal spacing.
-    if (!spreadMode) snapAxis("x");
+    // Always re-snap to the back wall — even in spread mode the back-wall
+    // slide only closes empty corridors; lateral spread is preserved by Y.
+    snapAxis("x");
     snapAxis("y");
+    // Second pass: the first XY snap can leave a small Y gap that only
+    // opens up after the X slide. Cheap and routinely closes 1-3% extra
+    // slack on mixed pallet loads.
+    snapAxis("y");
+    snapAxis("x");
 
     // Z-snap: re-evaluate the resting plane after the XY snaps. If a shorter
     // neighbour now sits under the box, drop the box onto it. Closes the

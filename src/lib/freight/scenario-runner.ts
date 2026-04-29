@@ -173,6 +173,14 @@ export interface BestPlan {
 export function pickBestPlan(
   items: CbmItem[],
   container: ContainerPreset,
+  /**
+   * Optional hint: the strategy id that won the previous call for the SAME
+   * container. If the new winner's `placedCargoCbm` is within 1% of the
+   * previous winner AND `placedCartons` matches exactly, keep the previous
+   * winner to prevent flicker on tiny input edits. Pass `undefined` on
+   * container-type changes — stickiness must not bleed across geometries.
+   */
+  previousStrategyId?: StrategyId,
 ): BestPlan {
   const allStrategies: Array<{ id: StrategyId; name: string }> = [
     { id: "row-back",     name: "Row: Back → Front" },
@@ -185,7 +193,20 @@ export function pickBestPlan(
   const results: ScenarioResult[] = allStrategies.map((s) => {
     // No qty scaling here: the optimise path must use 100% of the manifest
     // against 100% of the container's geometric inner dimensions.
-    const pack = packContainerAdvanced(items, container, s.id);
+    let pack = packContainerAdvanced(items, container, s.id);
+    // CoG-rescue: if the tight pack is dangerously off-centre (>18% offset),
+    // retry that strategy with spread mode forced ON and keep whichever
+    // pack has the better |cogOffsetPct| — but only when the rescue doesn't
+    // sacrifice cartons placed.
+    if (Math.abs(pack.cogOffsetPct) > 0.18) {
+      const rescue = packContainerAdvanced(items, container, s.id, true);
+      if (
+        rescue.placedCartons >= pack.placedCartons &&
+        Math.abs(rescue.cogOffsetPct) < Math.abs(pack.cogOffsetPct)
+      ) {
+        pack = rescue;
+      }
+    }
     const rows = pack.placed.length > 0 ? buildRows(pack) : [];
     const geometryAudit = validateAdvancedPack(pack);
     audits.set(s.id, geometryAudit);
@@ -248,15 +269,60 @@ export function pickBestPlan(
     };
   };
 
-  if (legal.length > 0) {
-    legal.sort((a, b) => {
+  // Determine if ANY plan fits the entire manifest. Drives the ranking rule:
+  //   - Full-fit available → density wins (we have headroom, optimise volume).
+  //   - Otherwise → fewest-shut-out wins (minimise cartons left behind).
+  const anyFullFit = results.some(
+    (r) => r.pack.totalCartons > 0 && r.pack.placedCartons >= r.pack.totalCartons,
+  );
+
+  // Compare two plans according to the active rule. Returns negative if a
+  // should rank before b. Used for both the legal pool and the red-fallback
+  // pool so ranking is consistent regardless of compliance state.
+  const compareByRule = (a: ScenarioResult, b: ScenarioResult) => {
+    if (anyFullFit) {
+      // Full-fit ranking: densest CBM → most cartons → compliance.
       if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
         return b.pack.placedCargoCbm - a.pack.placedCargoCbm;
       if (b.pack.placedCartons !== a.pack.placedCartons)
         return b.pack.placedCartons - a.pack.placedCartons;
       return b.compliance.score - a.compliance.score;
-    });
-    const ranked = legal.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
+    }
+    // Partial-fit ranking: leave the fewest cartons behind.
+    if (b.pack.placedCartons !== a.pack.placedCartons)
+      return b.pack.placedCartons - a.pack.placedCartons;
+    if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
+      return b.pack.placedCargoCbm - a.pack.placedCargoCbm;
+    if (b.pack.placedWeightKg !== a.pack.placedWeightKg)
+      return b.pack.placedWeightKg - a.pack.placedWeightKg;
+    const ra = redCount(a);
+    const rb = redCount(b);
+    if (ra !== rb) return ra - rb;
+    return b.compliance.score - a.compliance.score;
+  };
+
+  // Stickiness: if the previous winner is within 1% placedCargoCbm AND has
+  // the same placedCartons as the freshly-computed winner, keep the previous
+  // winner so trivial input edits don't flip the displayed strategy.
+  const applyStickiness = (sorted: ScenarioResult[]): ScenarioResult[] => {
+    if (!previousStrategyId || sorted.length < 2) return sorted;
+    const fresh = sorted[0];
+    const prev = sorted.find((r) => r.strategyId === previousStrategyId);
+    if (!prev || prev === fresh) return sorted;
+    const cbmDelta = fresh.pack.placedCargoCbm - prev.pack.placedCargoCbm;
+    const cbmRel = fresh.pack.placedCargoCbm > 0
+      ? cbmDelta / fresh.pack.placedCargoCbm
+      : 0;
+    if (cbmRel < 0.01 && prev.pack.placedCartons === fresh.pack.placedCartons) {
+      // Move prev to front, keep relative order of others.
+      return [prev, ...sorted.filter((r) => r !== prev)];
+    }
+    return sorted;
+  };
+
+  if (legal.length > 0) {
+    const sorted = applyStickiness([...legal].sort(compareByRule));
+    const ranked = sorted.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
     return {
       best: ranked[0],
       all: ranked,
@@ -265,19 +331,16 @@ export function pickBestPlan(
     };
   }
 
-  const pool = [...results];
-  pool.sort((a, b) => {
-    const ra = redCount(a);
-    const rb = redCount(b);
-    if (ra !== rb) return ra - rb;
-    if (b.compliance.score !== a.compliance.score)
-      return b.compliance.score - a.compliance.score;
-    if (b.pack.placedCargoCbm !== a.pack.placedCargoCbm)
-      return b.pack.placedCargoCbm - a.pack.placedCargoCbm;
-    return b.pack.placedCartons - a.pack.placedCartons;
-  });
-
-  const ranked = pool.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
+  // No legal plan — apply the same rule, then fold in red-violation count
+  // as a safety tiebreak so the cleanest dirty plan still wins ties.
+  const sorted = applyStickiness(
+    [...results].sort((a, b) => {
+      const primary = compareByRule(a, b);
+      if (primary !== 0) return primary;
+      return redCount(a) - redCount(b);
+    }),
+  );
+  const ranked = sorted.map((r, i) => ({ ...r, isBest: i === 0, rank: i + 1 }));
   return {
     best: ranked[0],
     all: ranked,
