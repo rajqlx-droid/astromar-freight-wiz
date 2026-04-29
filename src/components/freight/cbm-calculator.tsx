@@ -401,6 +401,14 @@ export function CbmCalculator({ items, setItems }: Props) {
   );
   const add = useCallback(() => pushItems([...items, emptyCbmItem()]), [items, pushItems]);
   const clear = useCallback(() => pushItems([emptyCbmItem(0)]), [pushItems]);
+  const resetAll = useCallback(() => {
+    pushItems([emptyCbmItem(0)]);
+    setForcedChoice(null);
+    setOptimizationRequested(false);
+    setActivePack(null);
+    setOpenPopoverId(null);
+    setConfirmModalOpen(false);
+  }, [pushItems]);
 
   /** Copy one row's packing options to every other row & mark them all confirmed. */
   const applyToAll = useCallback(
