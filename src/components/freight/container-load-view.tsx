@@ -460,7 +460,7 @@ function SinglePlanBody({
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
       <div className="space-y-3">
-        <StatsBar pack={pack} weight={weight} qty={pack.placedCartons} />
+        <StatsBar pack={pack} />
         <LimitExplanationPanel pack={pack} />
         {!viewerCollapsed && (
           <div className="overflow-hidden rounded-lg border bg-[oklch(0.98_0.005_240)] p-3 dark:bg-[oklch(0.18_0.01_240)]">
