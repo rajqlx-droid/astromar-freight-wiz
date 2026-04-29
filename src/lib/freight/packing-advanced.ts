@@ -572,15 +572,36 @@ export function packContainerAdvanced(
     const cartonRejects = { support: 0, sealed: 0, stackWeight: 0, nonStackable: 0 };
 
     for (const o of orients) {
-      // Candidate XY positions on a coarse grid.
+      // Candidate XY positions: union of (a) coarse stride grid and
+      // (b) exact edges of already-placed cargo (right/front faces + their
+      // own start coordinates). The edge candidates let identical cubes
+      // close the floor row exactly with sub-stride precision instead of
+      // missing the slot and stacking prematurely.
       const stepX = Math.min(placeStep, Math.max(25, Math.floor(o.l / 4)));
       const stepY = Math.min(placeStep, Math.max(25, Math.floor(o.w / 4)));
-      // Frontier bound: back-to-front scoring guarantees no better placement
-      // exists far past the furthest already-placed box. Limit X scan to
-      // frontierX + 2 × maxBoxLen (clamped to container length).
       const xLimit = Math.min(C.l - o.l, frontierX + 2 * maxItemLen);
-      for (let y = 0; y + o.w <= C.w; y += stepY) {
-        for (let x = 0; x <= xLimit; x += stepX) {
+
+      // Build candidate axis arrays.
+      const wallGap = getGapRule(c.packageType).minGap;
+      const xCandSet = new Set<number>();
+      const yCandSet = new Set<number>();
+      xCandSet.add(wallGap);
+      yCandSet.add(wallGap);
+      for (let x = 0; x <= xLimit; x += stepX) xCandSet.add(x);
+      for (let y = 0; y + o.w <= C.w; y += stepY) yCandSet.add(y);
+      for (const p of placedInternal) {
+        const xRight = p.x + p.l + wallGap;
+        if (xRight + o.l <= C.l && xRight <= xLimit) xCandSet.add(xRight);
+        if (p.x <= xLimit) xCandSet.add(p.x);
+        const yFront = p.y + p.w + wallGap;
+        if (yFront + o.w <= C.w) yCandSet.add(yFront);
+        yCandSet.add(p.y);
+      }
+      const xCandidates = [...xCandSet].filter((x) => x >= 0 && x + o.l <= C.l && x <= xLimit).sort((a, b) => a - b);
+      const yCandidates = [...yCandSet].filter((y) => y >= 0 && y + o.w <= C.w).sort((a, b) => a - b);
+
+      for (const y of yCandidates) {
+        for (const x of xCandidates) {
           const ev = evaluatePlacement(x, y, o.l, o.w, {
             ...c,
             origL: o.l,
