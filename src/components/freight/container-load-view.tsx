@@ -164,7 +164,24 @@ export function ContainerLoadView({
   // compliance in the HUD off the pack alone caused drift between the
   // picker's verdict and the badge.
   const [planMeta, setPlanMeta] = useState<BestPlanMeta | null>(null);
+  // Sticky strategy hint — the strategy id that won the previous optimise
+  // call for the SAME container. Reset to undefined whenever the container
+  // type changes so stickiness never bleeds across geometries.
+  const stickyStrategyRef = useRef<import("@/lib/freight/scenario-runner").StrategyId | undefined>(undefined);
+  // Track container id so we can detect a switch and hard-restart computing.
+  const lastContainerIdRef = useRef<string>(deferredContainer.id);
+
   useEffect(() => {
+    // Container-type switch: cancel any in-flight job, clear all derived
+    // state, and reset stickiness so the new container gets a fresh sweep
+    // across all 4 strategies.
+    if (lastContainerIdRef.current !== deferredContainer.id) {
+      worker.cancelAll();
+      stickyStrategyRef.current = undefined;
+      setSinglePack(makeEmptyPack(deferredContainer));
+      setPlanMeta(null);
+      lastContainerIdRef.current = deferredContainer.id;
+    }
     if (!hasCargo) {
       setSinglePack(makeEmptyPack(deferredContainer));
       setPlanMeta(null);
@@ -172,19 +189,25 @@ export function ContainerLoadView({
     }
     let cancelled = false;
     worker
-      .optimise(deferredItems, deferredContainer)
+      .optimise(deferredItems, deferredContainer, stickyStrategyRef.current)
       .then((res) => {
         if (cancelled) return;
         setSinglePack(res.best.pack);
         setPlanMeta(res.meta);
+        // Remember the winning strategy for stickiness on the next call
+        // (only valid for THIS container; cleared on container switch above).
+        stickyStrategyRef.current = res.best.strategyId;
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        // Silent: cancellation sentinel is expected on container switch /
+        // rapid input edits; worker termination races are equally benign.
+        if (err instanceof Error && err.message.startsWith("Cancelled:")) return;
         /* worker gone */
       });
     return () => {
       cancelled = true;
     };
-  }, [hasCargo, deferredItems, deferredContainer, worker.optimise]);
+  }, [hasCargo, deferredItems, deferredContainer, worker]);
 
   const activePack: AdvancedPackResult = singlePack;
 
