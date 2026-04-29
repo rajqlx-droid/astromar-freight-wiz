@@ -518,8 +518,17 @@ export function packContainerAdvanced(
   // otherwise spreading creates one-carton-per-row layouts that look like
   // floor-gap warnings on what is geometrically the only legal placement.
   const tightFillLengthMm = tightRowsEst * Math.max(1, avgWidthMm);
+  // Spread mode is now strictly a CoG-balance assist for genuinely sparse
+  // single-SKU loads. Multi-SKU manifests, anything ≥ 40 % full, and any
+  // strategy that implies tight stowage (row-back / floor-first / weight-first)
+  // always tight-pack against the back wall.
+  const distinctSkus = new Set(expanded.map((c) => c.itemIdx)).size;
+  const strategyAllowsSpread = strategy === "auto" || strategy === "mixed";
   const spreadMode =
-    volumeFill < 0.65 && tightFillLengthMm >= usableLengthMm * 0.5;
+    volumeFill < 0.40 &&
+    (distinctSkus <= 1 || expanded.length <= 8) &&
+    strategyAllowsSpread &&
+    tightFillLengthMm >= usableLengthMm * 0.5;
   // Estimate how many cartons will land on the floor (1 layer). Used to
   // choose the stride for evenly-spaced target slots in spread mode.
   const avgFloorFootprintMm2 = expanded.length > 0
