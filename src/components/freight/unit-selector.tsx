@@ -71,10 +71,6 @@ export const toKg = (value: number, unit: WeightUnit): number =>
 const LEN_KEY = "astromar.freight.lenUnit";
 const WT_KEY = "astromar.freight.wtUnit";
 
-const isLenUnit = (v: unknown): v is LengthUnit =>
-  typeof v === "string" && LENGTH_UNITS.some((u) => u.value === v);
-const isWtUnit = (v: unknown): v is WeightUnit =>
-  typeof v === "string" && WEIGHT_UNITS.some((u) => u.value === v);
 
 /**
  * Returns [unit, setUnit]. Always boots at "cm" / "kg" on every page load so
