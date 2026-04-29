@@ -10,14 +10,16 @@ import { cn } from "@/lib/utils";
 import {
   CONTAINERS,
   ITEM_COLORS,
-  pickOptimalContainer,
   totalCbm,
   totalQty,
   totalWeight,
   type ContainerPreset,
 } from "@/lib/freight/packing";
 import { type AdvancedPackResult } from "@/lib/freight/packing-advanced";
-import { type ContainerRecommendation } from "@/lib/freight/container-recommender";
+import {
+  recommendContainersFast,
+  type ContainerRecommendation,
+} from "@/lib/freight/container-recommender";
 import type { CbmItem } from "@/lib/freight/calculators";
 import { LoadReportPanel } from "./load-report-panel";
 import { LoadingSequence } from "./loading-sequence";
@@ -91,6 +93,7 @@ function makeEmptyPack(container: ContainerPreset): AdvancedPackResult {
 
 export function ContainerLoadView({
   items,
+  recommendation,
   forcedChoice,
   onChoiceChange,
   onReady,
@@ -118,10 +121,20 @@ export function ContainerLoadView({
 
   const hasCargo = cargoCbm > 0 && cargoQty > 0;
 
-  // Geometry-aware auto-pick: smallest container the 3D packer can actually
-  // place every piece in (not just one where CBM math fits). For 16 tall
-  // pallets this correctly escalates from 20ft GP → 40ft HC.
-  const autoContainer = useMemo(() => pickOptimalContainer(items), [items]);
+  // Auto-pick mirrors the recommendation banner so the two never disagree.
+  // The geometry-aware recommendation is computed off-thread by the parent
+  // (worker path) and passed in via the `recommendation` prop. While that
+  // result is pending we fall back to a cheap CBM-only pick so the Auto pill
+  // shows a sensible label immediately instead of defaulting to 40HC and
+  // freezing the main thread with a synchronous packer sweep.
+  const autoContainer = useMemo<ContainerPreset>(() => {
+    const rec = forcedChoice == null ? recommendation : undefined;
+    const fromRec = rec?.units?.[0]?.container;
+    if (fromRec) return fromRec;
+    if (cargoCbm <= 0) return CONTAINERS[0];
+    const fast = recommendContainersFast(cargoCbm, cargoWeight);
+    return fast.units[0]?.container ?? CONTAINERS[0];
+  }, [recommendation, forcedChoice, cargoCbm, cargoWeight]);
   const activeContainer: ContainerPreset =
     choice === "auto"
       ? autoContainer
