@@ -67,11 +67,18 @@ export function PackageTypeIcon({ type, className, size = 14 }: Props) {
         </svg>
       );
     case "bag":
-      // Sack / bag with tied neck.
+      // FIBC / bulk bag (jumbo bag) — square body with two top loop handles.
       return (
         <svg {...common}>
-          <path d="M9 4h6l-1 3c2 1 4 4 4 8 0 4-3 6-6 6s-6-2-6-6c0-4 2-7 4-8l-1-3z" />
-          <path d="M10 7h4" />
+          {/* Loop handles */}
+          <path d="M8 7V5.5a1.5 1.5 0 0 1 3 0V7" />
+          <path d="M13 7V5.5a1.5 1.5 0 0 1 3 0V7" />
+          {/* Bag body */}
+          <rect x="5" y="7" width="14" height="14" rx="1" />
+          {/* Top seam */}
+          <path d="M5 9h14" />
+          {/* Subtle vertical seam */}
+          <path d="M12 9v12" />
         </svg>
       );
     case "bale":
