@@ -1,30 +1,39 @@
-# Viral-Traffic Readiness Test Suite
+# Multi-Commodity Packing Test (10–20 SKUs, Single Container)
 
-Run 5 tests to verify the freight calculator can handle 100+ concurrent users without crashing, then deliver a single readiness report with pass/fail per test and fixes for anything that fails.
+## Goal
+Confirm the packer handles realistic mixed-cargo manifests with 10–20 distinct SKUs inside a **single container** — zero overlap, zero floating boxes, no weight overflow, exact CBM accounting, and graceful overflow handling when the manifest exceeds capacity.
 
-## Tests to run
+> Note: multi-container loading has been removed from the app, so every scenario packs into one container only. SKUs that don't fit must be reported as `unplaced` with a reason — never silently dropped or overlapped.
 
-1. **Edge fetch storm** — 200 parallel `fetch()` requests against the published URL (`astromar-freight-wiz.lovable.app`) for HTML + main JS chunks. Measure status codes, p50/p95/p99 latency, throughput. Pass: 100% 2xx, p99 < 1500ms.
+## Why this matters
+Existing suites cover single-SKU dense packs and 2–3 SKU mixes. Real freight manifests routinely have 10–20 line items in a single container. This is the missing coverage band.
 
-2. **Worker memory leak test** — Vitest test running 10 sequential 650-carton packs. Measure `process.memoryUsage().heapUsed` delta. Pass: heap growth < 50 MB, every pack < 5s.
+## What I'll build
 
-3. **Concurrent worker simulation** — Node script spawning 20 parallel `worker_threads`, each running a 250-carton pack. Verify all 20 return identical results to a single-run baseline (determinism + no shared state). Pass: all complete, results match, wall-clock scales near-linearly.
+A new test file `src/lib/freight/packing-advanced.multi-commodity.test.ts` with three scenarios, each packed into one container:
 
-4. **Bundle size audit** — Inspect existing `dist/` build output (or trigger one). Report total initial JS, worker chunk size, any chunks > 500 KB. Pass: initial < 300 KB gzipped, worker < 200 KB gzipped.
+1. **12-SKU general cargo → 40HC (fits)** — cartons + pallets + drums of varied dims/weights, sized to fit. Asserts 100% placement.
+2. **18-SKU e-commerce mix → 40GP (fits tightly)** — small-to-medium stackable cartons, mixed rotations. Asserts ≥95% placement and high utilization.
+3. **20-SKU industrial mix → 20GP (intentional overflow)** — heavy drums (non-stackable), tall crates, bags, bales. Manifest deliberately exceeds 20GP capacity. Asserts: nothing overlaps, every SKU reports honest `placed/unplaced` counts, `placedWeightKg ≤ maxPayloadKg`, no silent drops.
 
-5. **Throttled browser smoke test** — Browser tool against preview with 4× CPU throttle, run 250-carton scenario, verify UI responsive, 3D renders, no console errors.
+For each scenario, assert:
+- No pairwise AABB overlap (>0.5 mm any axis) — reuse helper from `accuracy.test.ts`.
+- Every placed box either on floor or supported within 2 mm.
+- `placedWeightKg ≤ container.maxPayloadKg`.
+- Sum of placed cartons' CBM equals `placedCargoCbm` within 0.0001 m³.
+- `validateAdvancedPack()` returns zero OVERLAP / FLOATING / DOOR_GAP / CEILING_GAP violations.
+- Per-item stats: `planned === placed + unplaced` for every SKU; overflow scenario must have `unplaced > 0` for at least one SKU with a populated `reason`.
+
+## Live UI verification
+Load `/freight-intelligence`, build a 15-SKU manifest in the CBM calculator, run the pack, and confirm:
+- 3D view renders all placed SKUs with distinct colors, no visual overlap.
+- Loading rows panel lists every SKU.
+- Totals match (sum of per-SKU CBM = manifest total CBM).
+- Any unplaced items surface in the limit-explanation panel.
 
 ## Deliverable
+Pass/fail report per scenario with timing, placed counts, utilization %, unplaced reasons, and any violations found. If a regression surfaces, I'll diagnose root cause before recommending a fix (fix would be a follow-up turn).
 
-A markdown report with a results table, any failures explained, fixes applied (if needed), and a green/yellow/red viral-readiness verdict. No new app features — this is verification + targeted fixes only.
-
-## Files likely touched (only if a test fails)
-
-- `src/lib/freight/packing-advanced.ts` — only if memory leak or determinism issue found
-- `vite.config.ts` — only if bundle audit reveals a chunk that needs splitting
-- New file `scripts/load-test/*.ts` for tests 1 + 3 (kept out of the app bundle)
-- New file `src/lib/freight/packing-advanced.stress.test.ts` for test 2
-
-## Out of scope
-
-Backend rate limiting, k6/Artillery API tests (no API exists in calculator path), DB pool tests (no DB used).
+## Files
+- **Create**: `src/lib/freight/packing-advanced.multi-commodity.test.ts`
+- **Read-only**: `packing-advanced.ts`, `geometry-validator.ts`, `gap-rules.ts` (no source changes)
