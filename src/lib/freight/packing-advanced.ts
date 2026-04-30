@@ -604,19 +604,17 @@ export function packContainerAdvanced(
       yCandSet.add(wallGap);
       for (let x = 0; x <= xLimit; x += stepX) xCandSet.add(x);
       for (let y = 0; y + o.w <= C.w; y += stepY) yCandSet.add(y);
-      // Edge candidates: collect from every placed box. The MAX_CAND trim
-      // below keeps the per-axis count bounded, so even with thousands of
-      // edges the inner loop stays small. Skip the edge pass entirely for
-      // very small loads — the stride grid alone is enough.
-      if (placedInternal.length >= 16) {
-        for (const p of placedInternal) {
-          const xRight = p.x + p.l + wallGap;
-          if (xRight + o.l <= C.l && xRight <= xLimit) xCandSet.add(xRight);
-          if (p.x <= xLimit) xCandSet.add(p.x);
-          const yFront = p.y + p.w + wallGap;
-          if (yFront + o.w <= C.w) yCandSet.add(yFront);
-          yCandSet.add(p.y);
-        }
+      // Edge candidates: collect from every placed box. Edges let identical
+      // cubes close the floor row exactly with sub-stride precision instead
+      // of missing the slot and stacking prematurely. The MAX_CAND trim
+      // below keeps the per-axis count bounded so the inner loop stays small.
+      for (const p of placedInternal) {
+        const xRight = p.x + p.l + wallGap;
+        if (xRight + o.l <= C.l && xRight <= xLimit) xCandSet.add(xRight);
+        if (p.x <= xLimit) xCandSet.add(p.x);
+        const yFront = p.y + p.w + wallGap;
+        if (yFront + o.w <= C.w) yCandSet.add(yFront);
+        yCandSet.add(p.y);
       }
       // Hard cap each axis to keep the inner loop bounded. Generous cap
       // protects performance on huge loads without sacrificing capacity.
