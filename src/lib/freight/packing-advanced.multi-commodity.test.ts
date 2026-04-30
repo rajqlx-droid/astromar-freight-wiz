@@ -75,7 +75,7 @@ function assertNoOverlapOrFloat(pack: Pack) {
       const dz = Math.min(a.z + a.h, b.z + b.h) - Math.max(a.z, b.z);
       if (dx > EPS && dy > EPS && dz > EPS) {
         throw new Error(
-          `boxes ${i}(${a.itemId}) and ${j}(${b.itemId}) overlap by ` +
+          `boxes ${i}((idx ${a.itemIdx}) and ${j}((idx ${b.itemIdx}) overlap by ` +
           `${dx.toFixed(2)}×${dy.toFixed(2)}×${dz.toFixed(2)} mm`,
         );
       }
@@ -92,7 +92,7 @@ function assertNoOverlapOrFloat(pack: Pack) {
         Math.min(s.x + s.l, b.x + b.l) > Math.max(s.x, b.x) &&
         Math.min(s.y + s.w, b.y + b.w) > Math.max(s.y, b.y),
     );
-    expect(supported, `box ${i} (${b.itemId}) at z=${b.z} has no supporter`).toBe(true);
+    expect(supported, `box ${i} ((idx ${b.itemIdx}) at z=${b.z} has no supporter`).toBe(true);
   }
 }
 
