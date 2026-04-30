@@ -551,6 +551,18 @@ export function packContainerAdvanced(
   let spreadCursor = 0; // increments per committed floor box in spread mode
 
   for (const c of expanded) {
+    // ── Payload cap: stop placing once the next carton would exceed the
+    // legal container payload. Without this gate the packer happily reports
+    // "650/650 placed" while the Load Report shows the cargo is overweight.
+    if (
+      container.maxPayloadKg > 0 &&
+      placedWeightKgRunning + (c.weight ?? 0) > container.maxPayloadKg
+    ) {
+      perItemReason[c.itemIdx] ||= "Container payload cap reached";
+      payloadCapHit = true;
+      continue;
+    }
+
     const orients = buildOrientations(c).filter(
       (o) => o.l <= C.l && o.w <= C.w && o.h <= C.h,
     );
@@ -575,10 +587,11 @@ export function packContainerAdvanced(
 
     for (const o of orients) {
       // Candidate XY positions: union of (a) coarse stride grid and
-      // (b) exact edges of already-placed cargo (right/front faces + their
-      // own start coordinates). The edge candidates let identical cubes
-      // close the floor row exactly with sub-stride precision instead of
-      // missing the slot and stacking prematurely.
+      // (b) edges of placed cargo NEAR THE ACTIVE ROW (right/front faces +
+      // own start coordinates). Edges let identical cubes close the floor
+      // row exactly with sub-stride precision; the windowing keeps the
+      // candidate set bounded so the packer stays linear-ish in n instead
+      // of becoming O(n³) and freezing the worker on medium loads.
       const stepX = Math.min(placeStep, Math.max(25, Math.floor(o.l / 4)));
       const stepY = Math.min(placeStep, Math.max(25, Math.floor(o.w / 4)));
       const xLimit = Math.min(C.l - o.l, frontierX + 2 * maxItemLen);
@@ -591,16 +604,43 @@ export function packContainerAdvanced(
       yCandSet.add(wallGap);
       for (let x = 0; x <= xLimit; x += stepX) xCandSet.add(x);
       for (let y = 0; y + o.w <= C.w; y += stepY) yCandSet.add(y);
-      for (const p of placedInternal) {
-        const xRight = p.x + p.l + wallGap;
-        if (xRight + o.l <= C.l && xRight <= xLimit) xCandSet.add(xRight);
-        if (p.x <= xLimit) xCandSet.add(p.x);
-        const yFront = p.y + p.w + wallGap;
-        if (yFront + o.w <= C.w) yCandSet.add(yFront);
-        yCandSet.add(p.y);
+      // Edge candidates: only collect from boxes near the active row to keep
+      // the per-placement cost bounded. For very small loads (<16 placed)
+      // skip the edge pass entirely — the stride grid alone already gives
+      // pixel-perfect placement and adds no measurable density.
+      if (placedInternal.length >= 16) {
+        const xWindowLo = frontierX - maxItemLen;
+        const xWindowHi = frontierX + 2 * maxItemLen;
+        for (const p of placedInternal) {
+          if (p.x + p.l < xWindowLo || p.x > xWindowHi) continue;
+          const xRight = p.x + p.l + wallGap;
+          if (xRight + o.l <= C.l && xRight <= xLimit) xCandSet.add(xRight);
+          if (p.x <= xLimit) xCandSet.add(p.x);
+          const yFront = p.y + p.w + wallGap;
+          if (yFront + o.w <= C.w) yCandSet.add(yFront);
+          yCandSet.add(p.y);
+        }
       }
-      const xCandidates = [...xCandSet].filter((x) => x >= 0 && x + o.l <= C.l && x <= xLimit).sort((a, b) => a - b);
-      const yCandidates = [...yCandSet].filter((y) => y >= 0 && y + o.w <= C.w).sort((a, b) => a - b);
+      // Hard cap each axis to keep the inner loop bounded. Keep the closest
+      // candidates to the active frontier.
+      const MAX_CAND = 64;
+      const trim = (arr: number[], anchor: number) => {
+        if (arr.length <= MAX_CAND) return arr;
+        return arr
+          .map((v) => ({ v, d: Math.abs(v - anchor) }))
+          .sort((a, b) => a.d - b.d)
+          .slice(0, MAX_CAND)
+          .map((e) => e.v)
+          .sort((a, b) => a - b);
+      };
+      const xCandidates = trim(
+        [...xCandSet].filter((x) => x >= 0 && x + o.l <= C.l && x <= xLimit),
+        frontierX,
+      ).sort((a, b) => a - b);
+      const yCandidates = trim(
+        [...yCandSet].filter((y) => y >= 0 && y + o.w <= C.w),
+        0,
+      ).sort((a, b) => a - b);
 
       for (const y of yCandidates) {
         for (const x of xCandidates) {
