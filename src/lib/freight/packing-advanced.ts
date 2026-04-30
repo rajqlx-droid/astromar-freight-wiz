@@ -621,9 +621,10 @@ export function packContainerAdvanced(
           yCandSet.add(p.y);
         }
       }
-      // Hard cap each axis to keep the inner loop bounded. Keep the closest
-      // candidates to the active frontier.
-      const MAX_CAND = 64;
+      // Hard cap each axis to keep the inner loop bounded. Generous cap
+      // keeps capacity intact (we measured 5-cube loss at 64); 192 is still
+      // small enough to be fast for 1000+ box loads.
+      const MAX_CAND = 192;
       const trim = (arr: number[], anchor: number) => {
         if (arr.length <= MAX_CAND) return arr;
         return arr
