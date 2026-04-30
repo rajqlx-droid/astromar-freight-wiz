@@ -255,6 +255,8 @@ export function packContainerAdvanced(
   const placedInternal: PlacedInternal[] = [];
   const placedSupportRatios: number[] = [];
   let placedCount = 0;
+  let placedWeightKgRunning = 0;
+  let payloadCapHit = false;
   let truncated = false;
 
   // Stacking diagnostics — counts how often each rule rejected a candidate
