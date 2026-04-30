@@ -992,6 +992,13 @@ export function packContainerAdvanced(
     if (spreadMode && z < 1) spreadCursor++;
   }
 
+  if (payloadCapHit && import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[pack] payload cap reached at ${placedWeightKgRunning.toFixed(0)} kg / ${container.maxPayloadKg} kg — remaining cartons skipped`,
+    );
+  }
+
   // Render-cap truncation (rare with skyline since we score; just in case).
   const toPlaced = (p: PlacedInternal): PlacedBox => ({
     x: p.x, y: p.y, z: p.z, l: p.l, w: p.w, h: p.h,
