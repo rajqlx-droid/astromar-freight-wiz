@@ -80,3 +80,44 @@ describe("packing-advanced — multi-SKU lateral balance (no one-sided pile)", (
     }
   });
 });
+
+describe("packing-advanced — payload cap & performance", () => {
+  const hc = CONTAINERS.find((c) => c.id === "40hc")!;
+
+  it("never reports placed cargo above the container payload cap", () => {
+    // 650 × (45.72 cm cube, 50 kg) into 40HC. Total weight 32 500 kg vs
+    // 26 500 kg cap → packer must stop at ≤ 530 cubes, not silently report
+    // "650/650 placed" while showing the load report as overweight.
+    const items: CbmItem[] = [
+      {
+        id: "heavy", length: 45.72, width: 45.72, height: 45.72,
+        qty: 650, weight: 50, packageType: "carton",
+        stackable: true, fragile: false,
+        allowSidewaysRotation: true, allowAxisRotation: false,
+      },
+    ];
+    const pack = packContainerAdvanced(items, hc);
+    expect(pack.placedWeightKg).toBeLessThanOrEqual(hc.maxPayloadKg);
+    expect(pack.placedCartons).toBeLessThanOrEqual(
+      Math.floor(hc.maxPayloadKg / 50),
+    );
+  });
+
+  it("packs 250 × 1.5 ft cubes well under the perf budget (no worker freeze)", () => {
+    const items: CbmItem[] = [
+      {
+        id: "cube", length: 45.72, width: 45.72, height: 45.72,
+        qty: 250, weight: 10, packageType: "carton",
+        stackable: true, fragile: false,
+        allowSidewaysRotation: true, allowAxisRotation: false,
+      },
+    ];
+    const start = performance.now();
+    const pack = packContainerAdvanced(items, hc);
+    const elapsed = performance.now() - start;
+    expect(pack.placedCartons).toBe(250);
+    // Generous budget to absorb CI noise; real worker now finishes in ~1 s.
+    expect(elapsed).toBeLessThan(5000);
+  });
+});
+
