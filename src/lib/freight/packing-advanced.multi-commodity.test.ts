@@ -117,12 +117,15 @@ function assertCommonInvariants(pack: Pack, manifest: CbmItem[]) {
     expect(stat.planned).toBe(src!.qty);
   }
 
-  // Sum of placed-carton CBM matches placedCargoCbm.
-  const summed = pack.placed.reduce(
-    (acc, b) => acc + (b.l * b.w * b.h) / 1e9, // mm³ → m³
-    0,
-  );
-  expect(Math.abs(summed - pack.placedCargoCbm)).toBeLessThan(1e-4);
+  // Sum of placed-carton CBM matches placedCargoCbm — only valid when the
+  // render cap didn't truncate placed[].
+  if (pack.placed.length === pack.placedCartons) {
+    const summed = pack.placed.reduce(
+      (acc, b) => acc + (b.l * b.w * b.h) / 1e9, // mm³ → m³
+      0,
+    );
+    expect(Math.abs(summed - pack.placedCargoCbm)).toBeLessThan(1e-4);
+  }
 
   // No overlap / floating / door / ceiling violations and every box supported.
   assertNoOverlapOrFloat(pack);
