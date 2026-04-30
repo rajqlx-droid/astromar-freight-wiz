@@ -604,15 +604,12 @@ export function packContainerAdvanced(
       yCandSet.add(wallGap);
       for (let x = 0; x <= xLimit; x += stepX) xCandSet.add(x);
       for (let y = 0; y + o.w <= C.w; y += stepY) yCandSet.add(y);
-      // Edge candidates: only collect from boxes near the active row to keep
-      // the per-placement cost bounded. For very small loads (<16 placed)
-      // skip the edge pass entirely — the stride grid alone already gives
-      // pixel-perfect placement and adds no measurable density.
+      // Edge candidates: collect from every placed box. The MAX_CAND trim
+      // below keeps the per-axis count bounded, so even with thousands of
+      // edges the inner loop stays small. Skip the edge pass entirely for
+      // very small loads — the stride grid alone is enough.
       if (placedInternal.length >= 16) {
-        const xWindowLo = frontierX - maxItemLen;
-        const xWindowHi = frontierX + 2 * maxItemLen;
         for (const p of placedInternal) {
-          if (p.x + p.l < xWindowLo || p.x > xWindowHi) continue;
           const xRight = p.x + p.l + wallGap;
           if (xRight + o.l <= C.l && xRight <= xLimit) xCandSet.add(xRight);
           if (p.x <= xLimit) xCandSet.add(p.x);
