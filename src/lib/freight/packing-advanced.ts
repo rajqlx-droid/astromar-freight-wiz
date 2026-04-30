@@ -985,6 +985,7 @@ export function packContainerAdvanced(
     }
 
     placedCount++;
+    placedWeightKgRunning += c.weight ?? 0;
     perItemPlaced[c.itemIdx]++;
     if (x + orient.l > frontierX) frontierX = x + orient.l;
     // Spread-mode bookkeeping: advance the target slot only for floor boxes.
