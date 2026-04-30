@@ -619,9 +619,8 @@ export function packContainerAdvanced(
         }
       }
       // Hard cap each axis to keep the inner loop bounded. Generous cap
-      // keeps capacity intact (we measured 5-cube loss at 64); 192 is still
-      // small enough to be fast for 1000+ box loads.
-      const MAX_CAND = 192;
+      // protects performance on huge loads without sacrificing capacity.
+      const MAX_CAND = 384;
       const trim = (arr: number[], anchor: number) => {
         if (arr.length <= MAX_CAND) return arr;
         return arr
