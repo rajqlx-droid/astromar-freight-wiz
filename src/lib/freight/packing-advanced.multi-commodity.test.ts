@@ -97,8 +97,13 @@ function assertNoOverlapOrFloat(pack: Pack) {
 }
 
 function assertCommonInvariants(pack: Pack, manifest: CbmItem[]) {
-  // Counter consistency.
-  expect(pack.placed.length).toBe(pack.placedCartons);
+  // Render cap: placed[] is sliced to 500 for 3D perf. The counter
+  // placedCartons is the true placed count. Either they match, or the
+  // render cap kicked in.
+  expect(pack.placed.length).toBeLessThanOrEqual(pack.placedCartons);
+  if (pack.placed.length < pack.placedCartons) {
+    expect(pack.placed.length).toBe(500);
+  }
 
   // Weight cap honoured.
   expect(pack.placedWeightKg).toBeLessThanOrEqual(pack.container.maxPayloadKg + 0.5);
