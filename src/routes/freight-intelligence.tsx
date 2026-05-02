@@ -382,14 +382,14 @@ function FreightIntelligencePage() {
         </a>
         {/* HEADER */}
         <header
-          className="no-print sticky top-0 z-50 w-full border-b-2 bg-background/95 shadow-sm backdrop-blur"
-          style={{ borderBottomColor: "var(--brand-navy)" }}
+          className="no-print sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur"
+          style={{ borderBottomColor: "color-mix(in oklab, var(--brand-navy) 20%, transparent)" }}
         >
           <div className="mx-auto flex h-[60px] max-w-7xl items-center justify-between px-3 md:px-4">
             <div className="flex items-center gap-2">
               <div
                 className="flex size-8 items-center justify-center rounded-md text-white"
-                style={{ background: "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))" }}
+                style={{ background: "var(--brand-navy)" }}
               >
                 <span className="text-sm font-bold">S</span>
               </div>
@@ -439,7 +439,7 @@ function FreightIntelligencePage() {
             "no-print sticky top-[60px] z-40 border-b backdrop-blur-md transition-shadow duration-200 " +
             (scrolled ? "shadow-[0_4px_12px_-4px_rgba(15,23,42,0.18)]" : "")
           }
-          style={{ background: "linear-gradient(180deg, color-mix(in oklab, var(--background) 88%, transparent), color-mix(in oklab, var(--brand-navy-soft) 88%, transparent))" }}
+          style={{ background: "color-mix(in oklab, var(--background) 96%, var(--brand-navy-soft))" }}
         >
           <div className="relative">
             <div
@@ -460,17 +460,16 @@ function FreightIntelligencePage() {
                   onClick={() => setActive(c.key)}
                   onKeyDown={(e) => onTabKey(e, idx)}
                   className={
-                    "min-w-[120px] shrink-0 rounded-lg border-2 px-3 py-2 text-left transition-all md:min-w-[140px] " +
+                    "min-w-[120px] shrink-0 rounded-lg border px-3 py-2 text-left transition-all md:min-w-[140px] " +
                     (isActive
-                      ? "text-white shadow-md"
-                      : "border-brand-navy/40 bg-background text-brand-navy hover:bg-brand-navy-soft hover:border-brand-orange")
+                      ? "text-white shadow-sm"
+                      : "border-brand-navy/25 bg-background text-brand-navy hover:bg-brand-navy-soft hover:border-brand-navy/50")
                   }
                   style={
                     isActive
                       ? {
-                          background:
-                            "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))",
-                          borderColor: "var(--brand-orange)",
+                          background: "var(--brand-navy)",
+                          borderColor: "var(--brand-navy-strong)",
                           scrollSnapAlign: "center",
                         }
                       : { scrollSnapAlign: "center" }
