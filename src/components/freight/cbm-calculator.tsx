@@ -529,7 +529,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   }, [draftItems, activePack]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 tabular-nums">
     <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-3 lg:col-span-7">
         {draftItems.map((it, idx) => (
@@ -722,7 +722,7 @@ export function CbmCalculator({ items, setItems }: Props) {
     {!showOptimization && (
       <Card
         id="cbm-optimize-cta"
-        className="mx-auto w-[calc(100%-1rem)] sm:w-[calc(100%-3rem)] lg:w-[calc(100%-5rem)] rounded-xl border-2 border-brand-navy/30 bg-gradient-to-br from-brand-navy-soft to-background p-3.5 pr-16 sm:p-4 sm:pr-20 scroll-mt-24"
+        className="mx-auto w-[calc(100%-1rem)] sm:w-[calc(100%-3rem)] lg:w-[calc(100%-5rem)] rounded-xl border border-brand-navy/20 bg-card p-3.5 pr-16 sm:p-4 sm:pr-20 scroll-mt-24 shadow-sm"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-2.5">

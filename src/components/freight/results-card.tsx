@@ -43,11 +43,10 @@ export function ResultsCard({ result, inputsTable, resolveExtras, extras, pdfDis
 
   return (
     <Card
-      className="print-area overflow-hidden border-2 shadow-sm"
+      className="print-area tabular-nums overflow-hidden border shadow-sm"
       style={{
-        borderColor: "var(--brand-navy)",
-        background:
-          "linear-gradient(180deg, var(--brand-navy-soft) 0%, var(--background) 70%)",
+        borderColor: "color-mix(in oklab, var(--brand-navy) 22%, transparent)",
+        background: "var(--card)",
       }}
       aria-live="polite"
     >
