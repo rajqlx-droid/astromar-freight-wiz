@@ -754,13 +754,13 @@ function FreightIntelligencePage() {
         </section>
 
         {/* FOOTER */}
-        <footer className="no-print border-t-2" style={{ borderTopColor: "var(--brand-navy)" }}>
+        <footer className="no-print border-t" style={{ borderTopColor: "color-mix(in oklab, var(--brand-navy) 18%, transparent)" }}>
           <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 md:grid-cols-3">
             <div>
               <div className="flex items-center gap-2">
                 <div
                   className="flex size-9 items-center justify-center rounded-md text-white"
-                  style={{ background: "linear-gradient(135deg, var(--brand-navy), var(--brand-navy-strong))" }}
+                  style={{ background: "var(--brand-navy)" }}
                 >
                   <span className="text-sm font-bold">A</span>
                 </div>
