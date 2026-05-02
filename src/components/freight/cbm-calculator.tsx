@@ -1323,55 +1323,6 @@ const CbmRow = memo(function CbmRow({
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1">
-          {(() => {
-            const policy = getRotationPolicy(it.packageType);
-            const sidewaysAllowed = policy.canSideways;
-            const sidewaysOn = sidewaysAllowed && it.allowSidewaysRotation === true;
-            const tip = !sidewaysAllowed
-              ? (policy.sidewaysReason ?? "Sideways rotation not allowed for this package type.")
-              : sidewaysOn
-                ? "Sideways rotation allowed (90° L↔W). Click to lock orientation."
-                : "Orientation locked. Click to allow 90° sideways rotation (L↔W).";
-            return (
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-pressed={sidewaysOn}
-                      aria-label={
-                        !sidewaysAllowed
-                          ? "Sideways rotation not allowed for this package type"
-                          : sidewaysOn
-                            ? "Disable sideways rotation"
-                            : "Enable sideways rotation"
-                      }
-                      disabled={!sidewaysAllowed}
-                      onClick={() => {
-                        if (!sidewaysAllowed) return;
-                        onUpdatePacking(it.id, { allowSidewaysRotation: !sidewaysOn });
-                      }}
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
-                        sidewaysOn
-                          ? "border-emerald-400/60 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200"
-                          : "border-brand-navy/25 bg-muted/40 text-muted-foreground hover:bg-muted hover:text-brand-navy",
-                        !sidewaysAllowed && "cursor-not-allowed opacity-60",
-                      )}
-                    >
-                      <span aria-hidden>{sidewaysOn ? "↻" : "⛔"}</span>
-                      <span className="truncate">
-                        {sidewaysOn ? "sideways OK" : "fixed orientation"}
-                      </span>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-[240px] text-xs">
-                    {tip}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            );
-          })()}
           <Popover open={popoverOpen} onOpenChange={onPopoverOpenChange}>
             <PopoverTrigger asChild>
               <button
