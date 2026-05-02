@@ -529,7 +529,7 @@ export function CbmCalculator({ items, setItems }: Props) {
   }, [draftItems, activePack]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 tabular-nums">
     <div className="mt-3 grid grid-cols-1 gap-6 lg:grid-cols-12">
       <div className="space-y-3 lg:col-span-7">
         {draftItems.map((it, idx) => (
